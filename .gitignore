@@ -1,0 +1,23 @@
+# IDE / editors
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# AI tooling local settings (paths and permission history)
+.claude/
+settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
