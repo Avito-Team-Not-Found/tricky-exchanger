@@ -107,5 +107,15 @@ export default defineESLintConfig([
       ],
     },
   },
+  {
+    files: ['mock/**/*.js'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+      },
+    },
+  },
   prettier,
 ])
