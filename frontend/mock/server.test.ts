@@ -120,6 +120,19 @@ describe('authorization', () => {
     expect(status).toBe(401)
     expect(body).toMatchObject({ error: expect.any(String), code: 401 })
   })
+
+  it('rejects an expired token', async () => {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
+    const payload = Buffer.from(
+      JSON.stringify({ sub: 'some-user-id', iat: Date.now() - 1000, exp: Date.now() - 500 }),
+    ).toString('base64url')
+    const expiredToken = `${header}.${payload}.mock-signature`
+
+    const { status } = await request('/products', {
+      headers: { Authorization: `Bearer ${expiredToken}` },
+    })
+    expect(status).toBe(401)
+  })
 })
 
 describe('products', () => {

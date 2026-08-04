@@ -40,7 +40,9 @@ function issueToken(userId) {
 function decodeToken(token) {
   try {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
-    return typeof payload.sub === 'string' ? payload.sub : null
+    if (typeof payload.sub !== 'string') return null
+    if (typeof payload.exp !== 'number' || Date.now() >= payload.exp) return null
+    return payload.sub
   } catch {
     return null
   }
