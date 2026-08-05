@@ -1,11 +1,11 @@
-import js from '@eslint/js'
-import { defineConfig as defineESLintConfig, globalIgnores } from 'eslint/config'
-import prettier from 'eslint-config-prettier'
-import importX from 'eslint-plugin-import-x'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
-import tanstackQuery from '@tanstack/eslint-plugin-query'
-import tseslint from 'typescript-eslint'
+import js from '@eslint/js';
+import { defineConfig as defineESLintConfig, globalIgnores } from 'eslint/config';
+import prettier from 'eslint-config-prettier';
+import importX from 'eslint-plugin-import-x';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import tanstackQuery from '@tanstack/eslint-plugin-query';
+import tseslint from 'typescript-eslint';
 
 export default defineESLintConfig([
   globalIgnores(['dist', 'node_modules', 'coverage']),
@@ -36,9 +36,11 @@ export default defineESLintConfig([
     settings: {
       'import-x/resolver': {
         typescript: {
+          // Алиасы @app/@pages/... берутся из tsconfig, иначе import-x не находит импортированные модули
           alwaysTryTypes: true,
         },
       },
+      // Алиасы FSD-слоёв считаются «внутренними» импортами, чтобы группировать их отдельно от внешних пакетов
       'import-x/internal-regex': '^@(app|pages|features|entities|shared)/',
     },
     plugins: {
@@ -48,7 +50,9 @@ export default defineESLintConfig([
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Файл с компонентом и не-компонентом ломает HMR Vite: состояние модуля теряется при правке
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // message/notification/Modal из antd не подхватывают тему ConfigProvider — нужен App.useApp()
       'no-restricted-imports': [
         'error',
         {
@@ -62,6 +66,7 @@ export default defineESLintConfig([
           ],
         },
       ],
+      // Порядок импортов по FSD: react → пакеты → алиасы слоёв → относительные пути, с пустой строкой между группами
       'import-x/order': [
         'error',
         {
@@ -79,13 +84,16 @@ export default defineESLintConfig([
           'newlines-between': 'always',
         },
       ],
+      // Повторный импорт одного модуля в одном файле — след неудачного слияния веток, а не осознанное решение
       'import-x/no-duplicates': 'error',
+      // Импорты стоят только в начале файла: перенос в середину ломает порядок побочных эффектов и чтение кода
       'import-x/first': 'error',
     },
   },
   {
     files: ['**/*.{ts,tsx}'],
     rules: {
+      // FSD: слой импортирует только из нижних слоёв: shared всем, entities страницам/фичам, features только страницам
       'import-x/no-restricted-paths': [
         'error',
         {
@@ -110,6 +118,7 @@ export default defineESLintConfig([
   {
     files: ['mock/**/*.js'],
     languageOptions: {
+      // У mock-сервера есть свои глобалы
       globals: {
         process: 'readonly',
         console: 'readonly',
@@ -117,5 +126,6 @@ export default defineESLintConfig([
       },
     },
   },
+  // Отключает правила форматирования, дублирующие Prettier, во избежание конфликтов
   prettier,
-])
+]);
