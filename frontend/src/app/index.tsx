@@ -1,6 +1,6 @@
-import { Typography } from 'antd'
+import { Typography } from 'antd';
 
-import { AppProviders } from './providers'
+import { AppProviders } from './providers';
 
 export function App() {
   return (
@@ -9,5 +9,5 @@ export function App() {
         <Typography.Title level={1}>Tricky Exchanger</Typography.Title>
       </main>
     </AppProviders>
-  )
+  );
 }

@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
-import { QueryProvider } from './QueryProvider'
-import { ReduxProvider } from './ReduxProvider'
-import { ThemeProvider } from './ThemeProvider'
+import { QueryProvider } from './QueryProvider';
+import { ReduxProvider } from './ReduxProvider';
+import { ThemeProvider } from './ThemeProvider';
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
@@ -11,5 +11,5 @@ export function AppProviders({ children }: { children: ReactNode }) {
         <ThemeProvider>{children}</ThemeProvider>
       </QueryProvider>
     </ReduxProvider>
-  )
+  );
 }
