@@ -1,7 +1,7 @@
-import { fileURLToPath, URL } from 'node:url'
+import { fileURLToPath, URL } from 'node:url';
 
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
@@ -20,4 +20,4 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}', 'mock/**/*.{test,spec}.{ts,tsx}'],
     passWithNoTests: true,
   },
-})
+});

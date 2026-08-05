@@ -72,8 +72,8 @@ npm run test:watch
 
 ## Стиль кода
 
-- Без точек с запятой, одинарные кавычки, `printWidth: 100`, trailing comma всегда — см.
-  `.prettierrc.json`. Не переопределять локально.
+- Точки с запятой обязательны, одинарные кавычки, `printWidth: 100`, trailing comma всегда — см.
+  `.prettierrc`. Не переопределять локально.
 - `message`, `notification` и `Modal` из пакета `antd` импортировать запрещено линтом —
   использовать `App.useApp()` (см. правило `no-restricted-imports` в `eslint.config.js`), иначе
   эти компоненты не подхватывают тему.
