@@ -12,6 +12,10 @@ const DEFAULT_PORT = 4000
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000
 const PRODUCT_TITLE_LIMIT = 100
 const PRODUCT_DESCRIPTION_LIMIT = 500
+const RECOVERY_CODE_TTL_MS = 10 * 60 * 1000
+
+// Коды сброса пароля живут только в памяти: эмейл-доставки в моке нет, поэтому код выводится в консоль и в ответ
+const recoveryCodes = new Map()
 
 function readPasswords(passwordsPath) {
   try {
@@ -203,6 +207,52 @@ export function createMockApp({
       return fail(res, 401, 'Неверный email или пароль')
     }
     res.json({ token: issueToken(user.id), user: publicUser(user) })
+  })
+
+  const issueRecoveryCode = (email) => {
+    const code = String(Math.floor(100000 + Math.random() * 900000))
+    recoveryCodes.set(email, { code, expiresAt: Date.now() + RECOVERY_CODE_TTL_MS })
+    return code
+  }
+
+  const recoveryCodeIsValid = (email, code) => {
+    const entry = recoveryCodes.get(email)
+    if (!entry || entry.code !== code || Date.now() >= entry.expiresAt) return false
+    return true
+  }
+
+  server.post('/api/v1/account/password-recovery/send-code/', (req, res) => {
+    const { email } = req.body ?? {}
+    const user = email ? findUserByEmail(email) : undefined
+    if (!user) return fail(res, 404, 'Пользователь с таким email не найден')
+
+    const code = issueRecoveryCode(email)
+    // доставки по эмейлу в моке нет — код логируется и возвращается в ответе, чтобы флоу можно было пройти вручную
+    console.log(`[mock] recovery code for ${email}: ${code}`)
+    res.json({ message: 'code_sent', code })
+  })
+
+  server.post('/api/v1/account/password-recovery/verify-code/', (req, res) => {
+    const { email, code } = req.body ?? {}
+    if (!recoveryCodeIsValid(email, code)) return fail(res, 400, 'Неверный или истёкший код')
+    res.json({ message: 'code_valid' })
+  })
+
+  server.post('/api/v1/account/password-recovery/reset-password/', (req, res) => {
+    const { email, code, password } = req.body ?? {}
+    if (!recoveryCodeIsValid(email, code)) return fail(res, 400, 'Неверный или истёкший код')
+    if (typeof password !== 'string' || password.length < 8) {
+      return fail(res, 400, 'Пароль должен быть не короче 8 символов')
+    }
+
+    const user = findUserByEmail(email)
+    if (!user) return fail(res, 404, 'Пользователь с таким email не найден')
+
+    const passwords = readPasswords(passwordsPath)
+    passwords[user.id] = password
+    writePasswords(passwordsPath, passwords)
+    recoveryCodes.delete(email)
+    res.json({ message: 'password_changed' })
   })
 
   server.use('/api/v1', (req, res, next) => {

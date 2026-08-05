@@ -135,6 +135,95 @@ describe('authorization', () => {
   })
 })
 
+describe('password recovery', () => {
+  it('sends a recovery code for a registered email', async () => {
+    const { status, body } = await postJson(
+      '/account/password-recovery/send-code/',
+      { email: DEMO_EMAIL },
+      false,
+    )
+
+    expect(status).toBe(200)
+    expect(body.message).toBe('code_sent')
+    expect(body.code).toMatch(/^\d{6}$/)
+  })
+
+  it('rejects an unregistered email', async () => {
+    const { status, body } = await postJson(
+      '/account/password-recovery/send-code/',
+      { email: 'ghost@example.com' },
+      false,
+    )
+
+    expect(status).toBe(404)
+    expect(body.code).toBe(404)
+  })
+
+  it('rejects an unknown code', async () => {
+    await postJson('/account/password-recovery/send-code/', { email: DEMO_EMAIL }, false)
+
+    const { status } = await postJson(
+      '/account/password-recovery/verify-code/',
+      { email: DEMO_EMAIL, code: '000000' },
+      false,
+    )
+    expect(status).toBe(400)
+  })
+
+  it('completes the flow and lets the user log in with the new password', async () => {
+    const { body: sent } = await postJson(
+      '/account/password-recovery/send-code/',
+      { email: DEMO_EMAIL },
+      false,
+    )
+
+    const verify = await postJson(
+      '/account/password-recovery/verify-code/',
+      { email: DEMO_EMAIL, code: sent.code },
+      false,
+    )
+    expect(verify.status).toBe(200)
+    expect(verify.body).toEqual({ message: 'code_valid' })
+
+    const reset = await postJson(
+      '/account/password-recovery/reset-password/',
+      { email: DEMO_EMAIL, code: sent.code, password: 'new-password-123' },
+      false,
+    )
+    expect(reset.status).toBe(200)
+    expect(reset.body).toEqual({ message: 'password_changed' })
+
+    const login = await postJson(
+      '/account/login/',
+      { email: DEMO_EMAIL, password: 'new-password-123' },
+      false,
+    )
+    expect(login.status).toBe(200)
+
+    const oldLogin = await postJson(
+      '/account/login/',
+      { email: DEMO_EMAIL, password: DEMO_PASSWORD },
+      false,
+    )
+    expect(oldLogin.status).toBe(401)
+  })
+
+  it('rejects a too-short new password', async () => {
+    const { body: sent } = await postJson(
+      '/account/password-recovery/send-code/',
+      { email: DEMO_EMAIL },
+      false,
+    )
+
+    const { status } = await postJson(
+      '/account/password-recovery/reset-password/',
+      { email: DEMO_EMAIL, code: sent.code, password: 'short' },
+      false,
+    )
+    expect(status).toBe(400)
+  })
+})
+
 describe('products', () => {
   it('lists only the current user products', async () => {
     const { status, body } = await request('/products', { headers: authHeaders() })
