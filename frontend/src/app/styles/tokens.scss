@@ -53,7 +53,8 @@
   --color-status-warning: #faad14;
   --color-status-error: #ff4d4f;
   --color-border-default: #3a3a3a;
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+  /* в тёмной теме элевация карточек передаётся отличием bg-card от bg-page, тень не рисуется (DESIGN.md §1.6) */
+  --shadow-card: none;
 }
 
 @media (min-width: 1024px) {

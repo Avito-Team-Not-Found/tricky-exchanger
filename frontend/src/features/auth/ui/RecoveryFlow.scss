@@ -1,0 +1,44 @@
+.recovery-title {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+.recovery-back {
+  align-self: flex-start;
+  padding-left: 0;
+}
+
+.recovery-description {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body);
+  color: var(--color-text-secondary);
+}
+
+.recovery-otp {
+  display: flex;
+  justify-content: center;
+}
+
+.recovery-resend {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.recovery-resend__link {
+  // тач-таргет 44×44 через padding + компенсирующий negative margin (DESIGN.md §1.8)
+  padding: 14px 8px;
+  margin: -14px -8px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--color-accent-primary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.recovery-resend__link:disabled {
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
