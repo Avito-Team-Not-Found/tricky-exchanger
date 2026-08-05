@@ -1,14 +1,14 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
-import { useAppDispatch, useAppSelector } from '@app/store/hooks'
-import { toggleTheme } from '@app/store/slices/themeSlice'
+import { useAppDispatch, useAppSelector } from '@app/store/hooks';
+import { toggleTheme } from '@app/store/slices/themeSlice';
 
-import { BrandLogo, ThemeToggle } from '@shared/ui'
-import './authLayout.scss'
+import { BrandLogo, ThemeToggle } from '@shared/ui';
+import './authLayout.scss';
 
 export function AuthLayout({ children }: { children: ReactNode }) {
-  const isDark = useAppSelector((state) => state.theme.mode) === 'dark'
-  const dispatch = useAppDispatch()
+  const isDark = useAppSelector((state) => state.theme.mode) === 'dark';
+  const dispatch = useAppDispatch();
 
   return (
     <div className="auth-page">
@@ -20,5 +20,5 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         {children}
       </div>
     </div>
-  )
+  );
 }

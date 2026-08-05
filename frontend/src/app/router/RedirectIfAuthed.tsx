@@ -1,13 +1,13 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
-import { Navigate } from 'react-router'
+import { Navigate } from 'react-router';
 
-import { useAppSelector } from '@app/store/hooks'
+import { useAppSelector } from '@app/store/hooks';
 
 export function RedirectIfAuthed({ children }: { children: ReactNode }) {
-  const token = useAppSelector((state) => state.user.token)
+  const token = useAppSelector((state) => state.user.token);
   if (token) {
-    return <Navigate to="/products" replace />
+    return <Navigate to="/products" replace />;
   }
-  return children
+  return children;
 }

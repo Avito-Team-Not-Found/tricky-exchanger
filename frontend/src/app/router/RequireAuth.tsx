@@ -1,13 +1,13 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
-import { Navigate } from 'react-router'
+import { Navigate } from 'react-router';
 
-import { useAppSelector } from '@app/store/hooks'
+import { useAppSelector } from '@app/store/hooks';
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const token = useAppSelector((state) => state.user.token)
+  const token = useAppSelector((state) => state.user.token);
   if (!token) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/login" replace />;
   }
-  return children
+  return children;
 }

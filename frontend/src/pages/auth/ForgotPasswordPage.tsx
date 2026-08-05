@@ -1,11 +1,11 @@
-import { RecoveryFlow } from '@features/auth'
+import { RecoveryFlow } from '@features/auth';
 
-import { AuthLayout } from './AuthLayout'
+import { AuthLayout } from './AuthLayout';
 
 export function ForgotPasswordPage() {
   return (
     <AuthLayout>
       <RecoveryFlow />
     </AuthLayout>
-  )
+  );
 }

@@ -1,8 +1,8 @@
-import { Route, Routes } from 'react-router'
+import { Route, Routes } from 'react-router';
 
-import { AuthPage, ForgotPasswordPage } from '@pages/index'
+import { AuthPage, ForgotPasswordPage } from '@pages/index';
 
-import { RedirectIfAuthed } from './RedirectIfAuthed'
+import { RedirectIfAuthed } from './RedirectIfAuthed';
 
 export function AppRoutes() {
   return (
@@ -34,5 +34,5 @@ export function AppRoutes() {
       {/* заглушка на / и неизвестные пути — до появления первой защищённой страницы редиректить некуда */}
       <Route path="*" element={<AuthPage />} />
     </Routes>
-  )
+  );
 }

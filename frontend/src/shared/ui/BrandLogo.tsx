@@ -1,9 +1,9 @@
-import { SwapOutlined } from '@ant-design/icons'
+import { SwapOutlined } from '@ant-design/icons';
 
-import './ui.scss'
+import './ui.scss';
 
 interface BrandLogoProps {
-  className?: string
+  className?: string;
 }
 
 export function BrandLogo({ className = '' }: BrandLogoProps) {
@@ -12,5 +12,5 @@ export function BrandLogo({ className = '' }: BrandLogoProps) {
       <SwapOutlined className="brand-logo__icon" aria-hidden />
       <span className="brand-logo__text">Tricky Exchanger</span>
     </span>
-  )
+  );
 }

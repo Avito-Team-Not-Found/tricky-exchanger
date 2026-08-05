@@ -1,35 +1,35 @@
-import { useState } from 'react'
+import { useState } from 'react';
 
-import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons'
-import { App as AntApp, Button, Form, Input } from 'antd'
-import { useNavigate } from 'react-router'
+import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons';
+import { App as AntApp, Button, Form, Input } from 'antd';
+import { useNavigate } from 'react-router';
 
-import { useAppDispatch } from '@app/store/hooks'
-import { loginSucceeded } from '@app/store/slices/userSlice'
+import { useAppDispatch } from '@app/store/hooks';
+import { loginSucceeded } from '@app/store/slices/userSlice';
 
-import { getErrorMessage } from '@shared/lib/errorMessage'
-import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH } from '@shared/lib/validation'
+import { getErrorMessage } from '@shared/lib/errorMessage';
+import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH } from '@shared/lib/validation';
 
-import { registerRequest } from '../api/authApi'
-import './AuthForms.scss'
+import { registerRequest } from '../api/authApi';
+import './AuthForms.scss';
 
 interface RegisterValues {
-  name: string
-  email: string
-  password: string
-  confirm: string
+  name: string;
+  email: string;
+  password: string;
+  confirm: string;
 }
 
 export function RegisterForm() {
-  const { message } = AntApp.useApp()
-  const dispatch = useAppDispatch()
-  const navigate = useNavigate()
-  const [form] = Form.useForm<RegisterValues>()
-  const name = Form.useWatch('name', form)
-  const email = Form.useWatch('email', form)
-  const password = Form.useWatch('password', form)
-  const confirm = Form.useWatch('confirm', form)
-  const [submitting, setSubmitting] = useState(false)
+  const { message } = AntApp.useApp();
+  const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const [form] = Form.useForm<RegisterValues>();
+  const name = Form.useWatch('name', form);
+  const email = Form.useWatch('email', form);
+  const password = Form.useWatch('password', form);
+  const confirm = Form.useWatch('confirm', form);
+  const [submitting, setSubmitting] = useState(false);
 
   // паттерн должен совпадать с правилом валидации поля, чтобы кнопка и Form не расходились
   const canSubmit =
@@ -37,25 +37,25 @@ export function RegisterForm() {
     EMAIL_PATTERN.test(email ?? '') &&
     (password?.length ?? 0) >= PASSWORD_MIN_LENGTH &&
     !!confirm &&
-    confirm === password
+    confirm === password;
 
   async function handleSubmit(values: RegisterValues) {
-    setSubmitting(true)
+    setSubmitting(true);
     try {
       const session = await registerRequest(
         values.name.trim(),
         values.email.trim(),
         values.password,
-      )
-      dispatch(loginSucceeded(session))
-      navigate('/products', { replace: true })
+      );
+      dispatch(loginSucceeded(session));
+      navigate('/products', { replace: true });
     } catch (error) {
       // регистрация никогда не отвечает 401 (см. mock/server.js) — только 400/409
       message.error(
         getErrorMessage(error, { 409: 'Пользователь с таким email уже зарегистрирован' }),
-      )
+      );
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
@@ -107,9 +107,9 @@ export function RegisterForm() {
           {
             validator(_, value: string | undefined) {
               if (!value || value === form.getFieldValue('password')) {
-                return Promise.resolve()
+                return Promise.resolve();
               }
-              return Promise.reject(new Error('Пароли не совпадают'))
+              return Promise.reject(new Error('Пароли не совпадают'));
             },
           },
         ]}
@@ -131,5 +131,5 @@ export function RegisterForm() {
         Зарегистрироваться
       </Button>
     </Form>
-  )
+  );
 }

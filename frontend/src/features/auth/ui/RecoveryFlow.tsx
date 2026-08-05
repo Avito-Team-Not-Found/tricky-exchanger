@@ -1,104 +1,104 @@
-import { useState } from 'react'
+import { useState } from 'react';
 
-import { ArrowLeftOutlined, LockOutlined, MailOutlined } from '@ant-design/icons'
-import { App as AntApp, Button, Form, Input, Result } from 'antd'
-import { isAxiosError } from 'axios'
-import { Link, useNavigate } from 'react-router'
+import { ArrowLeftOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
+import { App as AntApp, Button, Form, Input, Result } from 'antd';
+import { isAxiosError } from 'axios';
+import { Link, useNavigate } from 'react-router';
 
-import { getErrorMessage } from '@shared/lib/errorMessage'
-import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH } from '@shared/lib/validation'
+import { getErrorMessage } from '@shared/lib/errorMessage';
+import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH } from '@shared/lib/validation';
 
-import { resetPassword, sendRecoveryCode, verifyRecoveryCode } from '../api/authApi'
-import './AuthForms.scss'
-import './RecoveryFlow.scss'
+import { resetPassword, sendRecoveryCode, verifyRecoveryCode } from '../api/authApi';
+import './AuthForms.scss';
+import './RecoveryFlow.scss';
 
-const OTP_LENGTH = 6
+const OTP_LENGTH = 6;
 
-type RecoveryStep = 'email' | 'code' | 'password' | 'success'
+type RecoveryStep = 'email' | 'code' | 'password' | 'success';
 
 interface RecoveryEmailValues {
-  email: string
+  email: string;
 }
 
 interface NewPasswordValues {
-  password: string
-  confirm: string
+  password: string;
+  confirm: string;
 }
 
 export function RecoveryFlow() {
-  const { message } = AntApp.useApp()
-  const navigate = useNavigate()
-  const [step, setStep] = useState<RecoveryStep>('email')
-  const [email, setEmail] = useState('')
-  const [otp, setOtp] = useState('')
-  const [otpInvalid, setOtpInvalid] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [verifying, setVerifying] = useState(false)
-  const [resetting, setResetting] = useState(false)
+  const { message } = AntApp.useApp();
+  const navigate = useNavigate();
+  const [step, setStep] = useState<RecoveryStep>('email');
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpInvalid, setOtpInvalid] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
-  const [emailForm] = Form.useForm<RecoveryEmailValues>()
-  const emailValue = Form.useWatch('email', emailForm)
-  const emailReady = EMAIL_PATTERN.test(emailValue ?? '')
+  const [emailForm] = Form.useForm<RecoveryEmailValues>();
+  const emailValue = Form.useWatch('email', emailForm);
+  const emailReady = EMAIL_PATTERN.test(emailValue ?? '');
 
-  const [passwordForm] = Form.useForm<NewPasswordValues>()
-  const newPassword = Form.useWatch('password', passwordForm)
-  const confirm = Form.useWatch('confirm', passwordForm)
+  const [passwordForm] = Form.useForm<NewPasswordValues>();
+  const newPassword = Form.useWatch('password', passwordForm);
+  const confirm = Form.useWatch('confirm', passwordForm);
   const passwordReady =
-    (newPassword?.length ?? 0) >= PASSWORD_MIN_LENGTH && !!confirm && confirm === newPassword
+    (newPassword?.length ?? 0) >= PASSWORD_MIN_LENGTH && !!confirm && confirm === newPassword;
 
   async function handleSend(values: RecoveryEmailValues) {
-    setSending(true)
+    setSending(true);
     try {
-      await sendRecoveryCode(values.email.trim())
-      setEmail(values.email.trim())
-      setOtp('')
-      setOtpInvalid(false)
-      setStep('code')
+      await sendRecoveryCode(values.email.trim());
+      setEmail(values.email.trim());
+      setOtp('');
+      setOtpInvalid(false);
+      setStep('code');
     } catch (error) {
-      message.error(getErrorMessage(error, { 404: 'Пользователь с таким email не найден' }))
+      message.error(getErrorMessage(error, { 404: 'Пользователь с таким email не найден' }));
     } finally {
-      setSending(false)
+      setSending(false);
     }
   }
 
   async function handleResend() {
-    setSending(true)
+    setSending(true);
     try {
-      await sendRecoveryCode(email)
-      setOtp('')
-      setOtpInvalid(false)
-      message.success('Код отправлен снова')
+      await sendRecoveryCode(email);
+      setOtp('');
+      setOtpInvalid(false);
+      message.success('Код отправлен снова');
     } catch (error) {
-      message.error(getErrorMessage(error, {}))
+      message.error(getErrorMessage(error, {}));
     } finally {
-      setSending(false)
+      setSending(false);
     }
   }
 
   async function handleVerify() {
-    setVerifying(true)
+    setVerifying(true);
     try {
-      await verifyRecoveryCode(email, otp)
-      setStep('password')
+      await verifyRecoveryCode(email, otp);
+      setStep('password');
     } catch (error) {
       // otpInvalid отражает именно «код не подошёл» (400) — не сетевую/прочую ошибку
-      const isWrongCode = isAxiosError(error) && error.response?.status === 400
-      if (isWrongCode) setOtpInvalid(true)
-      message.error(getErrorMessage(error, { 400: 'Неверный или истёкший код' }))
+      const isWrongCode = isAxiosError(error) && error.response?.status === 400;
+      if (isWrongCode) setOtpInvalid(true);
+      message.error(getErrorMessage(error, { 400: 'Неверный или истёкший код' }));
     } finally {
-      setVerifying(false)
+      setVerifying(false);
     }
   }
 
   async function handleReset(values: NewPasswordValues) {
-    setResetting(true)
+    setResetting(true);
     try {
-      await resetPassword(email, otp, values.password)
-      setStep('success')
+      await resetPassword(email, otp, values.password);
+      setStep('success');
     } catch (error) {
-      message.error(getErrorMessage(error, { 400: 'Неверный или истёкший код' }))
+      message.error(getErrorMessage(error, { 400: 'Неверный или истёкший код' }));
     } finally {
-      setResetting(false)
+      setResetting(false);
     }
   }
 
@@ -112,7 +112,7 @@ export function RecoveryFlow() {
     >
       Назад
     </Button>
-  )
+  );
 
   if (step === 'email') {
     return (
@@ -156,7 +156,7 @@ export function RecoveryFlow() {
           </p>
         </Form>
       </>
-    )
+    );
   }
 
   if (step === 'code') {
@@ -172,8 +172,8 @@ export function RecoveryFlow() {
             value={otp}
             status={otpInvalid ? 'error' : undefined}
             onChange={(value) => {
-              setOtp(value)
-              setOtpInvalid(false)
+              setOtp(value);
+              setOtpInvalid(false);
             }}
             aria-label="Код из 6 цифр"
           />
@@ -200,7 +200,7 @@ export function RecoveryFlow() {
           Подтвердить
         </Button>
       </>
-    )
+    );
   }
 
   if (step === 'password') {
@@ -239,9 +239,9 @@ export function RecoveryFlow() {
               {
                 validator(_, value: string | undefined) {
                   if (!value || value === passwordForm.getFieldValue('password')) {
-                    return Promise.resolve()
+                    return Promise.resolve();
                   }
-                  return Promise.reject(new Error('Пароли не совпадают'))
+                  return Promise.reject(new Error('Пароли не совпадают'));
                 },
               },
             ]}
@@ -264,7 +264,7 @@ export function RecoveryFlow() {
           </Button>
         </Form>
       </>
-    )
+    );
   }
 
   return (
@@ -278,5 +278,5 @@ export function RecoveryFlow() {
         </Button>
       }
     />
-  )
+  );
 }

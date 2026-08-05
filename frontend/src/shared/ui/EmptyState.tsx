@@ -1,12 +1,12 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
-import './ui.scss'
+import './ui.scss';
 
 interface EmptyStateProps {
-  icon?: ReactNode
-  title: string
-  description?: string
-  action?: ReactNode
+  icon?: ReactNode;
+  title: string;
+  description?: string;
+  action?: ReactNode;
 }
 
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
@@ -17,5 +17,5 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
       {description && <p className="empty-state__description">{description}</p>}
       {action && <div className="empty-state__action">{action}</div>}
     </div>
-  )
+  );
 }

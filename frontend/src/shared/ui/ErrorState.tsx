@@ -1,10 +1,10 @@
-import { ExclamationCircleOutlined } from '@ant-design/icons'
-import { Button } from 'antd'
+import { ExclamationCircleOutlined } from '@ant-design/icons';
+import { Button } from 'antd';
 
-import './ui.scss'
+import './ui.scss';
 
 interface ErrorStateProps {
-  onRetry: () => void
+  onRetry: () => void;
 }
 
 export function ErrorState({ onRetry }: ErrorStateProps) {
@@ -14,5 +14,5 @@ export function ErrorState({ onRetry }: ErrorStateProps) {
       <p className="error-state__title">Что-то пошло не так</p>
       <Button onClick={onRetry}>Повторить попытку</Button>
     </div>
-  )
+  );
 }

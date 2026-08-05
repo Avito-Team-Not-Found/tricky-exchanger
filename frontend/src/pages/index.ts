@@ -1,2 +1,2 @@
-export { AuthPage } from './auth/AuthPage'
-export { ForgotPasswordPage } from './auth/ForgotPasswordPage'
+export { AuthPage } from './auth/AuthPage';
+export { ForgotPasswordPage } from './auth/ForgotPasswordPage';

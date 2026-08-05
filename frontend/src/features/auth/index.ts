@@ -1,3 +1,3 @@
-export { LoginForm } from './ui/LoginForm'
-export { RecoveryFlow } from './ui/RecoveryFlow'
-export { RegisterForm } from './ui/RegisterForm'
+export { LoginForm } from './ui/LoginForm';
+export { RecoveryFlow } from './ui/RecoveryFlow';
+export { RegisterForm } from './ui/RegisterForm';

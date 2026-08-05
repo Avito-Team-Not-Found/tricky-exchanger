@@ -1,15 +1,15 @@
-import type { User } from '@entities/user'
+import type { User } from '@entities/user';
 
-import { apiClient } from '@shared/api'
+import { apiClient } from '@shared/api';
 
 export interface AuthResponse {
-  token: string
-  user: User
+  token: string;
+  user: User;
 }
 
 export async function loginRequest(email: string, password: string): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>('/account/login/', { email, password })
-  return data
+  const { data } = await apiClient.post<AuthResponse>('/account/login/', { email, password });
+  return data;
 }
 
 export async function registerRequest(
@@ -21,27 +21,27 @@ export async function registerRequest(
     name,
     email,
     password,
-  })
-  return data
+  });
+  return data;
 }
 
 export interface SendCodeResponse {
-  message: 'code_sent'
+  message: 'code_sent';
   // мок-сервер возвращает код, чтобы флоу можно было пройти без эмейл-доставки (PROJECT.md §4.1)
-  code: string
+  code: string;
 }
 
 export async function sendRecoveryCode(email: string): Promise<SendCodeResponse> {
   const { data } = await apiClient.post<SendCodeResponse>('/account/password-recovery/send-code/', {
     email,
-  })
-  return data
+  });
+  return data;
 }
 
 export async function verifyRecoveryCode(email: string, code: string): Promise<void> {
-  await apiClient.post('/account/password-recovery/verify-code/', { email, code })
+  await apiClient.post('/account/password-recovery/verify-code/', { email, code });
 }
 
 export async function resetPassword(email: string, code: string, password: string): Promise<void> {
-  await apiClient.post('/account/password-recovery/reset-password/', { email, code, password })
+  await apiClient.post('/account/password-recovery/reset-password/', { email, code, password });
 }
