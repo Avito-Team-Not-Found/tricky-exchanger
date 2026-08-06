@@ -53,56 +53,9 @@ a {
   margin: -15px;
 }
 
-.page-container {
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--spacing-md);
-}
-
 .page-title {
   font-size: var(--font-size-h1);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-heading);
   margin-bottom: var(--spacing-md);
-}
-
-.skeleton-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.skeleton-card__media {
-  aspect-ratio: 1;
-}
-
-.skeleton-card__line {
-  height: var(--font-size-body);
-  margin: var(--spacing-sm);
-  border-radius: var(--radius-sm);
-}
-
-.skeleton-card.skeleton-card--list {
-  height: 64px;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-.shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--color-bg-card) 25%,
-    color-mix(in srgb, var(--color-text-secondary) 10%, var(--color-bg-card)) 50%,
-    var(--color-bg-card) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
 }
