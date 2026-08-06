@@ -1,120 +1,42 @@
-import { useState } from 'react';
-
 import { ArrowLeftOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Form, Input, Result } from 'antd';
-import { isAxiosError } from 'axios';
-import { Link, useNavigate } from 'react-router';
+import { Button, Form, Input, Result } from 'antd';
+import { Link } from 'react-router';
 
-import { getErrorMessage } from '@shared/lib/errorMessage';
 import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH } from '@shared/lib/validation';
 
-import { resetPassword, sendRecoveryCode, verifyRecoveryCode } from '../api/authApi';
+import { OTP_LENGTH, useRecoveryFlow } from '../model/useRecoveryFlow';
+
 import './AuthForms.scss';
 import './RecoveryFlow.scss';
 
-const OTP_LENGTH = 6;
-
-type RecoveryStep = 'email' | 'code' | 'password' | 'success';
-
-interface RecoveryEmailValues {
-  email: string;
-}
-
-interface NewPasswordValues {
-  password: string;
-  confirm: string;
-}
-
 export function RecoveryFlow() {
-  const { message } = AntApp.useApp();
-  const navigate = useNavigate();
-  const [step, setStep] = useState<RecoveryStep>('email');
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpInvalid, setOtpInvalid] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [resetting, setResetting] = useState(false);
+  const {
+    state,
+    emailForm,
+    emailReady,
+    passwordForm,
+    passwordReady,
+    handleSend,
+    handleResend,
+    setOtp,
+    handleVerify,
+    handleReset,
+    goBack,
+    goToLogin,
+  } = useRecoveryFlow();
 
-  const [emailForm] = Form.useForm<RecoveryEmailValues>();
-  const emailValue = Form.useWatch('email', emailForm);
-  const emailReady = EMAIL_PATTERN.test(emailValue ?? '');
-
-  const [passwordForm] = Form.useForm<NewPasswordValues>();
-  const newPassword = Form.useWatch('password', passwordForm);
-  const confirm = Form.useWatch('confirm', passwordForm);
-  const passwordReady =
-    (newPassword?.length ?? 0) >= PASSWORD_MIN_LENGTH && !!confirm && confirm === newPassword;
-
-  async function handleSend(values: RecoveryEmailValues) {
-    setSending(true);
-    try {
-      await sendRecoveryCode(values.email.trim());
-      setEmail(values.email.trim());
-      setOtp('');
-      setOtpInvalid(false);
-      setStep('code');
-    } catch (error) {
-      message.error(getErrorMessage(error, { 404: 'Пользователь с таким email не найден' }));
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function handleResend() {
-    setSending(true);
-    try {
-      await sendRecoveryCode(email);
-      setOtp('');
-      setOtpInvalid(false);
-      message.success('Код отправлен снова');
-    } catch (error) {
-      message.error(getErrorMessage(error, {}));
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function handleVerify() {
-    setVerifying(true);
-    try {
-      await verifyRecoveryCode(email, otp);
-      setStep('password');
-    } catch (error) {
-      // otpInvalid отражает именно «код не подошёл» (400) — не сетевую/прочую ошибку
-      const isWrongCode = isAxiosError(error) && error.response?.status === 400;
-      if (isWrongCode) setOtpInvalid(true);
-      message.error(getErrorMessage(error, { 400: 'Неверный или истёкший код' }));
-    } finally {
-      setVerifying(false);
-    }
-  }
-
-  async function handleReset(values: NewPasswordValues) {
-    setResetting(true);
-    try {
-      await resetPassword(email, otp, values.password);
-      setStep('success');
-    } catch (error) {
-      message.error(getErrorMessage(error, { 400: 'Неверный или истёкший код' }));
-    } finally {
-      setResetting(false);
-    }
-  }
-
-  // на финальном шаге выход только через «Войти», возврат к форме не нужен
-  const backButton = step !== 'success' && (
+  const backButton = state.step !== 'success' && (
     <Button
       type="text"
       className="recovery-back"
       icon={<ArrowLeftOutlined aria-hidden />}
-      onClick={() => navigate('/login')}
+      onClick={goBack}
     >
       Назад
     </Button>
   );
 
-  if (step === 'email') {
+  if (state.step === 'email') {
     return (
       <>
         {backButton}
@@ -127,7 +49,7 @@ export function RecoveryFlow() {
           form={emailForm}
           layout="vertical"
           name="recovery-email"
-          disabled={sending}
+          disabled={state.sending}
           requiredMark={false}
           onFinish={handleSend}
         >
@@ -146,7 +68,7 @@ export function RecoveryFlow() {
             htmlType="submit"
             size="large"
             block
-            loading={sending}
+            loading={state.sending}
             disabled={!emailReady}
           >
             Отправить код
@@ -159,22 +81,22 @@ export function RecoveryFlow() {
     );
   }
 
-  if (step === 'code') {
+  if (state.step === 'code') {
+    const sending = state.action === 'sending';
+    const verifying = state.action === 'verifying';
+
     return (
       <>
         {backButton}
         <h1 className="recovery-title">Введите код</h1>
-        <p className="recovery-description">Мы отправили 6-значный код на {email}</p>
+        <p className="recovery-description">Мы отправили 6-значный код на {state.email}</p>
         <div className="recovery-otp">
           <Input.OTP
             size="large"
             length={OTP_LENGTH}
-            value={otp}
-            status={otpInvalid ? 'error' : undefined}
-            onChange={(value) => {
-              setOtp(value);
-              setOtpInvalid(false);
-            }}
+            value={state.otp}
+            status={state.otpInvalid ? 'error' : undefined}
+            onChange={setOtp}
             aria-label="Код из 6 цифр"
           />
         </div>
@@ -194,7 +116,7 @@ export function RecoveryFlow() {
           size="large"
           block
           loading={verifying}
-          disabled={otp.length !== OTP_LENGTH}
+          disabled={state.otp.length !== OTP_LENGTH}
           onClick={handleVerify}
         >
           Подтвердить
@@ -203,7 +125,7 @@ export function RecoveryFlow() {
     );
   }
 
-  if (step === 'password') {
+  if (state.step === 'password') {
     return (
       <>
         {backButton}
@@ -214,7 +136,7 @@ export function RecoveryFlow() {
           form={passwordForm}
           layout="vertical"
           name="recovery-password"
-          disabled={resetting}
+          disabled={state.resetting}
           requiredMark={false}
           onFinish={handleReset}
         >
@@ -257,7 +179,7 @@ export function RecoveryFlow() {
             htmlType="submit"
             size="large"
             block
-            loading={resetting}
+            loading={state.resetting}
             disabled={!passwordReady}
           >
             Изменить пароль
@@ -273,7 +195,7 @@ export function RecoveryFlow() {
       title="Пароль изменён"
       subTitle="Используйте новый пароль при следующем входе"
       extra={
-        <Button type="primary" size="large" onClick={() => navigate('/login', { replace: true })}>
+        <Button type="primary" size="large" onClick={goToLogin}>
           Войти
         </Button>
       }
