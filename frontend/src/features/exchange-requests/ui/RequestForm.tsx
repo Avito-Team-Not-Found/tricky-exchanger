@@ -1,3 +1,5 @@
+import { useImperativeHandle, type Ref } from 'react';
+
 import { CheckCircleFilled, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Checkbox, Form, Input, Radio, Select, Skeleton } from 'antd';
 
@@ -11,11 +13,16 @@ import './RequestForm.scss';
 
 const CONDITION_OPTIONS = ITEM_CONDITIONS.map(({ value, label }) => ({ value, label }));
 
-interface RequestFormProps {
-  requestId?: string;
+export interface RequestFormHandle {
+  confirmLeave: () => void;
 }
 
-export function RequestForm({ requestId }: RequestFormProps) {
+interface RequestFormProps {
+  requestId?: string;
+  ref?: Ref<RequestFormHandle>;
+}
+
+export function RequestForm({ requestId, ref }: RequestFormProps) {
   const {
     form,
     request,
@@ -30,10 +37,14 @@ export function RequestForm({ requestId }: RequestFormProps) {
     categories,
     initialValues,
     result,
+    handleValuesChange,
+    confirmLeave,
     handleSubmit,
     goToList,
     goCreateItem,
   } = useRequestForm(requestId);
+
+  useImperativeHandle(ref, () => ({ confirmLeave }), [confirmLeave]);
 
   if (isLoading) {
     return (
@@ -79,6 +90,7 @@ export function RequestForm({ requestId }: RequestFormProps) {
       name="request-form"
       initialValues={initialValues}
       disabled={submitting || readOnly}
+      onValuesChange={handleValuesChange}
       onFinish={handleSubmit}
     >
       {readOnly && readOnlyReason ? (

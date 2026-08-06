@@ -25,13 +25,14 @@ export interface RequestFormValues {
 }
 
 export function useRequestForm(requestId?: string) {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [form] = Form.useForm<RequestFormValues>();
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<CreateRequestResult | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   const requestQuery = useRequest(requestId);
   const request = requestQuery.data;
@@ -109,6 +110,8 @@ export function useRequestForm(requestId?: string) {
         setResult(created);
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
       }
+      // после успешного сохранения уход с формы не должен спрашивать про несохранённое
+      setDirty(false);
     } catch (error) {
       message.error(
         getErrorMessage(
@@ -130,6 +133,31 @@ export function useRequestForm(requestId?: string) {
     navigate('/products/new?returnTo=request');
   }
 
+  function handleValuesChange() {
+    setDirty(true);
+  }
+
+  function confirmLeave() {
+    if (!dirty) {
+      goToList();
+      return;
+    }
+    modal.confirm({
+      title: 'Изменения не сохранены',
+      content: 'Хотите сохранить изменения или вернуться назад?',
+      okText: 'Сохранить изменения',
+      cancelText: 'Назад',
+      closable: false,
+      maskClosable: false,
+      // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
+      // берём значения синхронно и шлём сами
+      onOk: () => {
+        handleSubmit(form.getFieldsValue() as RequestFormValues);
+      },
+      onCancel: () => goToList(),
+    });
+  }
+
   return {
     form,
     request,
@@ -144,6 +172,8 @@ export function useRequestForm(requestId?: string) {
     categories: categoriesQuery.data ?? [],
     initialValues,
     result,
+    handleValuesChange,
+    confirmLeave,
     handleSubmit,
     goToList,
     goCreateItem,

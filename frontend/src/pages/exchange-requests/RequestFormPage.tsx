@@ -1,14 +1,16 @@
+import { useRef } from 'react';
+
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
-import { useNavigate, useParams } from 'react-router';
+import { useParams } from 'react-router';
 
-import { RequestForm } from '@features/exchange-requests';
+import { RequestForm, type RequestFormHandle } from '@features/exchange-requests';
 
 import './RequestFormPage.scss';
 
 export function RequestFormPage() {
   const { requestId } = useParams();
-  const navigate = useNavigate();
+  const formRef = useRef<RequestFormHandle>(null);
 
   return (
     <div className="request-form-page">
@@ -18,14 +20,14 @@ export function RequestFormPage() {
           type="text"
           icon={<ArrowLeftOutlined aria-hidden />}
           aria-label="Назад"
-          onClick={() => navigate('/exchange-requests')}
+          onClick={() => formRef.current?.confirmLeave()}
         />
         <h1 className="request-form-page__title">
           {requestId ? 'Редактирование запроса' : 'Новый запрос'}
         </h1>
       </header>
       <div className="request-form-page__body">
-        <RequestForm requestId={requestId} />
+        <RequestForm requestId={requestId} ref={formRef} />
       </div>
     </div>
   );
