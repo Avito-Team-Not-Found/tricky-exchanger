@@ -399,6 +399,36 @@ describe('items', () => {
     expect(body).toMatchObject({ id, condition: 'NEW', color: 'red', material: 'aluminum' });
   });
 
+  // multipart не умеет null: очистка едет пустой строкой. Без этого очистка цвета терялась,
+  // когда пользователь заодно менял фото и запрос уходил как multipart
+  it('clears color through multipart when the photo is replaced too', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const id = items[0].id;
+    await request(`/items/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ color: 'white', material: 'plastic' }),
+    });
+
+    const form = new FormData();
+    form.append('title', 'Товар без цвета');
+    form.append('description', 'Описание');
+    form.append('condition', 'USED');
+    form.append('color', '');
+    form.append('material', '');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
+
+    const { status, body } = await request(`/items/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: form,
+    });
+
+    expect(status).toBe(200);
+    expect(body.color).toBeNull();
+    expect(body.material).toBeNull();
+    expect(body.image).toMatch(/^data:image\/png;base64,/);
+  });
 
   it('refuses to archive a reserved item', async () => {
     const { status, body } = await request(`/items/${RESERVED_ITEM_ID}`, {
@@ -410,6 +440,20 @@ describe('items', () => {
     expect(body).toMatchObject({ code: 409 });
   });
 
+  it('stores an empty material as null, not the string "null"', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const id = items[0].id;
+
+    const { status, body } = await request(`/items/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ material: null, color: null }),
+    });
+
+    expect(status).toBe(200);
+    expect(body.material).toBeNull();
+    expect(body.color).toBeNull();
+  });
 
   it('returns 404 for a foreign item', async () => {
     const { status, body } = await request(`/items/${FOREIGN_ITEM_ID}`, {

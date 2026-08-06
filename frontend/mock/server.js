@@ -209,15 +209,16 @@ function parseItemFields(body, { partial = false } = {}) {
     patch.condition = condition;
   }
   if (has('color')) {
-    const color = String(body.color).trim();
+    // пустой/отсутствующий материал фронт шлёт как null — не превращать его в строку "null"
+    const color = body.color == null ? '' : String(body.color).trim();
     patch.color = color ? color : null;
   }
   if (has('material')) {
-    const material = String(body.material).trim();
+    const material = body.material == null ? '' : String(body.material).trim();
     patch.material = material ? material : null;
   }
   if (has('categoryId')) {
-    const categoryId = String(body.categoryId).trim();
+    const categoryId = body.categoryId == null ? '' : String(body.categoryId).trim();
     patch.categoryId = categoryId ? categoryId : null;
   }
   if (has('attributes') && body.attributes && typeof body.attributes === 'object') {
