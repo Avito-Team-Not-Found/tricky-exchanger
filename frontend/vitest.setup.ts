@@ -18,6 +18,14 @@ if (typeof window !== 'undefined') {
       dispatchEvent: () => false,
     }),
   });
+
+  // antd (Upload, Select и др.) опирается на ResizeObserver, которого нет в jsdom
+  class ResizeObserverMock {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  window.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
 }
 
 afterEach(() => {

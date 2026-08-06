@@ -1,0 +1,181 @@
+import { CheckCircleFilled, LockOutlined, PlusOutlined } from '@ant-design/icons';
+import { Button, Checkbox, Form, Input, Radio, Select, Skeleton } from 'antd';
+
+import { ITEM_CONDITIONS, ITEM_STATUS_META } from '@entities/item';
+
+import { ErrorState } from '@shared/ui';
+
+import { useRequestForm } from '../model/useRequestForm';
+
+import './RequestForm.scss';
+
+const CONDITION_OPTIONS = ITEM_CONDITIONS.map(({ value, label }) => ({ value, label }));
+
+interface RequestFormProps {
+  requestId?: string;
+}
+
+export function RequestForm({ requestId }: RequestFormProps) {
+  const {
+    form,
+    request,
+    isEdit,
+    isLoading,
+    isLoadError,
+    submitting,
+    canSubmit,
+    items,
+    readOnly,
+    readOnlyReason,
+    categories,
+    initialValues,
+    result,
+    handleSubmit,
+    goToList,
+    goCreateItem,
+  } = useRequestForm(requestId);
+
+  if (isLoading) {
+    return (
+      <div className="request-form__skeleton">
+        <Skeleton active paragraph={{ rows: 5 }} />
+      </div>
+    );
+  }
+
+  if (isLoadError) {
+    return <ErrorState onRetry={() => window.location.reload()} />;
+  }
+
+  if (result) {
+    const found = result.matching.createdCandidateChains > 0;
+    return (
+      <div className="request-result">
+        <CheckCircleFilled className="request-result__icon" aria-hidden />
+        <h2 className="request-result__title">Заявка создана</h2>
+        <p className="request-result__description">
+          {found
+            ? `Найдено ${result.matching.createdCandidateChains} подходящих цепочек. Заявка перешла в статус «В процессе».`
+            : 'Пока подходящих цепочек нет — заявка остаётся в поиске.'}
+        </p>
+        <Button
+          className="request-result__cta"
+          type="primary"
+          size="large"
+          block
+          onClick={goToList}
+        >
+          К моим запросам
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Form
+      className="request-form"
+      form={form}
+      layout="vertical"
+      name="request-form"
+      initialValues={initialValues}
+      disabled={submitting || readOnly}
+      onFinish={handleSubmit}
+    >
+      {readOnly && readOnlyReason ? (
+        <div className="request-form__lock" role="status">
+          <LockOutlined className="request-form__lock-icon" aria-hidden />
+          <span>
+            {readOnlyReason === 'LOCKED'
+              ? 'Заявка заблокирована и защищена от редактирования'
+              : 'Эта заявка закрыта для редактирования'}
+          </span>
+        </div>
+      ) : null}
+
+      <section className="request-form__block">
+        <h2 className="request-form__heading">Что вы отдаёте?</h2>
+        {isEdit ? (
+          <p className="request-form__summary">
+            {request?.offeredItem?.title ?? 'Товар не найден'}
+          </p>
+        ) : (
+          <>
+            {items.length > 0 ? (
+              <Form.Item
+                className="request-form__items-field"
+                name="offeredItemId"
+                rules={[{ required: true, message: 'Выберите товар' }]}
+              >
+                <Radio.Group className="request-form__items" orientation="vertical">
+                  {items.map((item) => (
+                    <Radio
+                      key={item.id}
+                      value={item.id}
+                      disabled={item.status !== 'ACTIVE'}
+                      className="request-form__item"
+                    >
+                      <span className="request-form__item-name">{item.title}</span>
+                      {item.status !== 'ACTIVE' ? (
+                        <span className="request-form__item-note">
+                          {ITEM_STATUS_META[item.status].label}
+                        </span>
+                      ) : null}
+                    </Radio>
+                  ))}
+                </Radio.Group>
+              </Form.Item>
+            ) : null}
+            <Button icon={<PlusOutlined aria-hidden />} onClick={goCreateItem}>
+              Создать новый товар
+            </Button>
+          </>
+        )}
+      </section>
+
+      <section className="request-form__block">
+        <h2 className="request-form__heading">Что вы хотите получить?</h2>
+        <Form.Item
+          label="Что вы хотите получить"
+          name="wantedDescription"
+          rules={[
+            { required: true, message: 'Опишите желаемый товар' },
+            { max: 500, message: 'Описание не длиннее 500 символов' },
+          ]}
+        >
+          <Input.TextArea
+            placeholder="Например, фотоаппарат в рабочем состоянии"
+            maxLength={500}
+            showCount
+            rows={3}
+          />
+        </Form.Item>
+
+        <div className="request-form__profile">
+          <h3 className="request-form__subheading">Фильтр поиска (необязательно)</h3>
+          <Form.Item label="Категория" name="categoryId">
+            <Select
+              placeholder="Выберите категорию"
+              allowClear
+              options={categories.map((category) => ({ value: category.id, label: category.name }))}
+            />
+          </Form.Item>
+          <Form.Item label="Допустимые состояния" name="acceptableCondition">
+            <Checkbox.Group options={CONDITION_OPTIONS} />
+          </Form.Item>
+        </div>
+      </section>
+
+      <Button
+        className="request-form__submit"
+        type="primary"
+        htmlType="submit"
+        size="large"
+        block
+        loading={submitting}
+        disabled={!canSubmit}
+      >
+        {isEdit ? 'Сохранить запрос' : 'Создать запрос'}
+      </Button>
+    </Form>
+  );
+}

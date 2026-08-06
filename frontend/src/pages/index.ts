@@ -1,6 +1,8 @@
 export { AuthPage } from './auth/AuthPage';
 export { ForgotPasswordPage } from './auth/ForgotPasswordPage';
 export { ProductsPage } from './products/ProductsPage';
+export { ItemFormPage } from './products/ItemFormPage';
 export { ExchangeRequestsPage } from './exchange-requests/ExchangeRequestsPage';
+export { RequestFormPage } from './exchange-requests/RequestFormPage';
 export { ProfilePage } from './profile/ProfilePage';
 export { ChangePasswordPage } from './profile/ChangePasswordPage';

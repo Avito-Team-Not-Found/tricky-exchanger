@@ -10,9 +10,23 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_PORT = 4000;
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
-const PRODUCT_TITLE_LIMIT = 100;
-const PRODUCT_DESCRIPTION_LIMIT = 500;
+const TITLE_LIMIT = 100;
+const DESCRIPTION_LIMIT = 500;
 const RECOVERY_CODE_TTL_MS = 10 * 60 * 1000;
+
+// Контракт PROJECT.md §4.2–4.3: значения enum'ов согласованы и для товаров, и для заявок
+const ITEM_CONDITIONS = ['NEW', 'LIKE_NEW', 'USED', 'NEEDS_REPAIR'];
+
+// Справочник категорий не входит в согласованный контракт (PROJECT.md §2.3) — мок отдаёт
+// статичный каталог, чтобы форму заявки можно было заполнить целиком
+const CATEGORIES = [
+  { id: 'electronics', name: 'Электроника' },
+  { id: 'appliances', name: 'Бытовая техника' },
+  { id: 'books', name: 'Книги' },
+  { id: 'sports', name: 'Спорт и отдых' },
+  { id: 'transport', name: 'Транспорт' },
+  { id: 'other', name: 'Другое' },
+];
 
 // Коды сброса пароля живут только в памяти: эмейл-доставки в моке нет, поэтому код выводится в консоль и в ответ
 const recoveryCodes = new Map();
@@ -56,13 +70,20 @@ function publicUser(user) {
   return { id: user.id, name: user.name, email: user.email };
 }
 
-function publicProduct(product) {
+function publicItem(item) {
   return {
-    id: product.id,
-    title: product.title,
-    description: product.description,
-    image: product.image ?? null,
-    status: product.status,
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    categoryId: item.categoryId ?? null,
+    condition: item.condition,
+    color: item.color ?? null,
+    material: item.material ?? null,
+    attributes: item.attributes ?? null,
+    image: item.image ?? null,
+    status: item.status,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
   };
 }
 
@@ -70,9 +91,9 @@ function publicRequest(request, offeredItem) {
   return {
     id: request.id,
     offeredItemId: request.offeredItemId,
-    offeredItem,
+    offeredItem: offeredItem ? publicItem(offeredItem) : null,
     wantedDescription: request.wantedDescription,
-    wantedState: request.wantedState,
+    wantedProfile: request.wantedProfile ?? null,
     status: request.status,
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
@@ -82,6 +103,7 @@ function publicRequest(request, offeredItem) {
 function publicChain(chain) {
   return {
     id: chain.id,
+    requestId: chain.requestId,
     length: chain.length,
     successProbability: chain.successProbability,
     selected: chain.selected,
@@ -89,12 +111,12 @@ function publicChain(chain) {
   };
 }
 
-function toOfferRef(product) {
-  return { id: product.id, title: product.title };
+function toOfferRef(item) {
+  return { id: item.id, title: item.title };
 }
 
 // Закольцовываем цепочку: владелец хочет товар первого участника, последний участник хочет товар владельца.
-function buildParticipants(request, offeredProduct, others, usersById, offset, otherCount) {
+function buildParticipants(request, offeredItem, others, usersById, offset, otherCount) {
   const owner = usersById[request.userId];
   const picks = [];
   let cursor = offset;
@@ -110,7 +132,7 @@ function buildParticipants(request, offeredProduct, others, usersById, offset, o
     {
       userId: owner.id,
       name: owner.name,
-      offers: toOfferRef(offeredProduct),
+      offers: toOfferRef(offeredItem),
       wants: toOfferRef(picks[0]),
     },
   ];
@@ -119,29 +141,29 @@ function buildParticipants(request, offeredProduct, others, usersById, offset, o
       userId: pick.userId,
       name: usersById[pick.userId].name,
       offers: toOfferRef(pick),
-      wants: toOfferRef(i === picks.length - 1 ? offeredProduct : picks[i + 1]),
+      wants: toOfferRef(i === picks.length - 1 ? offeredItem : picks[i + 1]),
     });
   });
 
   return participants;
 }
 
+// Мок-matching: кандидаты — активные товары других пользователей, стартовый берём по первому слову запроса.
 function generateChains(db, request) {
-  const products = db.get('products').value();
+  const items = db.get('items').value();
   const users = db.get('users').value();
   const usersById = Object.fromEntries(users.map((u) => [u.id, u]));
-  const offeredProduct = products.find((p) => p.id === request.offeredItemId);
-  if (!offeredProduct) return [];
+  const offeredItem = items.find((i) => i.id === request.offeredItemId);
+  if (!offeredItem) return [];
 
-  // Мок-кандидаты — активные товары других пользователей; стартовый берём по первому слову запроса.
-  const others = products.filter((p) => p.userId !== request.userId && p.status === 'active');
+  const others = items.filter((i) => i.userId !== request.userId && i.status === 'ACTIVE');
   if (others.length === 0) return [];
 
   const wantedWord = request.wantedDescription.toLowerCase().split(/\s+/)[0];
-  let matchIndex = others.findIndex((p) => p.title.toLowerCase().includes(wantedWord));
+  let matchIndex = others.findIndex((i) => i.title.toLowerCase().includes(wantedWord));
   if (matchIndex === -1) matchIndex = 0;
 
-  const distinctUsers = new Set(others.map((p) => p.userId)).size;
+  const distinctUsers = new Set(others.map((i) => i.userId)).size;
   const probabilities = [90, 72, 55];
   return probabilities
     .slice(0, Math.min(others.length, distinctUsers))
@@ -153,7 +175,7 @@ function generateChains(db, request) {
       selected: false,
       participants: buildParticipants(
         request,
-        offeredProduct,
+        offeredItem,
         others,
         usersById,
         matchIndex + chainIndex,
@@ -161,6 +183,73 @@ function generateChains(db, request) {
       ),
       createdAt: new Date().toISOString(),
     }));
+}
+
+// Поля товара приходят и из multipart (строки), и из JSON — приводим к одному виду и валидируем.
+function parseItemFields(body, { partial = false } = {}) {
+  const patch = {};
+  const has = (key) => body?.[key] !== undefined;
+  if (has('title')) {
+    const title = String(body.title).trim();
+    if (!title) return { error: 'Название обязательно' };
+    if (title.length > TITLE_LIMIT) return { error: `Название не длиннее ${TITLE_LIMIT} символов` };
+    patch.title = title;
+  }
+  if (has('description')) {
+    const description = String(body.description).trim();
+    if (!description) return { error: 'Описание обязательно' };
+    if (description.length > DESCRIPTION_LIMIT) {
+      return { error: `Описание не длиннее ${DESCRIPTION_LIMIT} символов` };
+    }
+    patch.description = description;
+  }
+  if (has('condition')) {
+    const condition = String(body.condition);
+    if (!ITEM_CONDITIONS.includes(condition)) return { error: 'Неизвестное состояние товара' };
+    patch.condition = condition;
+  }
+  if (has('color')) {
+    const color = String(body.color).trim();
+    patch.color = color ? color : null;
+  }
+  if (has('material')) {
+    const material = String(body.material).trim();
+    patch.material = material ? material : null;
+  }
+  if (has('categoryId')) {
+    const categoryId = String(body.categoryId).trim();
+    patch.categoryId = categoryId ? categoryId : null;
+  }
+  if (has('attributes') && body.attributes && typeof body.attributes === 'object') {
+    patch.attributes = body.attributes;
+  }
+
+  if (!partial && !patch.title) return { error: 'Название обязательно' };
+  if (!partial && !patch.description) return { error: 'Описание обязательно' };
+  if (!partial && !patch.condition) return { error: 'Состояние обязательно' };
+  return { patch };
+}
+
+// wantedProfile — необязательный структурированный фильтр мэтчинга (PROJECT.md §4.3).
+// null — фильтр не задан, undefined — ошибка валидации.
+function parseWantedProfile(profile) {
+  if (profile == null) return null;
+  if (typeof profile !== 'object' || Array.isArray(profile)) return undefined;
+
+  const result = {};
+  if (profile.categoryId != null) {
+    const categoryId = String(profile.categoryId).trim();
+    if (!categoryId) return undefined;
+    result.categoryId = categoryId;
+  }
+  if (profile.acceptableCondition != null) {
+    if (!Array.isArray(profile.acceptableCondition)) return undefined;
+    if (profile.acceptableCondition.length === 0) return undefined;
+    if (!profile.acceptableCondition.every((c) => ITEM_CONDITIONS.includes(c))) return undefined;
+    result.acceptableCondition = profile.acceptableCondition;
+  }
+  if (Object.keys(result).length === 0) return null;
+  return result;
 }
 
 export function createMockApp({
@@ -176,7 +265,7 @@ export function createMockApp({
   server.use(jsonServer.bodyParser);
 
   const fail = (res, code, message) => res.status(code).json({ error: message, code });
-  const findProduct = (productId) => db.get('products').getById(productId).value();
+  const findItem = (itemId) => db.get('items').getById(itemId).value();
   const findUserByEmail = (email) =>
     db
       .get('users')
@@ -289,91 +378,74 @@ export function createMockApp({
     res.json({ message: 'password_changed' });
   });
 
-  server.get('/api/v1/products', (req, res) => {
-    const products = db
-      .get('products')
-      .filter((p) => p.userId === req.userId)
-      .value();
-    res.json(products.map(publicProduct));
+  server.get('/api/v1/categories', (req, res) => {
+    res.json(CATEGORIES);
   });
 
-  server.get('/api/v1/products/:id', (req, res) => {
-    const product = findProduct(req.params.id);
-    if (!product || product.userId !== req.userId) return fail(res, 404, 'Товар не найден');
-    res.json(publicProduct(product));
+  server.get('/api/v1/items', (req, res) => {
+    const items = db
+      .get('items')
+      .filter((i) => i.userId === req.userId)
+      .value();
+    res.json(items.map(publicItem));
+  });
+
+  server.get('/api/v1/items/:id', (req, res) => {
+    const item = findItem(req.params.id);
+    if (!item || item.userId !== req.userId) return fail(res, 404, 'Товар не найден');
+    res.json(publicItem(item));
   });
 
   const toImageDataUri = (file) =>
     file ? `data:${file.mimetype};base64,${file.buffer.toString('base64')}` : null;
 
-  server.post('/api/v1/products', upload.single('image'), (req, res) => {
-    const title = req.body?.title?.trim();
-    const description = req.body?.description?.trim();
-    if (!title) return fail(res, 400, 'Название обязательно');
-    if (!description) return fail(res, 400, 'Описание обязательно');
-    if (title.length > PRODUCT_TITLE_LIMIT)
-      return fail(res, 400, `Название не длиннее ${PRODUCT_TITLE_LIMIT} символов`);
-    if (description.length > PRODUCT_DESCRIPTION_LIMIT) {
-      return fail(res, 400, `Описание не длиннее ${PRODUCT_DESCRIPTION_LIMIT} символов`);
-    }
+  server.post('/api/v1/items', upload.single('image'), (req, res) => {
+    const { patch, error } = parseItemFields(req.body);
+    if (error) return fail(res, 400, error);
     if (!req.file) return fail(res, 400, 'Нужно загрузить фото товара');
 
     const now = new Date().toISOString();
-    const product = {
+    const item = {
       id: randomUUID(),
       userId: req.userId,
-      title,
-      description,
+      ...patch,
       image: toImageDataUri(req.file),
-      status: 'active',
+      status: 'ACTIVE',
       createdAt: now,
       updatedAt: now,
     };
-    db.get('products').insert(product).write();
-    res.status(201).json(publicProduct(product));
+    db.get('items').insert(item).write();
+    res.status(201).json(publicItem(item));
   });
 
-  server.patch('/api/v1/products/:id', upload.single('image'), (req, res) => {
-    const product = findProduct(req.params.id);
-    if (!product || product.userId !== req.userId) return fail(res, 404, 'Товар не найден');
+  server.patch('/api/v1/items/:id', upload.single('image'), (req, res) => {
+    const item = findItem(req.params.id);
+    if (!item || item.userId !== req.userId) return fail(res, 404, 'Товар не найден');
 
-    const patch = {};
-    if (req.body?.title !== undefined) {
-      const title = req.body.title.trim();
-      if (!title) return fail(res, 400, 'Название обязательно');
-      if (title.length > PRODUCT_TITLE_LIMIT)
-        return fail(res, 400, `Название не длиннее ${PRODUCT_TITLE_LIMIT} символов`);
-      patch.title = title;
-    }
-    if (req.body?.description !== undefined) {
-      const description = req.body.description.trim();
-      if (!description) return fail(res, 400, 'Описание обязательно');
-      if (description.length > PRODUCT_DESCRIPTION_LIMIT) {
-        return fail(res, 400, `Описание не длиннее ${PRODUCT_DESCRIPTION_LIMIT} символов`);
-      }
-      patch.description = description;
-    }
+    const { patch, error } = parseItemFields(req.body, { partial: true });
+    if (error) return fail(res, 400, error);
     if (req.file) {
       patch.image = toImageDataUri(req.file);
     } else if (req.body?.image === null) {
       patch.image = null;
     }
 
-    db.get('products')
-      .updateById(product.id, { ...patch, updatedAt: new Date().toISOString() })
+    db.get('items')
+      .updateById(item.id, { ...patch, updatedAt: new Date().toISOString() })
       .write();
-    res.json(publicProduct(findProduct(product.id)));
+    res.json(publicItem(findItem(item.id)));
   });
 
-  server.delete('/api/v1/products/:id', (req, res) => {
-    const product = findProduct(req.params.id);
-    if (!product || product.userId !== req.userId) return fail(res, 404, 'Товар не найден');
+  // «Архивировать» (PROJECT.md §4.2): товар исчезает из списка, связанные заявки удаляются
+  server.delete('/api/v1/items/:id', (req, res) => {
+    const item = findItem(req.params.id);
+    if (!item || item.userId !== req.userId) return fail(res, 404, 'Товар не найден');
 
-    db.get('products').removeById(product.id).write();
+    db.get('items').removeById(item.id).write();
     db.get('exchangeRequests')
-      .removeWhere((r) => r.offeredItemId === product.id)
+      .removeWhere((r) => r.offeredItemId === item.id)
       .write();
-    res.json({ message: 'deleted' });
+    res.json({ message: 'archived' });
   });
 
   server.get('/api/v1/exchange-requests', (req, res) => {
@@ -381,137 +453,146 @@ export function createMockApp({
       .get('exchangeRequests')
       .filter((r) => r.userId === req.userId)
       .value();
-    res.json(
-      requests.map((request) => {
-        const offeredItem = findProduct(request.offeredItemId);
-        return {
-          id: request.id,
-          offeredItem: offeredItem ? publicProduct(offeredItem) : null,
-          wantedDescription: request.wantedDescription,
-          status: request.status,
-        };
-      }),
-    );
+    res.json(requests.map((request) => publicRequest(request, findItem(request.offeredItemId))));
   });
 
   server.get('/api/v1/exchange-requests/:id', (req, res) => {
     const request = db.get('exchangeRequests').getById(req.params.id).value();
     if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
-    const offeredItem = findProduct(request.offeredItemId);
-    res.json(publicRequest(request, offeredItem ? publicProduct(offeredItem) : null));
+    res.json(publicRequest(request, findItem(request.offeredItemId)));
   });
 
+  const applyRequestPatch = (request, patch) => {
+    db.get('chains')
+      .removeWhere((c) => c.requestId === request.id)
+      .write();
+    db.get('exchangeRequests')
+      .updateById(request.id, { ...patch, updatedAt: new Date().toISOString() })
+      .write();
+
+    // matching пересчитывается синхронно: нашлись цепочки → IN_PROPOSAL, нет → остаётся в поиске (ACTIVE)
+    const chains = generateChains(db, { ...request, ...patch });
+    if (chains.length > 0) {
+      db.get('chains')
+        .push(...chains)
+        .write();
+      db.get('exchangeRequests').updateById(request.id, { status: 'IN_PROPOSAL' }).write();
+    } else {
+      db.get('exchangeRequests').updateById(request.id, { status: 'ACTIVE' }).write();
+    }
+  };
+
   server.post('/api/v1/exchange-requests', (req, res) => {
-    const { offeredItemId, wantedDescription, wantedState } = req.body ?? {};
+    const { offeredItemId, wantedDescription, wantedProfile } = req.body ?? {};
     if (!offeredItemId) return fail(res, 400, 'Нужно выбрать отдаваемый товар');
-    if (!wantedDescription?.trim()) return fail(res, 400, 'Укажите название желаемого товара');
-    const product = findProduct(offeredItemId);
-    if (!product || product.userId !== req.userId)
+    const item = findItem(offeredItemId);
+    if (!item || item.userId !== req.userId) {
       return fail(res, 400, 'Отдаваемый товар не найден');
+    }
+    if (item.status !== 'ACTIVE') return fail(res, 400, 'Товар недоступен для обмена');
+    if (!wantedDescription?.trim()) return fail(res, 400, 'Укажите, что вы хотите получить');
+    if (String(wantedDescription).trim().length > DESCRIPTION_LIMIT) {
+      return fail(res, 400, `Описание не длиннее ${DESCRIPTION_LIMIT} символов`);
+    }
+    const profile = parseWantedProfile(wantedProfile);
+    if (profile === undefined) return fail(res, 400, 'Некорректный wantedProfile');
 
     const now = new Date().toISOString();
     const request = {
       id: randomUUID(),
       userId: req.userId,
       offeredItemId,
-      wantedDescription: wantedDescription.trim(),
-      wantedState: wantedState ?? null,
-      status: 'active',
+      wantedDescription: String(wantedDescription).trim(),
+      wantedProfile: profile,
+      status: 'ACTIVE',
       createdAt: now,
       updatedAt: now,
     };
     db.get('exchangeRequests').insert(request).write();
-    res.status(201).json(publicRequest(request, publicProduct(product)));
+
+    const chains = generateChains(db, request);
+    if (chains.length > 0) {
+      db.get('chains')
+        .push(...chains)
+        .write();
+      db.get('exchangeRequests').updateById(request.id, { status: 'IN_PROPOSAL' }).write();
+      request.status = 'IN_PROPOSAL';
+    }
+
+    res.status(201).json({
+      request: publicRequest(request, item),
+      matching: { createdCandidateChains: chains.length },
+    });
   });
 
   server.patch('/api/v1/exchange-requests/:id', (req, res) => {
     const request = db.get('exchangeRequests').getById(req.params.id).value();
     if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
-    if (request.status !== 'active')
+    // живая заявка (в поиске или с предложенными цепочками) редактируется, LOCKED/DONE/REMOVED — нет
+    if (request.status !== 'ACTIVE' && request.status !== 'IN_PROPOSAL') {
       return fail(res, 400, 'Можно редактировать только активный запрос');
+    }
 
     const patch = {};
     if (req.body?.wantedDescription !== undefined) {
-      if (!req.body.wantedDescription.trim())
-        return fail(res, 400, 'Укажите название желаемого товара');
-      patch.wantedDescription = req.body.wantedDescription.trim();
+      const description = String(req.body.wantedDescription).trim();
+      if (!description) return fail(res, 400, 'Укажите, что вы хотите получить');
+      if (description.length > DESCRIPTION_LIMIT) {
+        return fail(res, 400, `Описание не длиннее ${DESCRIPTION_LIMIT} символов`);
+      }
+      patch.wantedDescription = description;
     }
-    if (req.body?.wantedState !== undefined) patch.wantedState = req.body.wantedState;
+    if (req.body?.wantedProfile !== undefined) {
+      const profile = parseWantedProfile(req.body.wantedProfile);
+      if (profile === undefined) return fail(res, 400, 'Некорректный wantedProfile');
+      patch.wantedProfile = profile;
+    }
 
-    db.get('exchangeRequests')
-      .updateById(request.id, { ...patch, updatedAt: new Date().toISOString() })
-      .write();
+    applyRequestPatch(request, patch);
     const updated = db.get('exchangeRequests').getById(request.id).value();
-    const offeredItem = findProduct(updated.offeredItemId);
-    res.json(publicRequest(updated, offeredItem ? publicProduct(offeredItem) : null));
+    res.json(publicRequest(updated, findItem(updated.offeredItemId)));
   });
 
+  // Деактивация заявки — мягкая: статус REMOVED, заявка остаётся в списке (PROJECT.md §2.5 «Отменён»)
   server.delete('/api/v1/exchange-requests/:id', (req, res) => {
     const request = db.get('exchangeRequests').getById(req.params.id).value();
     if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
 
-    db.get('exchangeRequests').removeById(request.id).write();
+    db.get('exchangeRequests')
+      .updateById(request.id, { status: 'REMOVED', updatedAt: new Date().toISOString() })
+      .write();
+    // у отменённой заявки нет больше кандидатных цепочек
     db.get('chains')
       .removeWhere((c) => c.requestId === request.id)
       .write();
     res.json({ message: 'deleted' });
   });
 
-  server.post('/api/v1/exchange-requests/:id/cancel', (req, res) => {
-    const request = db.get('exchangeRequests').getById(req.params.id).value();
-    if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
-    if (request.status !== 'active') return fail(res, 400, 'Можно отменить только активный запрос');
-
-    db.get('exchangeRequests')
-      .updateById(request.id, { status: 'cancelled', updatedAt: new Date().toISOString() })
-      .write();
-    res.json({ message: 'cancelled' });
-  });
-
   server.get('/api/v1/exchange-requests/:id/chains', (req, res) => {
     const request = db.get('exchangeRequests').getById(req.params.id).value();
     if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
 
-    // Цепочки генерируются один раз и сохраняются, чтобы выбор переживал перезагрузку (PROJECT.md §4.4).
-    let chains = db
+    const chains = db
       .get('chains')
       .filter((c) => c.requestId === request.id)
-      .value();
-    if (chains.length === 0) {
-      chains = generateChains(db, request);
-      db.get('chains')
-        .push(...chains)
-        .write();
-    }
-
-    chains.sort((a, b) => b.successProbability - a.successProbability);
+      .value()
+      .sort((a, b) => b.successProbability - a.successProbability);
     res.json(chains.map(publicChain));
   });
 
-  server.post('/api/v1/exchange-requests/:id/chains/:chainId/select', (req, res) => {
-    const request = db.get('exchangeRequests').getById(req.params.id).value();
-    if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
-    const chain = db
-      .get('chains')
-      .find((c) => c.id === req.params.chainId && c.requestId === req.params.id)
-      .value();
+  // Выбор цепочки блокирует заявку: дальше согласование участников без правок условий (PROJECT.md §4.4)
+  server.post('/api/v1/chains/:chainId/select', (req, res) => {
+    const chain = db.get('chains').getById(req.params.chainId).value();
     if (!chain) return fail(res, 404, 'Цепочка не найдена');
+    const request = db.get('exchangeRequests').getById(chain.requestId).value();
+    if (!request || request.userId !== req.userId) return fail(res, 403, 'Вы не участник цепочки');
+    if (request.status !== 'ACTIVE' && request.status !== 'IN_PROPOSAL') {
+      return fail(res, 409, 'Заявка уже в финальном статусе');
+    }
 
     db.get('chains').updateById(chain.id, { selected: true }).write();
+    db.get('exchangeRequests').updateById(chain.requestId, { status: 'LOCKED' }).write();
     res.json({ id: chain.id, selected: true });
-  });
-
-  server.post('/api/v1/exchange-requests/:id/chains/:chainId/deselect', (req, res) => {
-    const request = db.get('exchangeRequests').getById(req.params.id).value();
-    if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
-    const chain = db
-      .get('chains')
-      .find((c) => c.id === req.params.chainId && c.requestId === req.params.id)
-      .value();
-    if (!chain) return fail(res, 404, 'Цепочка не найдена');
-
-    db.get('chains').updateById(chain.id, { selected: false }).write();
-    res.json({ id: chain.id, selected: false });
   });
 
   server.use('/api/v1', (req, res) => fail(res, 404, 'Эндпоинт не найден'));

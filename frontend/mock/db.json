@@ -25,14 +25,19 @@
       "createdAt": "2026-07-04T12:00:00.000Z"
     }
   ],
-  "products": [
+  "items": [
     {
       "id": "10000000-0000-4000-8000-000000000001",
       "userId": "00000000-0000-4000-8000-000000000001",
       "title": "Кухонный комбайн Bosch",
       "description": "Мощный комбайн, почти не пользовались, все насадки в комплекте",
+      "categoryId": "appliances",
+      "condition": "USED",
+      "color": "white",
+      "material": "plastic",
+      "attributes": null,
       "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%231677ff%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%9A%D0%BE%D0%BC%D0%B1%D0%B0%D0%B9%D0%BD%3C%2Ftext%3E%3C%2Fsvg%3E",
-      "status": "active",
+      "status": "ACTIVE",
       "createdAt": "2026-07-05T09:00:00.000Z",
       "updatedAt": "2026-07-05T09:00:00.000Z"
     },
@@ -41,70 +46,135 @@
       "userId": "00000000-0000-4000-8000-000000000001",
       "title": "Городской велосипед",
       "description": "Надёжный велосипед для города, 21 скорость, недавно обслуживался",
+      "categoryId": "transport",
+      "condition": "USED",
+      "color": "blue",
+      "material": "steel",
+      "attributes": null,
       "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%2313c2c2%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%92%D0%B5%D0%BB%D0%BE%D1%81%D0%B8%D0%BF%D0%B5%D0%B4%3C%2Ftext%3E%3C%2Fsvg%3E",
-      "status": "active",
-      "createdAt": "2026-07-05T10:00:00.000Z",
-      "updatedAt": "2026-07-05T10:00:00.000Z"
+      "status": "ACTIVE",
+      "createdAt": "2026-07-05T09:00:00.000Z",
+      "updatedAt": "2026-07-05T09:00:00.000Z"
     },
     {
       "id": "10000000-0000-4000-8000-000000000003",
-      "userId": "00000000-0000-4000-8000-000000000002",
-      "title": "Кофемашина рожковая",
-      "description": "Готовит отличный эспрессо, есть паровой капучинатор",
-      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%2352c41a%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%9A%D0%BE%D1%84%D0%B5%D0%BC%D0%B0%D1%88%D0%B8%D0%BD%D0%B0%3C%2Ftext%3E%3C%2Fsvg%3E",
-      "status": "active",
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "title": "Пылесос вертикальный",
+      "description": "Лёгкий, съёмный аккумулятор, три режима мощности",
+      "categoryId": "appliances",
+      "condition": "LIKE_NEW",
+      "color": "red",
+      "material": "plastic",
+      "attributes": null,
+      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%2313c2c2%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%9F%D1%8B%D0%BB%D0%B5%D1%81%D0%BE%D1%81%3C%2Ftext%3E%3C%2Fsvg%3E",
+      "status": "RESERVED",
       "createdAt": "2026-07-06T09:00:00.000Z",
       "updatedAt": "2026-07-06T09:00:00.000Z"
     },
     {
       "id": "10000000-0000-4000-8000-000000000004",
-      "userId": "00000000-0000-4000-8000-000000000002",
-      "title": "Электронная книга PocketBook",
-      "description": "Как новая, работает подсветка, заряда хватает на неделю",
-      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23faad14%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%A7%D0%B8%D1%82%D0%B0%D0%BB%D0%BA%D0%B0%3C%2Ftext%3E%3C%2Fsvg%3E",
-      "status": "active",
-      "createdAt": "2026-07-06T10:00:00.000Z",
-      "updatedAt": "2026-07-06T10:00:00.000Z"
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "title": "Электрочайник",
+      "description": "Быстро кипятит, подсветка, отключается автоматически",
+      "categoryId": "appliances",
+      "condition": "USED",
+      "color": "black",
+      "material": "steel",
+      "attributes": null,
+      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23fa541c%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%A7%D0%B0%D0%B9%D0%BD%D0%B8%D0%BA%3C%2Ftext%3E%3C%2Fsvg%3E",
+      "status": "EXCHANGED",
+      "createdAt": "2026-07-06T09:00:00.000Z",
+      "updatedAt": "2026-07-06T09:00:00.000Z"
     },
     {
-      "id": "10000000-0000-4000-8000-000000000005",
-      "userId": "00000000-0000-4000-8000-000000000003",
-      "title": "Зеркальный фотоаппарат Canon",
-      "description": "Полный комплект: камера, объектив, флешка и чехол",
-      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23eb2f96%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%A4%D0%BE%D1%82%D0%BE%D0%B0%D0%BF%D0%BF%D0%B0%D1%80%D0%B0%D1%82%3C%2Ftext%3E%3C%2Fsvg%3E",
-      "status": "active",
+      "id": "20000000-0000-4000-8000-000000000001",
+      "userId": "00000000-0000-4000-8000-000000000002",
+      "title": "Кофемашина рожковая",
+      "description": "Готовит отличный эспрессо, есть паровой капучинатор",
+      "categoryId": "appliances",
+      "condition": "USED",
+      "color": "silver",
+      "material": "steel",
+      "attributes": null,
+      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%2352c41a%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%9A%D0%BE%D1%84%D0%B5%D0%BC%D0%B0%D1%88%D0%B8%D0%BD%D0%B0%3C%2Ftext%3E%3C%2Fsvg%3E",
+      "status": "ACTIVE",
       "createdAt": "2026-07-07T09:00:00.000Z",
       "updatedAt": "2026-07-07T09:00:00.000Z"
     },
     {
-      "id": "10000000-0000-4000-8000-000000000006",
-      "userId": "00000000-0000-4000-8000-000000000003",
-      "title": "Игровая приставка",
-      "description": "В комплекте два геймпада и несколько игр",
-      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23722ed1%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%9F%D1%80%D0%B8%D1%81%D1%82%D0%B0%D0%B2%D0%BA%D0%B0%3C%2Ftext%3E%3C%2Fsvg%3E",
-      "status": "active",
-      "createdAt": "2026-07-07T10:00:00.000Z",
-      "updatedAt": "2026-07-07T10:00:00.000Z"
+      "id": "20000000-0000-4000-8000-000000000002",
+      "userId": "00000000-0000-4000-8000-000000000002",
+      "title": "Электронная книга PocketBook",
+      "description": "Как новая, работает подсветка, заряда хватает на неделю",
+      "categoryId": "electronics",
+      "condition": "LIKE_NEW",
+      "color": "black",
+      "material": null,
+      "attributes": null,
+      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23faad14%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%A7%D0%B8%D1%82%D0%B0%D0%BB%D0%BA%D0%B0%3C%2Ftext%3E%3C%2Fsvg%3E",
+      "status": "ACTIVE",
+      "createdAt": "2026-07-07T09:00:00.000Z",
+      "updatedAt": "2026-07-07T09:00:00.000Z"
     },
     {
-      "id": "10000000-0000-4000-8000-000000000007",
-      "userId": "00000000-0000-4000-8000-000000000004",
-      "title": "Беспроводные наушники",
-      "description": "Отличный звук, активное шумоподавление, кейс в комплекте",
-      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23fa8c16%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%9D%D0%B0%D1%83%D1%88%D0%BD%D0%B8%D0%BA%D0%B8%3C%2Ftext%3E%3C%2Fsvg%3E",
-      "status": "active",
+      "id": "30000000-0000-4000-8000-000000000001",
+      "userId": "00000000-0000-4000-8000-000000000003",
+      "title": "Зеркальный фотоаппарат Canon",
+      "description": "Полный комплект: камера, объектив, флешка и чехол",
+      "categoryId": "electronics",
+      "condition": "USED",
+      "color": "black",
+      "material": null,
+      "attributes": null,
+      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23eb2f96%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%A4%D0%BE%D1%82%D0%BE%D0%B0%D0%BF%D0%BF%D0%B0%D1%80%D0%B0%D1%82%3C%2Ftext%3E%3C%2Fsvg%3E",
+      "status": "ACTIVE",
       "createdAt": "2026-07-08T09:00:00.000Z",
       "updatedAt": "2026-07-08T09:00:00.000Z"
     },
     {
-      "id": "10000000-0000-4000-8000-000000000008",
+      "id": "30000000-0000-4000-8000-000000000002",
+      "userId": "00000000-0000-4000-8000-000000000003",
+      "title": "Игровая приставка",
+      "description": "В комплекте два геймпада и несколько игр",
+      "categoryId": "electronics",
+      "condition": "USED",
+      "color": "black",
+      "material": null,
+      "attributes": null,
+      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23722ed1%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%9F%D1%80%D0%B8%D1%81%D1%82%D0%B0%D0%B2%D0%BA%D0%B0%3C%2Ftext%3E%3C%2Fsvg%3E",
+      "status": "ACTIVE",
+      "createdAt": "2026-07-08T09:00:00.000Z",
+      "updatedAt": "2026-07-08T09:00:00.000Z"
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "userId": "00000000-0000-4000-8000-000000000004",
+      "title": "Беспроводные наушники",
+      "description": "Отличный звук, активное шумоподавление, кейс в комплекте",
+      "categoryId": "electronics",
+      "condition": "LIKE_NEW",
+      "color": "white",
+      "material": null,
+      "attributes": null,
+      "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%23fa8c16%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%9D%D0%B0%D1%83%D1%88%D0%BD%D0%B8%D0%BA%D0%B8%3C%2Ftext%3E%3C%2Fsvg%3E",
+      "status": "ACTIVE",
+      "createdAt": "2026-07-09T09:00:00.000Z",
+      "updatedAt": "2026-07-09T09:00:00.000Z"
+    },
+    {
+      "id": "40000000-0000-4000-8000-000000000002",
       "userId": "00000000-0000-4000-8000-000000000004",
       "title": "Фитнес-браслет",
       "description": "Трекинг сна, пульса и шагов, ремешок не изнашивается",
+      "categoryId": "electronics",
+      "condition": "USED",
+      "color": "black",
+      "material": "silicone",
+      "attributes": null,
       "image": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22400%22%3E%3Crect%20width%3D%22600%22%20height%3D%22400%22%20fill%3D%22%232f54eb%22%2F%3E%3Ctext%20x%3D%22300%22%20y%3D%22215%22%20text-anchor%3D%22middle%22%20font-size%3D%2232%22%20fill%3D%22%23ffffff%22%20font-family%3D%22sans-serif%22%3E%D0%91%D1%80%D0%B0%D1%81%D0%BB%D0%B5%D1%82%3C%2Ftext%3E%3C%2Fsvg%3E",
-      "status": "active",
-      "createdAt": "2026-07-08T10:00:00.000Z",
-      "updatedAt": "2026-07-08T10:00:00.000Z"
+      "status": "ACTIVE",
+      "createdAt": "2026-07-09T09:00:00.000Z",
+      "updatedAt": "2026-07-09T09:00:00.000Z"
     }
   ],
   "exchangeRequests": [
@@ -113,8 +183,11 @@
       "userId": "00000000-0000-4000-8000-000000000001",
       "offeredItemId": "10000000-0000-4000-8000-000000000001",
       "wantedDescription": "Кофемашина в рабочем состоянии",
-      "wantedState": "Как новый",
-      "status": "active",
+      "wantedProfile": {
+        "categoryId": "appliances",
+        "acceptableCondition": ["USED", "LIKE_NEW"]
+      },
+      "status": "ACTIVE",
       "createdAt": "2026-07-10T09:00:00.000Z",
       "updatedAt": "2026-07-10T09:00:00.000Z"
     },
@@ -123,11 +196,124 @@
       "userId": "00000000-0000-4000-8000-000000000001",
       "offeredItemId": "10000000-0000-4000-8000-000000000002",
       "wantedDescription": "Фотоаппарат с объективом",
-      "wantedState": "Б/у",
-      "status": "active",
+      "wantedProfile": null,
+      "status": "IN_PROPOSAL",
       "createdAt": "2026-07-11T09:00:00.000Z",
       "updatedAt": "2026-07-11T09:00:00.000Z"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000003",
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "offeredItemId": "10000000-0000-4000-8000-000000000001",
+      "wantedDescription": "Ноутбук для работы и учёбы",
+      "wantedProfile": {
+        "categoryId": "electronics"
+      },
+      "status": "LOCKED",
+      "createdAt": "2026-07-12T09:00:00.000Z",
+      "updatedAt": "2026-07-12T09:00:00.000Z"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000004",
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "offeredItemId": "10000000-0000-4000-8000-000000000002",
+      "wantedDescription": "Смартфон на каждый день",
+      "wantedProfile": null,
+      "status": "DONE",
+      "createdAt": "2026-07-13T09:00:00.000Z",
+      "updatedAt": "2026-07-13T09:00:00.000Z"
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000005",
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "offeredItemId": "10000000-0000-4000-8000-000000000001",
+      "wantedDescription": "Беспроводные наушники",
+      "wantedProfile": null,
+      "status": "REMOVED",
+      "createdAt": "2026-07-14T09:00:00.000Z",
+      "updatedAt": "2026-07-14T09:00:00.000Z"
     }
   ],
-  "chains": []
+  "chains": [
+    {
+      "id": "30000000-0000-4000-8000-000000000001",
+      "requestId": "20000000-0000-4000-8000-000000000002",
+      "length": 2,
+      "successProbability": 72,
+      "selected": false,
+      "participants": [
+        {
+          "userId": "00000000-0000-4000-8000-000000000001",
+          "name": "Анна Смирнова",
+          "offers": {
+            "id": "10000000-0000-4000-8000-000000000002",
+            "title": "Городской велосипед"
+          },
+          "wants": {
+            "id": "30000000-0000-4000-8000-000000000001",
+            "title": "Зеркальный фотоаппарат Canon"
+          }
+        },
+        {
+          "userId": "00000000-0000-4000-8000-000000000003",
+          "name": "Мария Кузнецова",
+          "offers": {
+            "id": "30000000-0000-4000-8000-000000000001",
+            "title": "Зеркальный фотоаппарат Canon"
+          },
+          "wants": {
+            "id": "10000000-0000-4000-8000-000000000002",
+            "title": "Городской велосипед"
+          }
+        }
+      ],
+      "createdAt": "2026-07-11T09:00:00.000Z"
+    },
+    {
+      "id": "30000000-0000-4000-8000-000000000002",
+      "requestId": "20000000-0000-4000-8000-000000000003",
+      "length": 3,
+      "successProbability": 90,
+      "selected": true,
+      "participants": [
+        {
+          "userId": "00000000-0000-4000-8000-000000000001",
+          "name": "Анна Смирнова",
+          "offers": {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "title": "Кухонный комбайн Bosch"
+          },
+          "wants": {
+            "id": "30000000-0000-4000-8000-000000000002",
+            "title": "Игровая приставка"
+          }
+        },
+        {
+          "userId": "00000000-0000-4000-8000-000000000003",
+          "name": "Мария Кузнецова",
+          "offers": {
+            "id": "30000000-0000-4000-8000-000000000002",
+            "title": "Игровая приставка"
+          },
+          "wants": {
+            "id": "40000000-0000-4000-8000-000000000001",
+            "title": "Беспроводные наушники"
+          }
+        },
+        {
+          "userId": "00000000-0000-4000-8000-000000000004",
+          "name": "Дмитрий Соколов",
+          "offers": {
+            "id": "40000000-0000-4000-8000-000000000001",
+            "title": "Беспроводные наушники"
+          },
+          "wants": {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "title": "Кухонный комбайн Bosch"
+          }
+        }
+      ],
+      "createdAt": "2026-07-12T09:00:00.000Z"
+    }
+  ]
 }
