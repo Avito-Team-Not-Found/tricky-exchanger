@@ -51,8 +51,9 @@
   color: var(--color-text-secondary);
 }
 
+// кнопка отделяется от текстового блока заметным отступом (макет «4.2 без товаров»)
 .empty-state__actions {
-  margin-top: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
 }
 
 .error-state {
