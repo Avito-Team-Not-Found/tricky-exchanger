@@ -16,6 +16,10 @@ import (
 	database "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	appLogger "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/logger"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
+	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
+	userRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/user"
+	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
 )
 
 func main() {
@@ -43,7 +47,13 @@ func main() {
 	// Точка расширения: по мере готовности фич сюда добавляются их Handler'ы
 	// явными параметрами (см. router.New).
 	pingHandler := router.NewPingHandler()
-	engine := router.New(pingHandler)
+
+	tokenService := token.NewService(cfg.JWTSecret, cfg.JWTTokenTTL)
+	userRepository := userRepo.NewRepository(pool)
+	userSvc := userService.NewService(userRepository, tokenService)
+	userH := userHandler.NewHandler(userSvc)
+
+	engine := router.New(pingHandler, userH)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.ServerPort,
