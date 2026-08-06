@@ -399,6 +399,18 @@ describe('items', () => {
     expect(body).toMatchObject({ id, condition: 'NEW', color: 'red', material: 'aluminum' });
   });
 
+
+  it('refuses to archive a reserved item', async () => {
+    const { status, body } = await request(`/items/${RESERVED_ITEM_ID}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ code: 409 });
+  });
+
+
   it('returns 404 for a foreign item', async () => {
     const { status, body } = await request(`/items/${FOREIGN_ITEM_ID}`, {
       headers: authHeaders(),
@@ -475,13 +487,14 @@ describe('exchange requests', () => {
     expect(status).toBe(400);
   });
 
-  it('rejects a reserved offered item', async () => {
+  // «товар уже в резерве» — конфликт (409), а не ошибка валидации: у фронта на него свой текст
+  it('rejects a reserved offered item with a conflict', async () => {
     const { status, body } = await postJson('/exchange-requests', {
       offeredItemId: RESERVED_ITEM_ID,
       wantedDescription: 'Что-то своё',
     });
-    expect(status).toBe(400);
-    expect(body).toMatchObject({ code: 400 });
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ code: 409 });
   });
 
   it('rejects a request without wanted description', async () => {
@@ -591,10 +604,11 @@ describe('chains', () => {
   });
 
   it('removes candidate chains when the request is removed', async () => {
-    const { body: requests } = await request('/exchange-requests', { headers: authHeaders() });
-    const active = requests.find((r: { status: string }) => r.status === 'ACTIVE');
+    // берём именно свободный товар: выбор цепочки выше мог забронировать тот, что в фикстуре
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const free = items.find((i: { status: string }) => i.status === 'ACTIVE');
     const { body: created } = await postJson('/exchange-requests', {
-      offeredItemId: active.offeredItemId,
+      offeredItemId: free.id,
       wantedDescription: 'Рюкзак для походов',
     });
     const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
@@ -627,5 +641,64 @@ describe('exchange request validation', () => {
     });
     expect(status).toBe(400);
     expect(body.code).toBe(400);
+  });
+});
+
+// Бронь товара — по PROJECT.md §1: её ставит выбор цепочки, а не создание заявки
+describe('item reservation lifecycle', () => {
+  async function createItem(title: string) {
+    const form = new FormData();
+    form.append('title', title);
+    form.append('description', 'Товар для проверки брони');
+    form.append('condition', 'USED');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
+    const { body } = await request('/items', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+    return body;
+  }
+
+  const itemStatus = async (itemId: string) => {
+    const { body } = await request(`/items/${itemId}`, { headers: authHeaders() });
+    return body.status;
+  };
+
+  it('reserves the item on chain select and frees it when the request is dropped', async () => {
+    const item = await createItem('Товар под бронь');
+    expect(await itemStatus(item.id)).toBe('ACTIVE');
+
+    const { body: created } = await postJson('/exchange-requests', {
+      offeredItemId: item.id,
+      wantedDescription: 'Наушники',
+    });
+    // до выбора цепочки товар остаётся свободным
+    expect(await itemStatus(item.id)).toBe('ACTIVE');
+
+    const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
+      headers: authHeaders(),
+    });
+    expect(chains.length).toBeGreaterThan(0);
+
+    const { status: selectStatus } = await request(`/chains/${chains[0].id}/select`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    expect(selectStatus).toBe(200);
+    expect(await itemStatus(item.id)).toBe('RESERVED');
+
+    // забронированный товар нельзя предложить в новой заявке — это конфликт, а не валидация
+    const { status: conflictStatus } = await postJson('/exchange-requests', {
+      offeredItemId: item.id,
+      wantedDescription: 'Что-то ещё',
+    });
+    expect(conflictStatus).toBe(409);
+
+    await request(`/exchange-requests/${created.request.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(await itemStatus(item.id)).toBe('ACTIVE');
   });
 });

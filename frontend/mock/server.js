@@ -266,6 +266,19 @@ export function createMockApp({
 
   const fail = (res, code, message) => res.status(code).json({ error: message, code });
   const findItem = (itemId) => db.get('items').getById(itemId).value();
+
+  // Бронь снимается, когда товар больше не держит ни одна заблокированная заявка.
+  // Обменянный товар (EXCHANGED) в оборот не возвращаем — сделка уже состоялась.
+  const releaseItemIfUnused = (itemId) => {
+    const item = findItem(itemId);
+    if (!item || item.status !== 'RESERVED') return;
+
+    const stillHeld = db
+      .get('exchangeRequests')
+      .some((r) => r.offeredItemId === itemId && r.status === 'LOCKED')
+      .value();
+    if (!stillHeld) db.get('items').updateById(itemId, { status: 'ACTIVE' }).write();
+  };
   const findUserByEmail = (email) =>
     db
       .get('users')
@@ -440,6 +453,8 @@ export function createMockApp({
   server.delete('/api/v1/items/:id', (req, res) => {
     const item = findItem(req.params.id);
     if (!item || item.userId !== req.userId) return fail(res, 404, 'Товар не найден');
+    // забронированный товар уже участвует в согласуемой цепочке — его нельзя выдернуть из сделки
+    if (item.status === 'RESERVED') return fail(res, 409, 'Товар уже участвует в сделке');
 
     db.get('items').removeById(item.id).write();
     db.get('exchangeRequests')
@@ -489,7 +504,9 @@ export function createMockApp({
     if (!item || item.userId !== req.userId) {
       return fail(res, 400, 'Отдаваемый товар не найден');
     }
-    if (item.status !== 'ACTIVE') return fail(res, 400, 'Товар недоступен для обмена');
+    // 409, а не 400: «товар уже в резерве» — отдельный конфликт по PROJECT.md §4.9,
+    // фронт показывает на него собственный текст (useRequestForm)
+    if (item.status !== 'ACTIVE') return fail(res, 409, 'Товар уже в резерве');
     if (!wantedDescription?.trim()) return fail(res, 400, 'Укажите, что вы хотите получить');
     if (String(wantedDescription).trim().length > DESCRIPTION_LIMIT) {
       return fail(res, 400, `Описание не длиннее ${DESCRIPTION_LIMIT} символов`);
@@ -565,6 +582,7 @@ export function createMockApp({
     db.get('chains')
       .removeWhere((c) => c.requestId === request.id)
       .write();
+    releaseItemIfUnused(request.offeredItemId);
     res.json({ message: 'deleted' });
   });
 
@@ -592,6 +610,8 @@ export function createMockApp({
 
     db.get('chains').updateById(chain.id, { selected: true }).write();
     db.get('exchangeRequests').updateById(chain.requestId, { status: 'LOCKED' }).write();
+    // выбор цепочки резервирует участие товара в ней на время согласования (PROJECT.md §1)
+    db.get('items').updateById(request.offeredItemId, { status: 'RESERVED' }).write();
     res.json({ id: chain.id, selected: true });
   });
 
