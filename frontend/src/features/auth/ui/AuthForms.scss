@@ -1,0 +1,36 @@
+.auth-form {
+  display: flex;
+  flex-direction: column;
+}
+
+// antd по умолчанию ставит между иконкой-префиксом и текстом 4px — для полей авторизации нужен воздух побольше
+.auth-form .ant-input-affix-wrapper .ant-input-prefix {
+  margin-inline-end: var(--spacing-sm);
+}
+
+.auth-form__forgot {
+  display: flex;
+  justify-content: flex-end;
+  margin: calc(-1 * var(--spacing-sm)) 0 var(--spacing-md);
+  font-size: var(--font-size-caption);
+}
+
+// тач-таргет 44×44 через padding + компенсирующий negative margin, без сдвига текста (DESIGN.md §1.8)
+.auth-form__forgot a,
+.auth-form__switch-text a {
+  display: inline-block;
+  padding: 14px 8px;
+  margin: -14px -8px;
+}
+
+.auth-form__hint {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+}
+
+.auth-form__switch-text {
+  margin-top: var(--spacing-md);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+  text-align: center;
+}

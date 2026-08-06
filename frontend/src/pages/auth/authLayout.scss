@@ -1,0 +1,36 @@
+.auth-page {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--spacing-lg) var(--spacing-md);
+}
+
+.auth-page__theme-toggle {
+  position: fixed;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+  z-index: 10;
+}
+
+.auth-page__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  width: 100%;
+  max-width: 400px;
+  padding: var(--spacing-lg);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.auth-page__card .brand-logo {
+  justify-content: center;
+}
+
+// сегменты — интерактивный контрол, при клике текст не должен выделяться в синее
+.auth-page__card .ant-segmented {
+  user-select: none;
+}

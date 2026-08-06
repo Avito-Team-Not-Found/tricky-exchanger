@@ -43,9 +43,19 @@ a {
   outline-offset: 2px;
 }
 
-.page-container {
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--spacing-md);
+// antd рендерит иконку показать/скрыть пароль без своего хит-бокса (~14×14px реального клика) —
+// расширяем зону через padding, гасим её же negative margin, чтобы верстка не сдвинулась (DESIGN.md §1.8)
+.ant-input-password-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 15px;
+  margin: -15px;
+}
+
+.page-title {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-heading);
+  margin-bottom: var(--spacing-md);
 }

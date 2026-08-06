@@ -9,6 +9,8 @@
 
 # AI tooling local settings (paths and permission history)
 .claude/
+.agents/
+skills-lock.json
 settings.local.json
 .continue/
 
