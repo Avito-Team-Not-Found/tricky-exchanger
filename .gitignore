@@ -6,9 +6,11 @@
 *.swp
 *.swo
 
+
 # AI tooling local settings (paths and permission history)
 .claude/
 settings.local.json
+.continue/
 
 # OS
 .DS_Store
