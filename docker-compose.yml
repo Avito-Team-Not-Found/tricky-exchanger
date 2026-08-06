@@ -1,0 +1,21 @@
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg18
+    container_name: tricky-exchanger-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-tricky}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-tricky}
+      POSTGRES_DB: ${DB_NAME:-tricky_exchanger}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tricky} -d ${DB_NAME:-tricky_exchanger}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
