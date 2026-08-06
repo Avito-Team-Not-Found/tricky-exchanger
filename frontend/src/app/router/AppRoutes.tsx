@@ -1,8 +1,18 @@
-import { Route, Routes } from 'react-router';
+import { Navigate, Route, Routes } from 'react-router';
 
-import { AuthPage, ForgotPasswordPage } from '@pages/index';
+import { AppLayout } from '@app/layouts/AppLayout';
+
+import {
+  AuthPage,
+  ChangePasswordPage,
+  ExchangeRequestsPage,
+  ForgotPasswordPage,
+  ProductsPage,
+  ProfilePage,
+} from '@pages/index';
 
 import { RedirectIfAuthed } from './RedirectIfAuthed';
+import { RequireAuth } from './RequireAuth';
 
 export function AppRoutes() {
   return (
@@ -31,8 +41,27 @@ export function AppRoutes() {
           </RedirectIfAuthed>
         }
       />
-      {/* заглушка на / и неизвестные пути — до появления первой защищённой страницы редиректить некуда */}
-      <Route path="*" element={<AuthPage />} />
+      <Route
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
+        <Route path="/products" element={<ProductsPage />} />
+        <Route path="/exchange-requests" element={<ExchangeRequestsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+      </Route>
+      {/* смена пароля — отдельный экран без таб-бара/бокового меню (DESIGN.md §4.8) */}
+      <Route
+        path="/profile/password"
+        element={
+          <RequireAuth>
+            <ChangePasswordPage />
+          </RequireAuth>
+        }
+      />
+      <Route path="*" element={<Navigate to="/products" replace />} />
     </Routes>
   );
 }
