@@ -203,8 +203,10 @@ export function createMockApp({
   server.post('/api/v1/account/login/', (req, res) => {
     const { email, password } = req.body ?? {};
     const user = email ? findUserByEmail(email) : undefined;
-    if (!user || readPasswords(passwordsPath)[user.id] !== password) {
-      return fail(res, 401, 'Неверный email или пароль');
+    // Несуществующий email отличаем от неверного пароля, чтобы фронт показал конкретную ошибку
+    if (!user) return fail(res, 404, 'Пользователь с таким email не найден');
+    if (readPasswords(passwordsPath)[user.id] !== password) {
+      return fail(res, 401, 'Неверный пароль');
     }
     res.json({ token: issueToken(user.id), user: publicUser(user) });
   });
@@ -267,6 +269,24 @@ export function createMockApp({
     const user = db.get('users').getById(req.params.id).value();
     if (!user) return fail(res, 404, 'Пользователь не найден');
     res.json(publicUser(user));
+  });
+
+  server.post('/api/v1/account/password-change/', (req, res) => {
+    const { currentPassword, newPassword } = req.body ?? {};
+    const user = db.get('users').getById(req.userId).value();
+    if (!user) return fail(res, 404, 'Пользователь не найден');
+
+    const passwords = readPasswords(passwordsPath);
+    if (passwords[user.id] !== currentPassword) {
+      return fail(res, 400, 'Неверный текущий пароль');
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      return fail(res, 400, 'Пароль должен быть не короче 8 символов');
+    }
+
+    passwords[user.id] = newPassword;
+    writePasswords(passwordsPath, passwords);
+    res.json({ message: 'password_changed' });
   });
 
   server.get('/api/v1/products', (req, res) => {

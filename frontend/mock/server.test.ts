@@ -103,6 +103,17 @@ describe('authorization', () => {
     expect(status).toBe(401);
   });
 
+  it('returns 404 for an unregistered email', async () => {
+    const { status, body } = await postJson(
+      '/account/login/',
+      { email: 'ghost@example.com', password: 'whatever123' },
+      false,
+    );
+
+    expect(status).toBe(404);
+    expect(body).toMatchObject({ error: expect.any(String), code: 404 });
+  });
+
   it('logs in and issues a token for the demo user', async () => {
     const { status, body } = await postJson(
       '/account/login/',
@@ -221,6 +232,71 @@ describe('password recovery', () => {
       false,
     );
     expect(status).toBe(400);
+  });
+});
+
+describe('password change', () => {
+  const PWD_EMAIL = 'password-change@example.com';
+  const PWD = 'original-pass-123';
+  let pwdToken: string;
+
+  beforeAll(async () => {
+    const { body } = await postJson(
+      '/account/registration/',
+      { email: PWD_EMAIL, password: PWD, name: 'Проверка смены пароля' },
+      false,
+    );
+    pwdToken = body.token;
+  });
+
+  it('rejects password change without a token', async () => {
+    const { status, body } = await request('/account/password-change/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: PWD, newPassword: 'new-password-123' }),
+    });
+    expect(status).toBe(401);
+    expect(body).toMatchObject({ error: expect.any(String), code: 401 });
+  });
+
+  it('rejects a wrong current password', async () => {
+    const { status, body } = await request('/account/password-change/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pwdToken}` },
+      body: JSON.stringify({ currentPassword: 'wrong-password', newPassword: 'new-password-123' }),
+    });
+    expect(status).toBe(400);
+    expect(body).toMatchObject({ error: expect.any(String), code: 400 });
+  });
+
+  it('rejects a too-short new password', async () => {
+    const { status } = await request('/account/password-change/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pwdToken}` },
+      body: JSON.stringify({ currentPassword: PWD, newPassword: 'short' }),
+    });
+    expect(status).toBe(400);
+  });
+
+  it('changes the password and lets the user log in with the new one', async () => {
+    const { status, body } = await request('/account/password-change/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${pwdToken}` },
+      body: JSON.stringify({ currentPassword: PWD, newPassword: 'new-password-123' }),
+    });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ message: 'password_changed' });
+
+    const login = await postJson(
+      '/account/login/',
+      { email: PWD_EMAIL, password: 'new-password-123' },
+      false,
+    );
+    expect(login.status).toBe(200);
+
+    const oldLogin = await postJson('/account/login/', { email: PWD_EMAIL, password: PWD }, false);
+    expect(oldLogin.status).toBe(401);
   });
 });
 
