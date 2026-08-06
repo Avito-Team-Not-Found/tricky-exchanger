@@ -6,11 +6,14 @@ import './ui.scss';
 
 export type StatusTone = 'success' | 'warning' | 'neutral' | 'error';
 
-// Пилюля из токенов темы (DESIGN.md §2.4): фон — статус-цвет на 12% непрозрачности, текст — полный
-const TONE_TOKEN: Record<StatusTone, keyof GlobalToken> = {
+// Пилюля, залитая статус-цветом полностью, с белым текстом (макет §2.4, StatusTag в Penpot).
+// Нейтральный статус — фиксированный серый: цвет text-secondary в тёмной теме слишком светлый
+// для белого текста (контраст падал бы ниже WCAG AA).
+const NEUTRAL_FILL = '#595959';
+
+const TONE_TOKEN: Partial<Record<StatusTone, keyof GlobalToken>> = {
   success: 'colorSuccess',
   warning: 'colorWarning',
-  neutral: 'colorTextSecondary',
   error: 'colorError',
 };
 
@@ -21,13 +24,9 @@ export interface StatusTagProps {
 
 export function StatusTag({ tone, children }: StatusTagProps) {
   const { token } = theme.useToken();
-  const color = token[TONE_TOKEN[tone]] as string;
-  const style: CSSProperties = {
-    color,
-    // заливка статус-цветом на ~12% (DESIGN.md §2.4); hex-alpha вместо color-mix —
-    // чтобы фон не пропадал в браузерах без поддержки color-mix
-    backgroundColor: `${color}1F`,
-  };
+  const backgroundColor =
+    tone === 'neutral' ? NEUTRAL_FILL : (token[TONE_TOKEN[tone] as keyof GlobalToken] as string);
+  const style: CSSProperties = { color: '#FFFFFF', backgroundColor };
 
   return (
     <span className="status-tag" style={style}>
