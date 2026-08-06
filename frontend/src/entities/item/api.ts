@@ -19,18 +19,15 @@ export async function createItem(payload: ItemPayload, image: File | null): Prom
   return data;
 }
 
-// image === undefined — фото не трогаем, image === null — удалить, File — заменить
+// image === undefined — фото не трогаем, File — заменить. Удаление фото недоступно:
+// фото обязательно в обеих формах (см. useItemForm.hasPhoto), поэтому нечем и незачем его чистить.
 export async function updateItem(
   itemId: string,
   payload: ItemPayload,
-  image: File | null | undefined,
+  image: File | undefined,
 ): Promise<Item> {
   if (image === undefined) {
     const { data } = await apiClient.patch<Item>(`/items/${itemId}`, payload);
-    return data;
-  }
-  if (image === null) {
-    const { data } = await apiClient.patch<Item>(`/items/${itemId}`, { ...payload, image: null });
     return data;
   }
   const { data } = await apiClient.patch<Item>(`/items/${itemId}`, toItemFormData(payload, image), {
@@ -48,9 +45,17 @@ function toItemFormData(payload: ItemPayload, image: File | null): FormData {
   form.append('title', payload.title);
   form.append('description', payload.description);
   form.append('condition', payload.condition);
-  if (payload.color) form.append('color', payload.color);
-  if (payload.material) form.append('material', payload.material);
-  if (payload.categoryId) form.append('categoryId', payload.categoryId);
+  // multipart не умеет null, поэтому очистка поля едет пустой строкой (сервер трактует её как null),
+  // а «не трогать поле» — отсутствием ключа. Раньше здесь была проверка на truthy, из-за которой
+  // очистка цвета/материала терялась, если пользователь заодно менял фото.
+  appendOptional(form, 'color', payload.color);
+  appendOptional(form, 'material', payload.material);
+  appendOptional(form, 'categoryId', payload.categoryId);
   if (image) form.append('image', image);
   return form;
+}
+
+function appendOptional(form: FormData, key: string, value: string | null | undefined): void {
+  if (value === undefined) return;
+  form.append(key, value ?? '');
 }

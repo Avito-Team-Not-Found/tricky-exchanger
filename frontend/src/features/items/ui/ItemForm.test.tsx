@@ -120,6 +120,26 @@ describe('ItemForm', () => {
     );
   });
 
+  it('requires a photo even when editing an item without one', () => {
+    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, image: null }));
+    renderWithProviders(<ItemForm itemId="item-1" />);
+
+    expect(screen.getByText('Добавить фото')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Сохранить изменения/ })).toBeDisabled();
+  });
+
+  it('removing the photo blocks saving', async () => {
+    const user = userEvent.setup();
+    mockedUseItem.mockReturnValue(queryOk(existingItem));
+    renderWithProviders(<ItemForm itemId="item-1" />);
+
+    expect(screen.getByRole('button', { name: /Удалить фото/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Удалить фото/ }));
+
+    expect(screen.getByText('Добавить фото')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Сохранить изменения/ })).toBeDisabled();
+  });
+
   it('archives an item through the confirmation modal and redirects', async () => {
     const user = userEvent.setup();
     mockedUseItem.mockReturnValue(queryOk(existingItem));

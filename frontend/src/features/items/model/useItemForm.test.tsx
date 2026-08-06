@@ -30,9 +30,11 @@ const mockedUseItem = vi.mocked(useItem);
 const mockedCreateItem = vi.mocked(createItem);
 const mockedUpdateItem = vi.mocked(updateItem);
 
+let queryClient = createTestQueryClient();
+
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <QueryClientProvider client={createTestQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <AntApp>
         <MemoryRouter>{children}</MemoryRouter>
       </AntApp>
@@ -53,6 +55,7 @@ const existingItem = {
 describe('useItemForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient = createTestQueryClient();
     mockedUseItem.mockReturnValue(queryOk(undefined));
   });
 
@@ -114,5 +117,65 @@ describe('useItemForm', () => {
       },
       undefined,
     );
+  });
+
+
+  describe('photo preview', () => {
+    const file = new File(['bytes'], 'photo.png', { type: 'image/png' });
+
+    // выбранный файл всегда важнее фото с сервера: показывать старое фото под видом нового нельзя
+    it('shows the picked file instead of the stored image', async () => {
+      mockedUseItem.mockReturnValue(queryOk(existingItem));
+      const { result } = renderHook(() => useItemForm('item-1'), { wrapper });
+      expect(result.current.previewUrl).toBe(existingItem.image);
+
+      await act(async () => {
+        result.current.handleImageSelected(file as never);
+      });
+
+      expect(result.current.previewUrl).toMatch(/^blob:/);
+      expect(result.current.previewUrl).not.toBe(existingItem.image);
+    });
+
+    // среда без Object URL API: превью просто нет. Показать вместо нового файла старое
+    // фото с сервера нельзя — пользователь решит, что его выбор не применился
+    it('shows no preview instead of the stale image when object URLs are unavailable', async () => {
+      const original = URL.createObjectURL;
+      // @ts-expect-error — намеренно воспроизводим окружение без Object URL API
+      URL.createObjectURL = undefined;
+      try {
+        mockedUseItem.mockReturnValue(queryOk(existingItem));
+        const { result } = renderHook(() => useItemForm('item-1'), { wrapper });
+
+        await act(async () => {
+          result.current.handleImageSelected(file as never);
+        });
+
+        expect(result.current.previewUrl).toBeNull();
+      } finally {
+        URL.createObjectURL = original;
+      }
+    });
+
+    it('releases the object URL when the file changes and on unmount', async () => {
+      const revoke = vi.spyOn(URL, 'revokeObjectURL');
+      const { result, unmount } = renderHook(() => useItemForm(), { wrapper });
+
+      await act(async () => {
+        result.current.handleImageSelected(file as never);
+      });
+      const firstUrl = result.current.previewUrl;
+
+      await act(async () => {
+        result.current.handleImageSelected(
+          new File(['other'], 'other.png', { type: 'image/png' }) as never,
+        );
+      });
+      expect(revoke).toHaveBeenCalledWith(firstUrl);
+
+      const secondUrl = result.current.previewUrl;
+      unmount();
+      expect(revoke).toHaveBeenCalledWith(secondUrl);
+    });
   });
 });

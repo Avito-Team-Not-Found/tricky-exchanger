@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { App as AntApp, Form, type UploadFile, type UploadProps } from 'antd';
+import { App as AntApp, Form, type UploadProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import {
@@ -26,7 +26,7 @@ export interface ItemFormValues {
 }
 
 export function useItemForm(itemId?: string) {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -37,6 +37,7 @@ export function useItemForm(itemId?: string) {
   const [pendingFile, setPendingFile] = useState<UploadedFile | null>(null);
   const [removingImage, setRemovingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   const isEdit = Boolean(itemId);
   // создание товара из формы запроса: после сохранения возвращаемся в неё с выбором нового товара (PROJECT.md §2.4)
@@ -56,35 +57,81 @@ export function useItemForm(itemId?: string) {
     };
   }, [item]);
 
-  // превью фото выводится из состояния, а не копируется в стейт: pending — новое фото, иначе текущее с сервера
-  const fileList: UploadFile[] = useMemo(() => {
-    if (pendingFile) {
-      return [
-        { uid: 'pending', name: pendingFile.name, originFileObj: pendingFile, status: 'done' },
-      ];
-    }
-    if (isEdit && item?.image && !removingImage) {
-      return [{ uid: 'existing', name: 'Фото', url: item.image, status: 'done' }];
-    }
-    return [];
-  }, [pendingFile, isEdit, item, removingImage]);
+  // фото обязательно в обеих формах: убрали фотку у существующего товара — сохранить нельзя
+  const hasPhoto = Boolean(pendingFile) || (isEdit && Boolean(item?.image) && !removingImage);
+
+  // blob-URL под выбранный файл живёт ровно до смены файла или размонтирования,
+  // иначе каждая новая фотка (до 5 МБ) остаётся висеть в памяти вкладки
+  const pendingPreview = useMemo(
+    () =>
+      pendingFile && typeof URL.createObjectURL === 'function'
+        ? URL.createObjectURL(pendingFile)
+        : null,
+    [pendingFile],
+  );
+  useEffect(() => {
+    if (!pendingPreview) return;
+    return () => URL.revokeObjectURL(pendingPreview);
+  }, [pendingPreview]);
+
+  // выбран новый файл — показываем только его (даже если превью ещё не готово),
+  // иначе — текущее фото с сервера. Показывать старое фото вместо нового нельзя: это враньё
+  const previewUrl = pendingFile
+    ? pendingPreview
+    : isEdit && item?.image && !removingImage
+      ? item.image
+      : null;
 
   const title = Form.useWatch('title', form);
   const description = Form.useWatch('description', form);
   const condition = Form.useWatch('condition', form);
 
   const fieldsValid = Boolean(title?.trim()) && Boolean(description?.trim()) && Boolean(condition);
-  // фото обязательно только при создании; при редактировании его можно не трогать
-  const canSubmit = fieldsValid && (isEdit || fileList.length > 0) && !submitting;
+  const canSubmit = fieldsValid && hasPhoto && !submitting;
 
   function handleImageSelected(file: UploadedFile) {
     setPendingFile(file);
     setRemovingImage(false);
+    setDirty(true);
   }
 
   function handleImageRemove() {
     setPendingFile(null);
     if (item?.image) setRemovingImage(true);
+    setDirty(true);
+  }
+
+  // любой ввод в поля формы помечает её как изменённую
+  function handleValuesChange() {
+    setDirty(true);
+  }
+
+  function goBack() {
+    navigate(returnToRequest ? '/exchange-requests/new' : '/products');
+  }
+
+  // уход с формы с несохранёнными изменениями — только через подтверждение
+  function confirmLeave() {
+    if (!dirty) {
+      goBack();
+      return;
+    }
+    modal.confirm({
+      title: 'Изменения не сохранены',
+      content: 'Хотите сохранить изменения или вернуться назад?',
+      okText: 'Сохранить изменения',
+      cancelText: 'Назад',
+      closable: false,
+      maskClosable: false,
+      // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
+      // берём значения синхронно и шлём сами (валидация формы уже ограничивает кнопку сохранения)
+      // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
+      // берём значения синхронно и шлём сами (валидация формы уже ограничивает кнопку сохранения)
+      onOk: () => {
+        handleSubmit(form.getFieldsValue() as ItemFormValues);
+      },
+      onCancel: () => goBack(),
+    });
   }
 
   async function handleSubmit(values: ItemFormValues) {
@@ -100,8 +147,7 @@ export function useItemForm(itemId?: string) {
     };
     try {
       if (isEdit) {
-        const image = pendingFile ? pendingFile : removingImage ? null : undefined;
-        await updateItem(itemId as string, payload, image);
+        await updateItem(itemId as string, payload, pendingFile ?? undefined);
         message.success('Товар обновлён');
         queryClient.invalidateQueries({ queryKey: ['items'] });
         navigate('/products');
@@ -139,9 +185,12 @@ export function useItemForm(itemId?: string) {
     submitting,
     canSubmit,
     initialValues,
-    fileList,
+    previewUrl,
+    hasPhoto,
     handleImageSelected,
     handleImageRemove,
+    handleValuesChange,
+    confirmLeave,
     handleSubmit,
   };
 }

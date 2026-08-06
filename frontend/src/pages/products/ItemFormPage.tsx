@@ -1,20 +1,16 @@
+import { useRef } from 'react';
+
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useParams } from 'react-router';
 
-import { ItemForm } from '@features/items';
+import { ItemForm, type ItemFormHandle } from '@features/items';
 
 import './ItemFormPage.scss';
 
 export function ItemFormPage() {
   const { itemId } = useParams();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const returnToRequest = searchParams.get('returnTo') === 'request';
-
-  function goBack() {
-    navigate(returnToRequest ? '/exchange-requests/new' : '/products');
-  }
+  const formRef = useRef<ItemFormHandle>(null);
 
   return (
     <div className="item-form-page">
@@ -24,14 +20,14 @@ export function ItemFormPage() {
           type="text"
           icon={<ArrowLeftOutlined aria-hidden />}
           aria-label="Назад"
-          onClick={goBack}
+          onClick={() => formRef.current?.confirmLeave()}
         />
         <h1 className="item-form-page__title">
           {itemId ? 'Редактирование товара' : 'Новый товар'}
         </h1>
       </header>
       <div className="item-form-page__body">
-        <ItemForm itemId={itemId} />
+        <ItemForm itemId={itemId} ref={formRef} />
       </div>
     </div>
   );
