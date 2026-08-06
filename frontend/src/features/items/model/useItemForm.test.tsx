@@ -119,6 +119,26 @@ describe('useItemForm', () => {
     );
   });
 
+  // заявка везёт снимок товара (offeredItem), поэтому правка товара обязана
+  // инвалидировать и список заявок — иначе там ещё минуту висят старые название и фото
+  it('invalidates both items and exchange requests after an update', async () => {
+    mockedUseItem.mockReturnValue(queryOk(existingItem));
+    mockedUpdateItem.mockResolvedValue(existingItem);
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useItemForm('item-1'), { wrapper });
+
+    await act(async () => {
+      await result.current.handleSubmit({
+        title: 'Комбайн Bosch',
+        description: 'Новое описание',
+        condition: 'NEW',
+      });
+    });
+
+    const keys = invalidate.mock.calls.map(([options]) => options?.queryKey);
+    expect(keys).toContainEqual(['items']);
+    expect(keys).toContainEqual(['exchange-requests']);
+  });
 
   describe('photo preview', () => {
     const file = new File(['bytes'], 'photo.png', { type: 'image/png' });

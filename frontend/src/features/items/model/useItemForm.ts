@@ -150,6 +150,9 @@ export function useItemForm(itemId?: string) {
         await updateItem(itemId as string, payload, pendingFile ?? undefined);
         message.success('Товар обновлён');
         queryClient.invalidateQueries({ queryKey: ['items'] });
+        // заявки везут в себе снимок товара (offeredItem) — без инвалидации список
+        // заявок ещё минуту показывает старое название и фото
+        queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
         navigate('/products');
       } else {
         const created = await createItem(payload, pendingFile);

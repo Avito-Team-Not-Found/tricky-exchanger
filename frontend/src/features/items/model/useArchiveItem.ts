@@ -14,6 +14,9 @@ export function useArchiveItem(onSuccess?: () => void) {
     onSuccess: () => {
       message.success('Товар удалён');
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      // вместе с товаром сервер удаляет и связанные с ним заявки — иначе их список
+      // остаётся в кеше stale (staleTime 60s) и клик по удалённой заявке уводит в 404
+      queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
       onSuccess?.();
     },
     onError: (error) =>
