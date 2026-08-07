@@ -40,6 +40,12 @@ type Config struct {
 	VectorDim         int
 	EmbeddingTimeout  time.Duration
 	MaxInputLength    int
+	// MinIO* — настройки объектного хранилища для фото товаров (см. internal/infrastructure/storage).
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
+	MinIOUseSSL    bool
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -74,6 +80,11 @@ func Load() (*Config, error) {
 		VectorDim:         envIntOrDefault("VECTOR_DIM", 384),
 		EmbeddingTimeout:  envDurationOrDefault("EMBEDDING_TIMEOUT", 2*time.Second),
 		MaxInputLength:    envIntOrDefault("MAX_INPUT_LENGTH", 1500),
+		MinIOEndpoint:  envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
+		MinIOAccessKey: envOrDefault("MINIO_ACCESS_KEY", ""),
+		MinIOSecretKey: envOrDefault("MINIO_SECRET_KEY", ""),
+		MinIOBucket:    envOrDefault("MINIO_BUCKET", "items"),
+		MinIOUseSSL:    envOrDefault("MINIO_USE_SSL", "false") == "true",
 	}, nil
 }
 
