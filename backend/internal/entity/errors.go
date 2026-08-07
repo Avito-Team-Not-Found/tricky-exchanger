@@ -23,4 +23,5 @@ var (
 	ErrMatchingNotConfigured        = errors.New("фасад matching не настроен")
 	ErrEmptyEmbedding               = errors.New("сервис embeddings вернул пустой вектор")
 	ErrOfferEmbeddingMissing        = errors.New("для предлагаемого товара не сформирован embedding")
+	ErrClusterNotConfigured         = errors.New("сервис кластеризации не настроен")
 )

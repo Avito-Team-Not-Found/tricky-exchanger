@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
+	clusterservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/cluster"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 )
 
@@ -26,17 +28,27 @@ type UpdateInput struct {
 // Service реализует сценарии работы с заявками без привязки к HTTP.
 // Идентификатор аутентифицированного пользователя передаёт вызывающий код.
 type Service struct {
-	repository ExchangeOfferRepository
-	embedding  embedding.Client
-	matching   matching.Facade
+	repository   ExchangeOfferRepository
+	embedding    embedding.Client
+	matching     matching.Facade
+	clusters     *clusterservice.Service
+	transactions database.TransactionManager
 }
 
 // NewService создаёт сервис заявок с зависимостями для хранения, embeddings и matching.
-func NewService(repository ExchangeOfferRepository, embeddingClient embedding.Client, matchingFacade matching.Facade) *Service {
+func NewService(
+	repository ExchangeOfferRepository,
+	embeddingClient embedding.Client,
+	matchingFacade matching.Facade,
+	clusterService *clusterservice.Service,
+	transactionManager database.TransactionManager,
+) *Service {
 	return &Service{
-		repository: repository,
-		embedding:  embeddingClient,
-		matching:   matchingFacade,
+		repository:   repository,
+		embedding:    embeddingClient,
+		matching:     matchingFacade,
+		clusters:     clusterService,
+		transactions: transactionManager,
 	}
 }
 
@@ -51,13 +63,25 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 		return entity.ExchangeOffer{}, err
 	}
 
-	created, err := s.repository.Create(ctx, entity.ExchangeOffer{
-		UserID:            userID,
-		OfferedItemID:     input.OfferedItemID,
-		WantedDescription: strings.TrimSpace(input.WantedDescription),
-		WantEmbedding:     embeddingValue,
-		Status:            entity.RequestStatusActive,
-		Version:           1,
+	if s.transactions == nil || s.clusters == nil {
+		return entity.ExchangeOffer{}, entity.ErrClusterNotConfigured
+	}
+
+	var created entity.ExchangeOffer
+	err = s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		var createErr error
+		created, createErr = s.repository.Create(ctx, tx, entity.ExchangeOffer{
+			UserID:            userID,
+			OfferedItemID:     input.OfferedItemID,
+			WantedDescription: strings.TrimSpace(input.WantedDescription),
+			WantEmbedding:     embeddingValue,
+			Status:            entity.RequestStatusActive,
+			Version:           1,
+		})
+		if createErr != nil {
+			return createErr
+		}
+		return s.clusters.Synchronize(ctx, tx, created.ID)
 	})
 	if err != nil {
 		return entity.ExchangeOffer{}, err
@@ -95,13 +119,25 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 		return entity.ExchangeOffer{}, err
 	}
 
-	updated, err := s.repository.Update(ctx, entity.ExchangeOffer{
-		ID:                requestID,
-		UserID:            userID,
-		OfferedItemID:     input.OfferedItemID,
-		WantedDescription: strings.TrimSpace(input.WantedDescription),
-		WantEmbedding:     embeddingValue,
-	}, input.Version)
+	if s.transactions == nil || s.clusters == nil {
+		return entity.ExchangeOffer{}, entity.ErrClusterNotConfigured
+	}
+
+	var updated entity.ExchangeOffer
+	err = s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		var updateErr error
+		updated, updateErr = s.repository.Update(ctx, tx, entity.ExchangeOffer{
+			ID:                requestID,
+			UserID:            userID,
+			OfferedItemID:     input.OfferedItemID,
+			WantedDescription: strings.TrimSpace(input.WantedDescription),
+			WantEmbedding:     embeddingValue,
+		}, input.Version)
+		if updateErr != nil {
+			return updateErr
+		}
+		return s.clusters.Synchronize(ctx, tx, updated.ID)
+	})
 	if err != nil {
 		return entity.ExchangeOffer{}, err
 	}
@@ -123,7 +159,19 @@ func (s *Service) Delete(ctx context.Context, userID string, requestID, version 
 		return entity.ErrInvalidVersion
 	}
 
-	archived, err := s.repository.Archive(ctx, userID, requestID, version)
+	if s.transactions == nil || s.clusters == nil {
+		return entity.ErrClusterNotConfigured
+	}
+
+	var archived entity.ExchangeOffer
+	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		var archiveErr error
+		archived, archiveErr = s.repository.Archive(ctx, tx, userID, requestID, version)
+		if archiveErr != nil {
+			return archiveErr
+		}
+		return s.clusters.Remove(ctx, tx, archived.ID)
+	})
 	if err != nil {
 		return err
 	}

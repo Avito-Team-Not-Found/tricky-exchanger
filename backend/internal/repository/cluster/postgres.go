@@ -9,7 +9,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	clusterservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/cluster"
 )
 
 const (
@@ -31,59 +33,6 @@ func NewRepository(pool *pgxpool.Pool) *Postgres {
 		candidateN:  defaultCandidateLimit,
 		maxDistance: defaultMaxDistance,
 	}
-}
-
-// Synchronize удаляет старое членство предложения и добавляет его в кластер,
-// найденный по близости отдаваемого товара и желаемого товара.
-// Метод должен выполняться в той же транзакции, что и изменение предложения.
-func (r *Postgres) Synchronize(ctx context.Context, tx pgx.Tx, offerID int64) error {
-	offerEmbedding, wantEmbedding, err := r.vectorLiterals(ctx, tx, offerID)
-	if err != nil {
-		return err
-	}
-
-	oldClusterID, err := r.deleteMembership(ctx, tx, offerID)
-	if err != nil {
-		return err
-	}
-	if oldClusterID != nil {
-		if err := r.refresh(ctx, tx, *oldClusterID); err != nil {
-			return err
-		}
-	}
-
-	clusterID, err := r.findCandidateCluster(ctx, tx, offerID, offerEmbedding, wantEmbedding)
-	if err != nil {
-		return err
-	}
-	if clusterID == nil {
-		clusterID, err = r.createCluster(ctx, tx)
-		if err != nil {
-			return err
-		}
-	}
-
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO cluster_members (cluster_id, request_id)
-		VALUES ($1, $2)
-	`, *clusterID, offerID); err != nil {
-		return fmt.Errorf("add offer to cluster: %w", err)
-	}
-
-	return r.refresh(ctx, tx, *clusterID)
-}
-
-// Remove удаляет предложение из кластера и актуализирует метаданные кластера.
-// Метод должен выполняться в той же транзакции, что и архивирование предложения.
-func (r *Postgres) Remove(ctx context.Context, tx pgx.Tx, offerID int64) error {
-	clusterID, err := r.deleteMembership(ctx, tx, offerID)
-	if err != nil {
-		return err
-	}
-	if clusterID == nil {
-		return nil
-	}
-	return r.refresh(ctx, tx, *clusterID)
 }
 
 // ListActiveMembers возвращает текущий состав активного кластера. Метод нужен
@@ -128,7 +77,8 @@ func (r *Postgres) ListActiveMembers(ctx context.Context, clusterID int64) ([]en
 	return members, nil
 }
 
-func (r *Postgres) vectorLiterals(ctx context.Context, tx pgx.Tx, offerID int64) (string, string, error) {
+// LoadVectors загружает векторы направления обмена для предложения.
+func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int64) (clusterservice.OfferVectors, error) {
 	var offerEmbedding *string
 	var wantEmbedding *string
 	err := tx.QueryRow(ctx, `
@@ -138,18 +88,19 @@ func (r *Postgres) vectorLiterals(ctx context.Context, tx pgx.Tx, offerID int64)
 		WHERE eo.id = $1 AND eo.status = 'ACTIVE'
 	`, offerID).Scan(&offerEmbedding, &wantEmbedding)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", entity.ErrExchangeOfferNotFound
+		return clusterservice.OfferVectors{}, entity.ErrExchangeOfferNotFound
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("load offer vectors for clustering: %w", err)
+		return clusterservice.OfferVectors{}, fmt.Errorf("load offer vectors for clustering: %w", err)
 	}
 	if offerEmbedding == nil || wantEmbedding == nil {
-		return "", "", entity.ErrOfferEmbeddingMissing
+		return clusterservice.OfferVectors{}, entity.ErrOfferEmbeddingMissing
 	}
-	return *offerEmbedding, *wantEmbedding, nil
+	return clusterservice.OfferVectors{OfferEmbedding: *offerEmbedding, WantEmbedding: *wantEmbedding}, nil
 }
 
-func (r *Postgres) deleteMembership(ctx context.Context, tx pgx.Tx, offerID int64) (*int64, error) {
+// DeleteMembership удаляет строку membership и возвращает прежний кластер.
+func (r *Postgres) DeleteMembership(ctx context.Context, tx database.Tx, offerID int64) (*int64, error) {
 	var clusterID int64
 	err := tx.QueryRow(ctx, `
 		DELETE FROM cluster_members
@@ -165,12 +116,13 @@ func (r *Postgres) deleteMembership(ctx context.Context, tx pgx.Tx, offerID int6
 	return &clusterID, nil
 }
 
-func (r *Postgres) findCandidateCluster(
+// FindCandidateCluster возвращает кластер ближайшего предложения,
+// совпадающего по embeddings отдаваемого и желаемого товара.
+func (r *Postgres) FindCandidateCluster(
 	ctx context.Context,
-	tx pgx.Tx,
+	tx database.Tx,
 	offerID int64,
-	offerEmbedding string,
-	wantEmbedding string,
+	vectors clusterservice.OfferVectors,
 ) (*int64, error) {
 	const query = `
 		WITH nearest_by_offer AS MATERIALIZED (
@@ -196,7 +148,7 @@ func (r *Postgres) findCandidateCluster(
 	`
 
 	var clusterID int64
-	err := tx.QueryRow(ctx, query, offerEmbedding, wantEmbedding, offerID, r.candidateN, r.maxDistance).Scan(&clusterID)
+	err := tx.QueryRow(ctx, query, vectors.OfferEmbedding, vectors.WantEmbedding, offerID, r.candidateN, r.maxDistance).Scan(&clusterID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -206,7 +158,8 @@ func (r *Postgres) findCandidateCluster(
 	return &clusterID, nil
 }
 
-func (r *Postgres) createCluster(ctx context.Context, tx pgx.Tx) (*int64, error) {
+// Create создаёт пустой кластер; участника добавляет вызывающий сервис.
+func (r *Postgres) Create(ctx context.Context, tx database.Tx) (int64, error) {
 	var clusterID int64
 	err := tx.QueryRow(ctx, `
 		INSERT INTO clusters (epsilon)
@@ -214,12 +167,24 @@ func (r *Postgres) createCluster(ctx context.Context, tx pgx.Tx) (*int64, error)
 		RETURNING id
 	`).Scan(&clusterID)
 	if err != nil {
-		return nil, fmt.Errorf("create cluster: %w", err)
+		return 0, fmt.Errorf("create cluster: %w", err)
 	}
-	return &clusterID, nil
+	return clusterID, nil
 }
 
-func (r *Postgres) refresh(ctx context.Context, tx pgx.Tx, clusterID int64) error {
+// AddMember добавляет предложение в кластер.
+func (r *Postgres) AddMember(ctx context.Context, tx database.Tx, clusterID, offerID int64) error {
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO cluster_members (cluster_id, request_id)
+		VALUES ($1, $2)
+	`, clusterID, offerID); err != nil {
+		return fmt.Errorf("add offer to cluster: %w", err)
+	}
+	return nil
+}
+
+// Refresh пересчитывает агрегаты кластера или удаляет его, если он пуст.
+func (r *Postgres) Refresh(ctx context.Context, tx database.Tx, clusterID int64) error {
 	const deleteQuery = `
 		DELETE FROM clusters AS c
 		WHERE c.id = $1
@@ -259,3 +224,5 @@ func (r *Postgres) refresh(ctx context.Context, tx pgx.Tx, clusterID int64) erro
 	}
 	return nil
 }
+
+var _ clusterservice.Repository = (*Postgres)(nil)

@@ -22,8 +22,10 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
+	clusterRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/cluster"
 	exchangeOfferRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/exchange_offer"
 	userRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/user"
+	clusterservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/cluster"
 	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
@@ -31,7 +33,7 @@ import (
 
 func main() {
 	// Загружаем .env (не ошибка, если файла нет — переменные могут быть в окружении)
-	_ = godotenv.Load()
+	_ = godotenv.Load("../.env")
 
 	cfg, err := config.Load()
 
@@ -72,6 +74,9 @@ func main() {
 	userH := userHandler.NewHandler(userSvc)
 
 	exchangeOfferRepository := exchangeOfferRepo.NewRepository(pool)
+	clusterRepository := clusterRepo.NewRepository(pool)
+	clusterSvc := clusterservice.NewService(clusterRepository)
+	transactionManager := database.NewTransactionManager(pool)
 
 	// Выбор embed-провайдера конфигом: tei | stub.
 	var embedClient embedding.Client
@@ -88,6 +93,8 @@ func main() {
 		exchangeOfferRepository,
 		embedClient,
 		matching.NewNoopFacade(),
+		clusterSvc,
+		transactionManager,
 	)
 	exchangeOfferH := exchangeOfferHandler.NewHandler(exchangeOfferSvc)
 
