@@ -13,6 +13,8 @@ import (
 type Repository interface {
 	Create(ctx context.Context, user *entity.User) error
 	GetByEmail(ctx context.Context, email string) (*entity.User, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*entity.User, error)
+	UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error
 }
 
 // TokenIssuer — то, что service/user ожидает от инфраструктуры выпуска сессионных токенов.

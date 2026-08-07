@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	router "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
@@ -21,8 +22,27 @@ func (stubUserService) Register(_ context.Context, fullName, email, _ string) (*
 	return &entity.User{FullName: fullName, Email: email}, "stub-token", nil
 }
 
+func (stubUserService) Login(_ context.Context, email, _ string) (*entity.User, string, error) {
+	return &entity.User{Email: email}, "stub-token", nil
+}
+
+func (stubUserService) Me(_ context.Context, userID uuid.UUID) (*entity.User, error) {
+	return &entity.User{ID: userID}, nil
+}
+
+func (stubUserService) ChangePassword(_ context.Context, _ uuid.UUID, _, _ string) error {
+	return nil
+}
+
+// stubTokenParser — заглушка middleware.TokenParser для тестов роутера.
+type stubTokenParser struct{}
+
+func (stubTokenParser) Parse(_ string) (uuid.UUID, error) {
+	return uuid.New(), nil
+}
+
 func newTestEngine() *gin.Engine {
-	return router.New(router.NewPingHandler(), userHandler.NewHandler(stubUserService{}))
+	return router.New(stubTokenParser{}, router.NewPingHandler(), userHandler.NewHandler(stubUserService{}))
 }
 
 func TestPingHandler(t *testing.T) {
@@ -42,6 +62,52 @@ func TestPingHandler(t *testing.T) {
 	const expectedBody = `{"message":"pong","status":"ok"}`
 	if rec.Body.String() != expectedBody {
 		t.Fatalf("expected body %q, got %q", expectedBody, rec.Body.String())
+	}
+}
+
+func TestLogin_RouteRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code == http.StatusNotFound {
+		t.Fatalf("expected /api/v1/auth/login to be registered, got 404")
+	}
+}
+
+func TestMe_RequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d without Authorization header, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestMe_WithAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer any-token")
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d with Authorization header, got %d", http.StatusOK, rec.Code)
 	}
 }
 

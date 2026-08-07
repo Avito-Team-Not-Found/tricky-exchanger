@@ -16,17 +16,6 @@ type registerRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
-type userResponse struct {
-	ID       string `json:"id"`
-	FullName string `json:"fullName"`
-	Email    string `json:"email"`
-}
-
-type registerResponse struct {
-	Token string       `json:"token"`
-	User  userResponse `json:"user"`
-}
-
 // Register godoc — POST /api/v1/auth/register (PROJECT.md §4.1).
 // Регистрирует нового пользователя и сразу создаёт для него сессию.
 func (h *Handler) Register(c *gin.Context) {
@@ -47,7 +36,7 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	api.SendOk(c, http.StatusCreated, registerResponse{
+	api.SendOk(c, http.StatusCreated, sessionResponse{
 		Token: token,
 		User: userResponse{
 			ID:       user.ID.String(),

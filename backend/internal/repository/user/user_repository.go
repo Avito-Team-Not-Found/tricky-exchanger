@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -53,4 +54,44 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*entity.User
 	}
 
 	return &u, nil
+}
+
+// GetByID возвращает пользователя по ID. Если пользователь не найден — repository.ErrNotFound.
+func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*entity.User, error) {
+	const q = `
+		SELECT id, full_name, email, password_hash, created_at
+		FROM users
+		WHERE id = $1
+	`
+
+	var u entity.User
+	err := r.pool.QueryRow(ctx, q, id).Scan(&u.ID, &u.FullName, &u.Email, &u.PasswordHash, &u.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, repository.ErrNotFound
+		}
+		return nil, repository.MapDBError(err)
+	}
+
+	return &u, nil
+}
+
+// UpdatePassword перезаписывает password_hash пользователя. Если пользователь
+// не найден — repository.ErrNotFound.
+func (r *Repository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+	const q = `
+		UPDATE users
+		SET password_hash = $2
+		WHERE id = $1
+	`
+
+	tag, err := r.pool.Exec(ctx, q, id, passwordHash)
+	if err != nil {
+		return repository.MapDBError(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return repository.ErrNotFound
+	}
+
+	return nil
 }

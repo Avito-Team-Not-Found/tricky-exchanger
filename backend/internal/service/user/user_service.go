@@ -52,3 +52,68 @@ func (s *Service) Register(ctx context.Context, fullName, email, password string
 
 	return user, token, nil
 }
+
+// Login проверяет email/пароль и выпускает сессионный токен.
+// Не различает "email не найден" и "неверный пароль" в возвращаемой ошибке
+// (обе — entity.ErrInvalidCredentials), чтобы не давать возможность
+// перебором проверить, какие email зарегистрированы.
+func (s *Service) Login(ctx context.Context, email, password string) (*entity.User, string, error) {
+	user, err := s.repo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, "", entity.ErrInvalidCredentials
+		}
+		return nil, "", fmt.Errorf("get user by email: %w", err)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return nil, "", entity.ErrInvalidCredentials
+	}
+
+	token, err := s.tokens.Generate(user.ID)
+	if err != nil {
+		return nil, "", fmt.Errorf("generate token: %w", err)
+	}
+
+	return user, token, nil
+}
+
+// Me возвращает пользователя по ID из валидного токена (см. middleware.Auth).
+func (s *Service) Me(ctx context.Context, userID uuid.UUID) (*entity.User, error) {
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, entity.ErrUserNotFound
+		}
+		return nil, fmt.Errorf("get user by id: %w", err)
+	}
+
+	return user, nil
+}
+
+// ChangePassword меняет пароль авторизованного пользователя, предварительно
+// проверяя текущий пароль.
+func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return entity.ErrUserNotFound
+		}
+		return fmt.Errorf("get user by id: %w", err)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)); err != nil {
+		return entity.ErrInvalidCredentials
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	if err := s.repo.UpdatePassword(ctx, userID, string(hash)); err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+
+	return nil
+}

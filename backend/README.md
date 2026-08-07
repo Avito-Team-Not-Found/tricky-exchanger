@@ -67,6 +67,7 @@ internal/
   service/<feature>/      # бизнес-логика; contracts.go — интерфейсы того, что нужно от repository/infrastructure
   handler/<feature>/      # HTTP-хендлеры (gin); contracts.go — интерфейс того, что нужно от service
   infrastructure/         # технические клиенты без бизнес-логики (email, jwt, embeddings, pgvector)
+  middleware/             # сквозные gin-мидлвари, не привязанные к одной фиче (сейчас — Auth, проверка JWT)
   api/                    # общий формат HTTP-ответа/ошибки (internal/api/response.go)
   core/                   # конфиг, логгер, БД-пул, роутер
 ```
@@ -93,9 +94,17 @@ internal/
 - `GET /healthz` — liveness-проверка (не под `/api/v1`, используется докером/оркестратором).
 - `GET /api/v1/ping` — тестовая ручка каркаса (`internal/core/router/ping_handler.go`),
   показывает паттерн подключения новых ручек. Удалить, когда появится первая настоящая фича.
-- `POST /api/v1/auth/register` — регистрация пользователя, сразу создаёт сессию (см. ниже).
+- `POST /api/v1/auth/register` — регистрация пользователя, сразу создаёт сессию.
+- `POST /api/v1/auth/login` — вход по email/паролю.
+- `GET /api/v1/auth/me` 🔒 — текущий пользователь по токену (восстановление сессии на фронте).
+- `POST /api/v1/auth/change-password` 🔒 — смена пароля залогиненным пользователем (это **не**
+  восстановление пароля по коду с почты — та ручка появится отдельно).
+- `POST /api/v1/auth/logout` 🔒 — завершение текущей сессии.
 
-### Регистрация пользователя
+🔒 — требует заголовок `Authorization: Bearer <jwt>`, проверяется мидлварью
+`middleware.Auth` (`internal/middleware/auth.go`).
+
+### Аутентификация
 
 `POST /api/v1/auth/register`
 
@@ -117,13 +126,48 @@ internal/
 Ошибки: `400` — невалидные данные (пустые поля, некорректный email, пароль короче 8 символов),
 `409` — email уже зарегистрирован.
 
+`POST /api/v1/auth/login`
+
+Запрос:
+
+```json
+{ "email": "ivan@example.com", "password": "supersecret" }
+```
+
+Успех (`200`) — тот же формат ответа, что у `register`. Ошибка: `401` для любой неверной пары
+email/пароль (специально не различаем "нет такого email" и "неверный пароль", чтобы не давать
+перебором проверять зарегистрированные email).
+
+`GET /api/v1/auth/me` 🔒 — без тела, в ответ (`200`) отдаёт объект `user` (как в `register`, но
+без `token`). `401` — нет/невалиден токен.
+
+`POST /api/v1/auth/change-password` 🔒
+
+Запрос:
+
+```json
+{ "currentPassword": "supersecret", "newPassword": "newsecret1", "newPasswordConfirmation": "newsecret1" }
+```
+
+Успех (`200`): `{ "message": "password_changed" }`. Ошибки: `400` — неверный текущий пароль,
+пароли не совпадают или новый пароль короче 8 символов; `401` — нет/невалиден токен.
+
+`POST /api/v1/auth/logout` 🔒 — без тела, в ответ (`200`) `{ "message": "logged_out" }`. Сессии в
+этом MVP — стейтлесс JWT без хранилища токенов, поэтому сервер не инвалидирует конкретный токен
+(он живёт до истечения TTL, `JWTTokenTTL` в конфиге) — ручка подтверждает, что запрос пришёл с
+валидным токеном, а сам токен удаляется на клиенте.
+
+> Восстановление пароля по коду с почты (`send-code` → `verify-code` → `reset-password`) в этот
+> набор не входит и будет отдельной задачей.
+
 ### Как добавить свою ручку
 
 1. В `internal/handler/<feature>/` реализуйте `Handler` с методами-хендлерами
    (`func (h *Handler) List(c *gin.Context)` и т.п.) — так же, как `handler/user`.
 2. Добавьте handler явным параметром в `router.New(...)` (`internal/core/router/router.go`) и
    навесьте его маршруты на группу `api` в теле функции (получат префикс `/api/v1`, который
-   ждёт фронтенд).
+   ждёт фронтенд). Если ручка требует авторизации — навесьте `middleware.Auth(tokenParser)` на
+   группу/маршрут (см. `authProtected` в `router.go` как референс).
 3. Создайте handler (через `service` и `repository` фичи) и передайте его в `router.New(...)`
    в `cmd/api/main.go`.
 
