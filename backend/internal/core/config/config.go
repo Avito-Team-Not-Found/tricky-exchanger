@@ -55,6 +55,8 @@ type Config struct {
 	VectorMetric      string  // "cosine" (зафиксировано, соответствует индексу)
 	ClusterTopK       int     // размер ближайшего окружения для поиска кластера
 	ClusterThreshold  float64 // порог similarity отдельно для обоих векторов кластера
+	CycleOutgoingK    int     // максимум исходящих рёбер одной вершины
+	CycleMaxDrafts    int     // максимум возвращаемых вариантов цепочки
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -95,6 +97,8 @@ func Load() (*Config, error) {
 		VectorMetric:      envOrDefault("VECTOR_METRIC", "cosine"),
 		ClusterTopK:       envIntOrDefault("CLUSTER_TOPK", 50),
 		ClusterThreshold:  envFloatOrDefault("CLUSTER_SIMILARITY_THRESHOLD", 0.8),
+		CycleOutgoingK:    envIntOrDefault("CYCLE_OUTGOING_K", 20),
+		CycleMaxDrafts:    envIntOrDefault("CYCLE_MAX_DRAFTS", 10),
 
 		MinIOEndpoint:  envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey: envOrDefault("MINIO_ACCESS_KEY", ""),
