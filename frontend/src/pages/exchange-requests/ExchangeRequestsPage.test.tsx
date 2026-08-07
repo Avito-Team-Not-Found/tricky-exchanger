@@ -89,14 +89,25 @@ describe('ExchangeRequestsPage', () => {
     }
   });
 
-  it('opens the request for editing on card click', async () => {
+  it('opens the exchange options on card click', async () => {
     const user = userEvent.setup();
     mockedUseRequests.mockReturnValue(queryOk([requests[0]]));
     renderWithProviders(<ExchangeRequestsPage />, {
-      routes: [{ path: '/exchange-requests/1/edit', element: <div>edit screen</div> }],
+      routes: [{ path: '/exchange-requests/1', element: <div>chains screen</div> }],
     });
 
     await user.click(screen.getByRole('button', { name: /Запрос/ }));
-    expect(await screen.findByText('edit screen')).toBeInTheDocument();
+    expect(await screen.findByText('chains screen')).toBeInTheDocument();
+  });
+
+  it('opens the exchange options for a request with found chains', async () => {
+    const user = userEvent.setup();
+    mockedUseRequests.mockReturnValue(queryOk([requests[1]]));
+    renderWithProviders(<ExchangeRequestsPage />, {
+      routes: [{ path: '/exchange-requests/2', element: <div>chains screen</div> }],
+    });
+
+    await user.click(screen.getByRole('button', { name: /Запрос/ }));
+    expect(await screen.findByText('chains screen')).toBeInTheDocument();
   });
 });

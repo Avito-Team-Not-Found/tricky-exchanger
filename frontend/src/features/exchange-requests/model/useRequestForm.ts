@@ -94,6 +94,9 @@ export function useRequestForm(requestId?: string) {
         });
         message.success('Запрос обновлён');
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
+        // правка заявки пересчитывает кандидатные цепочки на сервере — иначе список
+        // вариантов ещё минуту показывает старые цепочки (кеш 'chains' живёт 60 с)
+        queryClient.invalidateQueries({ queryKey: ['chains'] });
         navigate('/exchange-requests');
       } else {
         const created = await createRequest({
@@ -120,6 +123,12 @@ export function useRequestForm(requestId?: string) {
 
   function goToList() {
     navigate('/exchange-requests');
+  }
+
+  // после создания с найденными цепочками ведём на экран «Варианты обмена» (PROJECT.md §2.6)
+  function goToChains() {
+    if (!result) return;
+    navigate(`/exchange-requests/${result.request.id}`);
   }
 
   // у пользователя нет товаров — ведём в форму создания товара, оттуда вернёмся с выбором нового (PROJECT.md §2.4)
@@ -184,6 +193,7 @@ export function useRequestForm(requestId?: string) {
     confirmLeave,
     handleSubmit,
     goToList,
+    goToChains,
     goCreateItem,
   };
 }

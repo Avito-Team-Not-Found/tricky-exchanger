@@ -136,6 +136,24 @@ describe('RequestForm', () => {
     ).toBeInTheDocument();
   });
 
+  it('leads to the exchange options when chains are found', async () => {
+    const user = userEvent.setup();
+    mockedCreateRequest.mockResolvedValue({
+      request: { id: 'req-2', status: 'IN_PROPOSAL' } as unknown as ExchangeRequest,
+      matching: { createdCandidateChains: 2 },
+    });
+    renderWithProviders(<RequestForm />, {
+      routes: [{ path: '/exchange-requests/req-2', element: <div>chains screen</div> }],
+    });
+
+    await user.click(screen.getByText('Кухонный комбайн'));
+    await fillWanted(user);
+    await user.click(screen.getByRole('button', { name: /Создать запрос/ }));
+    await user.click(await screen.findByRole('button', { name: /Посмотреть цепочки/ }));
+
+    expect(await screen.findByText('chains screen')).toBeInTheDocument();
+  });
+
   it('keeps submit disabled until the search filter is filled', async () => {
     const user = userEvent.setup();
     renderWithProviders(<RequestForm />);

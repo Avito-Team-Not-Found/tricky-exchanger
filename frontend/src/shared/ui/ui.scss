@@ -88,3 +88,25 @@
 .error-state__retry {
   margin-top: var(--spacing-sm);
 }
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-semibold);
+  user-select: none;
+}
+
+// пилюля 26px с тонированной заливкой; сама заливка и цвет текста приходят инлайн из токенов темы
+.probability-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-heading);
+  white-space: nowrap;
+}

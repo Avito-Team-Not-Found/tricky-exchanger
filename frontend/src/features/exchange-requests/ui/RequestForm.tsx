@@ -41,6 +41,7 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
     confirmLeave,
     handleSubmit,
     goToList,
+    goToChains,
     goCreateItem,
   } = useRequestForm(requestId);
   const removeRequest = useRemoveRequest(goToList);
@@ -86,9 +87,9 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
           type="primary"
           size="large"
           block
-          onClick={goToList}
+          onClick={found ? goToChains : goToList}
         >
-          К моим запросам
+          {found ? 'Посмотреть цепочки' : 'К моим запросам'}
         </Button>
       </div>
     );

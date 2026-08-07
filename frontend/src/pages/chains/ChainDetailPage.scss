@@ -1,0 +1,78 @@
+// ширина читаемой колонки экранов цепочки: по ней выравниваются и шапка, и тело
+$content-width: 640px;
+
+.chain-detail-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.chain-detail-page__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-height: 56px;
+  margin: calc(-1 * var(--spacing-md)) calc(-1 * var(--spacing-md)) 0;
+  padding: 0 var(--spacing-md);
+  background: var(--color-bg-page);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.chain-detail-page__header-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 56px;
+}
+
+.chain-detail-page__back {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.chain-detail-page__title {
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-heading);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chain-detail-page__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--spacing-lg);
+  // боковые и нижний отступы 16px даёт padding .app-body — свой добавляем только сверху
+  padding: var(--spacing-md) 0 0;
+}
+
+@media (min-width: 768px) {
+  .chain-detail-page__body {
+    align-items: center;
+  }
+
+  .chain-detail-page__header-inner,
+  .chain-detail-page__body > * {
+    width: 100%;
+    max-width: $content-width;
+    margin: 0 auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  // рядом появляется боковое меню — подложка шапки не должна залезать в промежуток между ними
+  .chain-detail-page__header {
+    margin-right: 0;
+    margin-left: 0;
+    padding: 0;
+  }
+
+  // в строке участника рядом стоят два названия товаров — в колонке 640px они режутся уже на
+  // третьем слове, поэтому на десктопе колонка шире
+  .chain-detail-page__header-inner,
+  .chain-detail-page__body > * {
+    max-width: 800px;
+  }
+}

@@ -31,13 +31,19 @@ const FORM_SCREEN_PATTERNS = [
   /^\/exchange-requests\/[^/]+\/edit$/,
 ];
 
+// экраны цепочки — полноэкранный подпоток (макеты 4.7/4.8): у экрана своя шапка, а низ занимает
+// кнопка действия, поэтому глобальной шапки и таб-бара нет. Макеты только мобильные — боковое
+// меню десктопа остаётся: там кнопка действия ничего не перекрывает
+const FULL_SCREEN_PATTERNS = [/^\/chains\/[^/]+(\/participants)?$/];
+
 export function AppLayout() {
   const { pathname } = useLocation();
+  const isFullScreen = FULL_SCREEN_PATTERNS.some((pattern) => pattern.test(pathname));
   const isFormScreen = FORM_SCREEN_PATTERNS.some((pattern) => pattern.test(pathname));
 
   return (
-    <div className="app-layout">
-      {!isFormScreen ? (
+    <div className={`app-layout${isFullScreen ? ' app-layout--full-screen' : ''}`}>
+      {!isFormScreen && !isFullScreen ? (
         <header className="app-header">
           <div className="app-header__inner">
             <BrandLogo className="app-header__brand" />
@@ -60,14 +66,16 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
-      <nav className="app-bottom-nav" aria-label="Основная навигация">
-        {NAV_ITEMS.map((item) => (
-          <NavLink key={item.to} to={item.to} className={navClassName}>
-            <span className="app-nav-item__icon">{item.icon}</span>
-            <span className="app-nav-item__label">{item.label}</span>
-          </NavLink>
-        ))}
-      </nav>
+      {!isFullScreen ? (
+        <nav className="app-bottom-nav" aria-label="Основная навигация">
+          {NAV_ITEMS.map((item) => (
+            <NavLink key={item.to} to={item.to} className={navClassName}>
+              <span className="app-nav-item__icon">{item.icon}</span>
+              <span className="app-nav-item__label">{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      ) : null}
     </div>
   );
 }
