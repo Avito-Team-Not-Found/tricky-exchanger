@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, screen } from '@testing-library/react';
 import { App as AntApp } from 'antd';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -116,6 +116,24 @@ describe('useRequestForm', () => {
     expect(result.current.readOnly).toBe(true);
     expect(result.current.readOnlyReason).toBe('LOCKED');
     expect(result.current.canSubmit).toBe(false);
+  });
+
+  // диалог ухода отправлял значения формы без валидации: незаполненная форма уезжала на сервер
+  // (400) или падала на сборке payload, показывая ошибку сети вместо подсказки по полям
+  it('does not offer saving an incomplete form on leave', async () => {
+    const { result } = renderHook(() => useRequestForm(), { wrapper });
+
+    await act(async () => {
+      result.current.handleValuesChange();
+    });
+    await act(async () => {
+      result.current.confirmLeave();
+    });
+
+    expect(await screen.findByRole('button', { name: /Выйти без сохранения/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Сохранить изменения/ })).not.toBeInTheDocument();
+    expect(mockedCreateRequest).not.toHaveBeenCalled();
+    expect(result.current.submitting).toBe(false);
   });
 
   it('detects the missing-items state for a fresh user', () => {

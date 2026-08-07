@@ -81,7 +81,7 @@ export function useRequestForm(requestId?: string) {
     !submitting &&
     !readOnly;
 
-  // фильтр обязателен в форме, но confirmLeave отправляет значения без валидации — незаполненное уходит как null
+  // контракт допускает пустой профиль поиска, форма — нет: незаполненное уезжает как null
   function buildProfile(values: RequestFormValues): WantedProfile {
     return {
       categoryId: values.categoryId ?? null,
@@ -143,6 +143,20 @@ export function useRequestForm(requestId?: string) {
       goToList();
       return;
     }
+    // форма заполнена не полностью — сохранять нечего, предлагаем только уйти или остаться
+    if (!canSubmit) {
+      modal.confirm({
+        title: 'Изменения не сохранены',
+        content: 'Форма заполнена не полностью — сохранить нельзя. Выйти без сохранения?',
+        okText: 'Выйти без сохранения',
+        okButtonProps: { danger: true },
+        cancelText: 'Остаться',
+        closable: false,
+        maskClosable: false,
+        onOk: () => goToList(),
+      });
+      return;
+    }
     modal.confirm({
       title: 'Изменения не сохранены',
       content: 'Хотите сохранить изменения или вернуться назад?',
@@ -151,7 +165,7 @@ export function useRequestForm(requestId?: string) {
       closable: false,
       maskClosable: false,
       // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
-      // берём значения синхронно и шлём сами
+      // берём значения синхронно и шлём сами (сюда попадаем только при canSubmit)
       onOk: () => {
         handleSubmit(form.getFieldsValue() as RequestFormValues);
       },
