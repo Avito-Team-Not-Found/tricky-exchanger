@@ -47,7 +47,7 @@ func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 // проверку прав доступа выполняет вызывающий слой (service).
 func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) {
 	const q = `
-		SELECT id, owner_user_id, title, description, category_id, status, created_at, updated_at
+		SELECT id, owner_user_id, title, description, category_id, image_url, status, created_at, updated_at
 		FROM items
 		WHERE id = $1
 	`
@@ -67,7 +67,7 @@ func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) 
 // и общее количество товаров, отсортированные по дате создания (новые сверху).
 func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pageSize int) ([]*entity.Item, int, error) {
 	const q = `
-		SELECT id, owner_user_id, title, description, category_id, status, created_at, updated_at,
+		SELECT id, owner_user_id, title, description, category_id, image_url, status, created_at, updated_at,
 		       count(*) OVER() AS total
 		FROM items
 		WHERE owner_user_id = $1
@@ -86,7 +86,7 @@ func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pag
 	for rows.Next() {
 		var it entity.Item
 		if err := rows.Scan(
-			&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.CategoryID,
+			&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.CategoryID, &it.ImageURL,
 			&it.Status, &it.CreatedAt, &it.UpdatedAt, &total,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan item list row: %w", err)
@@ -150,6 +150,27 @@ func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status entity.Ite
 	return nil
 }
 
+// UpdateImageURL сохраняет ссылку на загруженное в MinIO фото товара. Если товар
+// не найден — repository.ErrNotFound.
+func (r *Postgres) UpdateImageURL(ctx context.Context, id int64, url string) error {
+	const q = `
+		UPDATE items
+		SET image_url = $2,
+		    updated_at = now()
+		WHERE id = $1
+	`
+
+	tag, err := r.pool.Exec(ctx, q, id, url)
+	if err != nil {
+		return fmt.Errorf("update item image url: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return repository.ErrNotFound
+	}
+
+	return nil
+}
+
 // CategoryExists проверяет, что категория с указанным ID существует в справочнике.
 func (r *Postgres) CategoryExists(ctx context.Context, categoryID int64) (bool, error) {
 	const q = `SELECT EXISTS (SELECT 1 FROM categories WHERE id = $1)`
@@ -169,7 +190,7 @@ type rowScanner interface {
 func scanItem(row rowScanner) (*entity.Item, error) {
 	var it entity.Item
 	err := row.Scan(
-		&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.CategoryID,
+		&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.CategoryID, &it.ImageURL,
 		&it.Status, &it.CreatedAt, &it.UpdatedAt,
 	)
 	if err != nil {

@@ -3,6 +3,8 @@ package item_test
 import (
 	"context"
 	"errors"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +19,7 @@ var ownerID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
 
 func TestCreateTrimsAndPersistsActiveItem(t *testing.T) {
 	repo := &fakeRepo{}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	created, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
 		Title:       "  PlayStation 5  ",
@@ -40,7 +42,7 @@ func TestCreateTrimsAndPersistsActiveItem(t *testing.T) {
 
 func TestCreateRejectsEmptyTitle(t *testing.T) {
 	repo := &fakeRepo{}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{Title: "   "})
 	if !errors.Is(err, entity.ErrTitleRequired) {
@@ -53,7 +55,7 @@ func TestCreateRejectsEmptyTitle(t *testing.T) {
 
 func TestCreateRejectsUnknownCategory(t *testing.T) {
 	repo := &fakeRepo{categoryExists: false}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	categoryID := int64(999)
 	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
@@ -67,7 +69,7 @@ func TestCreateRejectsUnknownCategory(t *testing.T) {
 
 func TestGetReturnsNotFoundForOtherOwner(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: uuid.New()}}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	_, err := service.Get(context.Background(), ownerID, 1)
 	if !errors.Is(err, entity.ErrItemForbidden) {
@@ -77,7 +79,7 @@ func TestGetReturnsNotFoundForOtherOwner(t *testing.T) {
 
 func TestGetReturnsNotFoundWhenMissing(t *testing.T) {
 	repo := &fakeRepo{getErr: repository.ErrNotFound}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	_, err := service.Get(context.Background(), ownerID, 1)
 	if !errors.Is(err, entity.ErrItemNotFound) {
@@ -87,7 +89,7 @@ func TestGetReturnsNotFoundWhenMissing(t *testing.T) {
 
 func TestListNormalizesPagination(t *testing.T) {
 	repo := &fakeRepo{}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	if _, _, err := service.List(context.Background(), ownerID, 0, 0); err != nil {
 		t.Fatalf("List() error = %v", err)
@@ -106,7 +108,7 @@ func TestListNormalizesPagination(t *testing.T) {
 
 func TestUpdateRejectsArchivedItem(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	title := "new title"
 	_, err := service.Update(context.Background(), ownerID, 1, itemservice.UpdateInput{Title: &title})
@@ -117,7 +119,7 @@ func TestUpdateRejectsArchivedItem(t *testing.T) {
 
 func TestUpdateRejectsHardReservation(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service := itemservice.NewService(repo, &fakeReservations{reserved: true})
+	service := itemservice.NewService(repo, &fakeReservations{reserved: true}, &fakeStorage{})
 
 	title := "new title"
 	_, err := service.Update(context.Background(), ownerID, 1, itemservice.UpdateInput{Title: &title})
@@ -128,7 +130,7 @@ func TestUpdateRejectsHardReservation(t *testing.T) {
 
 func TestArchiveRejectsAlreadyArchivedItem(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	if err := service.Archive(context.Background(), ownerID, 1); !errors.Is(err, entity.ErrItemArchived) {
 		t.Fatalf("Archive() error = %v, want ErrItemArchived", err)
@@ -137,13 +139,59 @@ func TestArchiveRejectsAlreadyArchivedItem(t *testing.T) {
 
 func TestArchiveUpdatesStatus(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
 
 	if err := service.Archive(context.Background(), ownerID, 1); err != nil {
 		t.Fatalf("Archive() error = %v", err)
 	}
 	if repo.statusSet != entity.ItemStatusArchived {
 		t.Fatalf("repository.UpdateStatus called with %s, want ARCHIVED", repo.statusSet)
+	}
+}
+
+func TestUploadImageRejectsUnsupportedContentType(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
+
+	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "application/pdf")
+	if !errors.Is(err, entity.ErrInvalidImageType) {
+		t.Fatalf("UploadImage() error = %v, want ErrInvalidImageType", err)
+	}
+}
+
+func TestUploadImageRejectsOversizedFile(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
+
+	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 6<<20, "image/jpeg")
+	if !errors.Is(err, entity.ErrImageTooLarge) {
+		t.Fatalf("UploadImage() error = %v, want ErrImageTooLarge", err)
+	}
+}
+
+func TestUploadImageRejectsArchivedItem(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
+
+	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "image/jpeg")
+	if !errors.Is(err, entity.ErrItemArchived) {
+		t.Fatalf("UploadImage() error = %v, want ErrItemArchived", err)
+	}
+}
+
+func TestUploadImageSavesURLAndReturnsUpdatedItem(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
+	service := itemservice.NewService(repo, &fakeReservations{}, &fakeStorage{})
+
+	updated, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "image/png")
+	if err != nil {
+		t.Fatalf("UploadImage() error = %v", err)
+	}
+	if updated.ImageURL == nil || *updated.ImageURL == "" {
+		t.Fatalf("UploadImage() did not set ImageURL: %#v", updated)
+	}
+	if repo.imageURLSet != *updated.ImageURL {
+		t.Fatalf("repository.UpdateImageURL called with %q, want %q", repo.imageURLSet, *updated.ImageURL)
 	}
 }
 
@@ -155,6 +203,7 @@ type fakeRepo struct {
 	listPage       int
 	listPageSize   int
 	statusSet      entity.ItemStatus
+	imageURLSet    string
 }
 
 func (r *fakeRepo) Create(_ context.Context, item *entity.Item) error {
@@ -195,10 +244,29 @@ func (r *fakeRepo) CategoryExists(_ context.Context, _ int64) (bool, error) {
 	return r.categoryExists, nil
 }
 
+func (r *fakeRepo) UpdateImageURL(_ context.Context, _ int64, url string) error {
+	if r.item == nil {
+		return repository.ErrNotFound
+	}
+	r.imageURLSet = url
+	return nil
+}
+
 type fakeReservations struct {
 	reserved bool
 }
 
 func (f *fakeReservations) HasActiveHardReservation(_ context.Context, _ int64) (bool, error) {
 	return f.reserved, nil
+}
+
+type fakeStorage struct {
+	uploadErr error
+}
+
+func (f *fakeStorage) Upload(_ context.Context, objectName string, _ io.Reader, _ int64, _ string) (string, error) {
+	if f.uploadErr != nil {
+		return "", f.uploadErr
+	}
+	return "http://minio.local/items/" + objectName, nil
 }
