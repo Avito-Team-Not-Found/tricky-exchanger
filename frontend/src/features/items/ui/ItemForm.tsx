@@ -1,10 +1,8 @@
 import { useImperativeHandle, type Ref } from 'react';
 
 import { DeleteOutlined, PictureOutlined, UploadOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Form, Input, Select, Skeleton, Upload } from 'antd';
+import { App as AntApp, Button, Form, Input, Skeleton, Upload } from 'antd';
 import { useNavigate } from 'react-router';
-
-import { ITEM_CONDITIONS } from '@entities/item';
 
 import { ErrorState } from '@shared/ui';
 
@@ -12,8 +10,6 @@ import { useArchiveItem } from '../model/useArchiveItem';
 import { useItemForm } from '../model/useItemForm';
 
 import './ItemForm.scss';
-
-const CONDITION_OPTIONS = ITEM_CONDITIONS.map(({ value, label }) => ({ value, label }));
 
 export interface ItemFormHandle {
   confirmLeave: () => void;
@@ -146,13 +142,6 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
         ]}
       >
         <Input.TextArea placeholder="Описание товара" maxLength={500} showCount rows={4} />
-      </Form.Item>
-      <Form.Item
-        label="Состояние"
-        name="condition"
-        rules={[{ required: true, message: 'Выберите состояние' }]}
-      >
-        <Select placeholder="Выберите состояние" options={CONDITION_OPTIONS} />
       </Form.Item>
       <Form.Item label="Цвет" name="color">
         <Input placeholder="Например, белый" maxLength={50} />

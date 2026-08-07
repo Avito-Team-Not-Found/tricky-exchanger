@@ -1,9 +1,9 @@
 import { useImperativeHandle, type Ref } from 'react';
 
 import { CheckCircleFilled, LockOutlined, PlusOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Checkbox, Form, Input, Radio, Select, Skeleton } from 'antd';
+import { App as AntApp, Button, Form, Input, Radio, Select, Skeleton } from 'antd';
 
-import { ITEM_CONDITIONS, ITEM_STATUS_META } from '@entities/item';
+import { ITEM_STATUS_META } from '@entities/item';
 
 import { ErrorState } from '@shared/ui';
 
@@ -11,8 +11,6 @@ import { useRemoveRequest } from '../model/useRemoveRequest';
 import { useRequestForm } from '../model/useRequestForm';
 
 import './RequestForm.scss';
-
-const CONDITION_OPTIONS = ITEM_CONDITIONS.map(({ value, label }) => ({ value, label }));
 
 export interface RequestFormHandle {
   confirmLeave: () => void;
@@ -43,6 +41,7 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
     confirmLeave,
     handleSubmit,
     goToList,
+    goToChains,
     goCreateItem,
   } = useRequestForm(requestId);
   const removeRequest = useRemoveRequest(goToList);
@@ -88,9 +87,9 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
           type="primary"
           size="large"
           block
-          onClick={goToList}
+          onClick={found ? goToChains : goToList}
         >
-          К моим запросам
+          {found ? 'Посмотреть цепочки' : 'К моим запросам'}
         </Button>
       </div>
     );
@@ -196,13 +195,6 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
               placeholder="Выберите категорию"
               options={categories.map((category) => ({ value: category.id, label: category.name }))}
             />
-          </Form.Item>
-          <Form.Item
-            label="Допустимые состояния"
-            name="acceptableCondition"
-            rules={[{ required: true, message: 'Выберите хотя бы одно состояние' }]}
-          >
-            <Checkbox.Group options={CONDITION_OPTIONS} />
           </Form.Item>
         </div>
       </section>

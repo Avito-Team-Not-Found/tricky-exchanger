@@ -46,7 +46,8 @@ const themeTokens: Record<ThemeMode, ThemeConfig['token']> = {
 };
 
 const sharedComponents: ThemeConfig['components'] = {
-  Button: { fontWeight: 600 },
+  // Button Label из §1.4 — 16px/600; antd по умолчанию рисует 14px
+  Button: { fontWeight: 600, fontSize: 16 },
   // Body 16px из дизайна (§1.4) — antd по умолчанию рисует текст ввода 14px, и он криво центрируется в поле 44px
   Input: { inputFontSize: 16 },
   Segmented: { borderRadius: 8, borderRadiusSM: 4 },

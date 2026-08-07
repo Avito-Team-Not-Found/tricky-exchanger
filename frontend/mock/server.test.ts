@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -323,7 +323,6 @@ describe('items', () => {
     expect(body[0]).toMatchObject({
       id: expect.any(String),
       title: expect.any(String),
-      condition: expect.any(String),
       image: expect.any(String),
       status: 'ACTIVE',
     });
@@ -333,7 +332,6 @@ describe('items', () => {
     const form = new FormData();
     form.append('title', 'Смарт-часы');
     form.append('description', 'Работают как новые');
-    form.append('condition', 'LIKE_NEW');
     form.append('color', 'black');
     form.append('material', '');
     form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'watch.png');
@@ -347,7 +345,6 @@ describe('items', () => {
     expect(status).toBe(201);
     expect(body).toMatchObject({
       title: 'Смарт-часы',
-      condition: 'LIKE_NEW',
       color: 'black',
       material: null,
       status: 'ACTIVE',
@@ -359,7 +356,6 @@ describe('items', () => {
     const form = new FormData();
     form.append('title', 'Без фото');
     form.append('description', 'Описание');
-    form.append('condition', 'NEW');
 
     const { status, body } = await request('/items', {
       method: 'POST',
@@ -371,34 +367,18 @@ describe('items', () => {
     expect(body.code).toBe(400);
   });
 
-  it('rejects an unknown condition', async () => {
-    const form = new FormData();
-    form.append('title', 'Странный товар');
-    form.append('description', 'Описание');
-    form.append('condition', 'ALIEN');
-    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
-
-    const { status } = await request('/items', {
-      method: 'POST',
-      headers: authHeaders(),
-      body: form,
-    });
-
-    expect(status).toBe(400);
-  });
-
-  it('patches condition, color and material', async () => {
+  it('patches color and material', async () => {
     const { body: items } = await request('/items', { headers: authHeaders() });
     const id = items[0].id;
 
     const { status, body } = await request(`/items/${id}`, {
       method: 'PATCH',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ condition: 'NEW', color: 'red', material: 'aluminum' }),
+      body: JSON.stringify({ color: 'red', material: 'aluminum' }),
     });
 
     expect(status).toBe(200);
-    expect(body).toMatchObject({ id, condition: 'NEW', color: 'red', material: 'aluminum' });
+    expect(body).toMatchObject({ id, color: 'red', material: 'aluminum' });
   });
 
   // multipart не умеет null: очистка едет пустой строкой. Без этого очистка цвета терялась,
@@ -415,7 +395,6 @@ describe('items', () => {
     const form = new FormData();
     form.append('title', 'Товар без цвета');
     form.append('description', 'Описание');
-    form.append('condition', 'USED');
     form.append('color', '');
     form.append('material', '');
     form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
@@ -470,7 +449,6 @@ describe('items', () => {
     const form = new FormData();
     form.append('title', 'Товар на удаление');
     form.append('description', 'Проверяем архивирование');
-    form.append('condition', 'USED');
     form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
     const { body: created } = await request('/items', {
       method: 'POST',
@@ -511,7 +489,7 @@ describe('exchange requests', () => {
     const { status, body } = await postJson('/exchange-requests', {
       offeredItemId: itemId,
       wantedDescription: 'Наушники с шумоподавлением',
-      wantedProfile: { categoryId: 'electronics', acceptableCondition: ['NEW', 'LIKE_NEW'] },
+      wantedProfile: { categoryId: 'electronics' },
     });
 
     expect(status).toBe(201);
@@ -612,7 +590,30 @@ describe('exchange requests', () => {
 });
 
 describe('chains', () => {
-  it('selecting a chain locks the request', async () => {
+  // Свежий товар + заявка с кандидатными цепочками — чтобы тесты не зависели от общего состояния db.json
+  async function createCandidateChain(): Promise<string> {
+    const form = new FormData();
+    form.append('title', `Товар ${Math.random()}`);
+    form.append('description', 'Создаётся для независимого теста цепочки');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
+    const { body: item } = await request('/items', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+
+    const { body: created } = await postJson('/exchange-requests', {
+      offeredItemId: item.id,
+      wantedDescription: 'Наушники с шумоподавлением',
+    });
+    const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
+      headers: authHeaders(),
+    });
+    return chains[0].id;
+  }
+
+  // выбор не эксклюзивен: он не блокирует ни заявку, ни остальные варианты (макет 4.6)
+  it('selects several chains of one request without locking it', async () => {
     const { body: requests } = await request('/exchange-requests', { headers: authHeaders() });
     const active = requests.find((r: { status: string }) => r.status === 'ACTIVE');
 
@@ -623,15 +624,129 @@ describe('chains', () => {
     const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
       headers: authHeaders(),
     });
+    expect(chains.length).toBeGreaterThan(1);
 
-    const { status, body } = await postJson(`/chains/${chains[0].id}/select`, {});
-    expect(status).toBe(200);
-    expect(body).toEqual({ id: chains[0].id, selected: true });
+    for (const chain of chains) {
+      const { status, body } = await postJson(`/chains/${chain.id}/select`, {});
+      expect(status).toBe(200);
+      expect(body).toEqual({ id: chain.id, status: 'PROPOSED' });
+    }
+
+    const { body: after } = await request(`/exchange-requests/${created.request.id}/chains`, {
+      headers: authHeaders(),
+    });
+    expect(after.map((c: { status: string }) => c.status)).toEqual(chains.map(() => 'PROPOSED'));
 
     const detail = await request(`/exchange-requests/${created.request.id}`, {
       headers: authHeaders(),
     });
-    expect(detail.body.status).toBe('LOCKED');
+    expect(detail.body.status).toBe('IN_PROPOSAL');
+  });
+
+  // выбор обратим: «Отменить выбор» возвращает цепочку в список вариантов
+  it('cancels a selection and returns the chain to CANDIDATE', async () => {
+    const chainId = await createCandidateChain();
+
+    const { status: selectStatus } = await postJson(`/chains/${chainId}/select`, {});
+    expect(selectStatus).toBe(200);
+
+    const { status, body } = await request(`/chains/${chainId}/select`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(status).toBe(200);
+    expect(body).toEqual({ id: chainId, status: 'CANDIDATE' });
+
+    const { body: detail } = await request(`/chains/${chainId}`, { headers: authHeaders() });
+    expect(detail.status).toBe('CANDIDATE');
+    expect(detail.viewerPermissions).toMatchObject({ canSelect: true, canDeselect: false });
+  });
+
+  it('rejects cancelling a selection that was never made', async () => {
+    const chainId = await createCandidateChain();
+
+    const { status, body } = await request(`/chains/${chainId}/select`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ code: 409 });
+  });
+
+  it('lists the response statuses of the chain participants', async () => {
+    const chainId = await createCandidateChain();
+    const { body: detail } = await request(`/chains/${chainId}`, { headers: authHeaders() });
+
+    const { status, body } = await request(`/chains/${chainId}/responses`, {
+      headers: authHeaders(),
+    });
+    expect(status).toBe(200);
+    expect(Array.isArray(body)).toBe(true);
+    expect(body).toHaveLength(detail.participants.length);
+  });
+
+  it('accepts a chain response and reports readiness once everyone agrees', async () => {
+    const chainId = await createCandidateChain();
+
+    const { status, body } = await postJson(`/chains/${chainId}/responses/accept`, {});
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ chainId, isReadyForSelection: true });
+  });
+
+  it('declines a chain response and keeps it unselectable', async () => {
+    const chainId = await createCandidateChain();
+
+    const { status, body } = await postJson(`/chains/${chainId}/responses/decline`, {});
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ chainId, isReadyForSelection: false });
+  });
+
+  it('rejects a second response to the same chain', async () => {
+    const chainId = await createCandidateChain();
+
+    await postJson(`/chains/${chainId}/responses/accept`, {});
+    const { status, body } = await postJson(`/chains/${chainId}/responses/decline`, {});
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ code: 409 });
+  });
+
+  // фронт прячет кнопку отклика по canRespond, но прямой вызов API после дедлайна обязан
+  // получать 410 (PROJECT.md §4.4) — иначе отклик уезжает «за окно» таймера
+  it('rejects responding after the response deadline has passed', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tricky-mock-test-'));
+    const dbPath = join(dir, 'db.json');
+    const passwordsPath = join(dir, 'passwords.json');
+    copyFileSync(join(mockDir, 'db.json'), dbPath);
+    copyFileSync(join(mockDir, 'passwords.json'), passwordsPath);
+    // протухаем дедлайн кандидатной цепочки Анны (3001)
+    const seed = JSON.parse(readFileSync(dbPath, 'utf8'));
+    const chain = seed.chains.find(
+      (c: { id: string }) => c.id === '30000000-0000-4000-8000-000000000001',
+    );
+    chain.responseDeadlineAt = new Date(Date.now() - 60_000).toISOString();
+    writeFileSync(dbPath, JSON.stringify(seed, null, 2));
+
+    const app = createMockApp({ dbPath, passwordsPath });
+    const srv = app.listen(0);
+    await new Promise<void>((resolve) => srv.once('listening', resolve));
+    try {
+      const address = srv.address();
+      if (!address || typeof address === 'string')
+        throw new Error('Не удалось определить порт мок-сервера');
+      const url = `http://127.0.0.1:${address.port}`;
+      const response = await fetch(
+        `${url}/api/v1/chains/30000000-0000-4000-8000-000000000001/responses/accept`,
+        { method: 'POST', headers: authHeaders() },
+      );
+      const body = await response.json();
+      expect(response.status).toBe(410);
+      expect(body).toMatchObject({ code: 410 });
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        srv.close((err) => (err ? reject(err) : resolve())),
+      );
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('rejects selecting a chain that belongs to another user', async () => {
@@ -655,7 +770,6 @@ describe('chains', () => {
     const form = new FormData();
     form.append('title', 'Товар с цепочками');
     form.append('description', 'Удаляется вместе с заявкой');
-    form.append('condition', 'USED');
     form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
     const { body: item } = await request('/items', {
       method: 'POST',
@@ -711,28 +825,13 @@ describe('chains', () => {
   });
 });
 
-describe('exchange request validation', () => {
-  it('rejects an unknown acceptable condition in the profile', async () => {
-    const { body: items } = await request('/items', { headers: authHeaders() });
-    const itemId = items.find((i: { status: string }) => i.status === 'ACTIVE').id;
-
-    const { status, body } = await postJson('/exchange-requests', {
-      offeredItemId: itemId,
-      wantedDescription: 'Что-то',
-      wantedProfile: { acceptableCondition: ['ALIEN'] },
-    });
-    expect(status).toBe(400);
-    expect(body.code).toBe(400);
-  });
-});
-
-// Бронь товара — по PROJECT.md §1: её ставит выбор цепочки, а не создание заявки
+// Бронь товара: выбор цепочки не эксклюзивен и обратим, поэтому сам по себе ничего не резервирует
+// и не блокирует заявку — товар остаётся свободным до отдельного шага сделки (PROJECT.md §4.5)
 describe('item reservation lifecycle', () => {
   async function createItem(title: string) {
     const form = new FormData();
     form.append('title', title);
     form.append('description', 'Товар для проверки брони');
-    form.append('condition', 'USED');
     form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
     const { body } = await request('/items', {
       method: 'POST',
@@ -747,7 +846,7 @@ describe('item reservation lifecycle', () => {
     return body.status;
   };
 
-  it('reserves the item on chain select and frees it when the request is dropped', async () => {
+  it('keeps the item free while its request collects and selects chains', async () => {
     const item = await createItem('Товар под бронь');
     expect(await itemStatus(item.id)).toBe('ACTIVE');
 
@@ -755,7 +854,6 @@ describe('item reservation lifecycle', () => {
       offeredItemId: item.id,
       wantedDescription: 'Наушники',
     });
-    // до выбора цепочки товар остаётся свободным
     expect(await itemStatus(item.id)).toBe('ACTIVE');
 
     const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
@@ -768,14 +866,7 @@ describe('item reservation lifecycle', () => {
       headers: authHeaders(),
     });
     expect(selectStatus).toBe(200);
-    expect(await itemStatus(item.id)).toBe('RESERVED');
-
-    // забронированный товар нельзя предложить в новой заявке — это конфликт, а не валидация
-    const { status: conflictStatus } = await postJson('/exchange-requests', {
-      offeredItemId: item.id,
-      wantedDescription: 'Что-то ещё',
-    });
-    expect(conflictStatus).toBe(409);
+    expect(await itemStatus(item.id)).toBe('ACTIVE');
 
     await request(`/exchange-requests/${created.request.id}`, {
       method: 'DELETE',

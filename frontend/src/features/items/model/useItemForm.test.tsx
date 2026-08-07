@@ -46,7 +46,6 @@ const existingItem = {
   id: 'item-1',
   title: 'Комбайн',
   description: 'Описание',
-  condition: 'USED',
   color: 'white',
   material: 'plastic',
   image: 'data:image/png;base64,abc',
@@ -72,7 +71,6 @@ describe('useItemForm', () => {
       await result.current.handleSubmit({
         title: '  Смарт-часы  ',
         description: 'Работают',
-        condition: 'LIKE_NEW',
         color: '  black ',
         material: '',
       });
@@ -82,7 +80,6 @@ describe('useItemForm', () => {
       {
         title: 'Смарт-часы',
         description: 'Работают',
-        condition: 'LIKE_NEW',
         color: 'black',
         material: null,
       },
@@ -99,7 +96,6 @@ describe('useItemForm', () => {
       await result.current.handleSubmit({
         title: 'Комбайн Bosch',
         description: 'Новое описание',
-        condition: 'NEW',
         color: 'red',
         material: 'aluminum',
       });
@@ -111,7 +107,6 @@ describe('useItemForm', () => {
       {
         title: 'Комбайн Bosch',
         description: 'Новое описание',
-        condition: 'NEW',
         color: 'red',
         material: 'aluminum',
       },
@@ -131,7 +126,6 @@ describe('useItemForm', () => {
       await result.current.handleSubmit({
         title: 'Комбайн Bosch',
         description: 'Новое описание',
-        condition: 'NEW',
       });
     });
 

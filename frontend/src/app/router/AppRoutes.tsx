@@ -4,6 +4,9 @@ import { AppLayout } from '@app/layouts/AppLayout';
 
 import {
   AuthPage,
+  ChainDetailPage,
+  ChainListPage,
+  ChainParticipantsPage,
   ChangePasswordPage,
   ExchangeRequestsPage,
   ForgotPasswordPage,
@@ -56,6 +59,9 @@ export function AppRoutes() {
         <Route path="/exchange-requests" element={<ExchangeRequestsPage />} />
         <Route path="/exchange-requests/new" element={<RequestFormPage />} />
         <Route path="/exchange-requests/:requestId/edit" element={<RequestFormPage />} />
+        <Route path="/exchange-requests/:requestId" element={<ChainListPage />} />
+        <Route path="/chains/:chainId" element={<ChainDetailPage />} />
+        <Route path="/chains/:chainId/participants" element={<ChainParticipantsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
       {/* смена пароля — отдельный экран без таб-бара/бокового меню (DESIGN.md §4.8) */}
