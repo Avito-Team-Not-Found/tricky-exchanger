@@ -70,6 +70,7 @@ func main() {
 	})
 	userSvc := userService.NewService(userRepository, tokenService, codeStore, mailerSvc, cfg.RecoveryCodeTTL)
 	userH := userHandler.NewHandler(userSvc)
+
 	exchangeOfferRepository := exchangeOfferRepo.NewRepository(pool)
 	exchangeOfferSvc := exchangeOfferService.NewService(
 		exchangeOfferRepository,
