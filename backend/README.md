@@ -13,6 +13,7 @@
 | PostgreSQL      | v18                 |
 | pgvector        | v0.8.6              |
 | golang-migrate  | v4.19.1             |
+| TEI (embeddings) | ghcr.io/huggingface/text-embeddings-inference:cpu-1.9 |
 
 ## Запуск одной командой
 
@@ -251,6 +252,32 @@ email/пароль (специально не различаем "нет так�
 Слои фичи (`entity`, `service/<feature>`, `repository/<feature>`, `handler/<feature>`, при
 необходимости `infrastructure/...`) уже созданы как пустые пакеты по структуре из архитектуры
 проекта — просто наполняйте их кодом.
+
+## Embeddings (TEI)
+
+Для генерации векторов желания (`WantEmbedding`) бэкенд использует
+[Text Embeddings Inference](https://github.com/huggingface/text-embeddings-inference)
+с моделью `intfloat/multilingual-e5-small`. В docker-compose он поднимается как
+отдельный сервис `tei` и доступен бэкенду по внутреннему адресу `http://tei:80`
+(переменная `TEI_URL`), наружу проброшен на `TEI_EXTERNAL_PORT` (по умолчанию `8090`).
+
+Провайдер выбирается конфигом `EMBEDDING_PROVIDER`: `tei` — реальный сервис, либо
+`stub` (по умолчанию) — детерминированный клиент-заглушка для разработки без TEI.
+Остальные настройки: `VECTOR_DIM`, `EMBEDDING_TIMEOUT`, `MAX_INPUT_LENGTH` — лимит
+входного текста в символах (текст усекается до него перед отправкой в модель).
+
+Проверить, что TEI поднялся и отвечает:
+
+```bash
+docker compose up -d tei
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8090/health   # ждём 200
+curl -s -X POST http://localhost:8090/embed \
+  -H "Content-Type: application/json" \
+  -d '{"inputs":"хочу iPhone"}'                                          # вернёт вектор
+```
+
+Если `EMBEDDING_PROVIDER=tei`, `app` стартует только после того, как `tei` стал
+healthy (внутренний healthcheck ходит на `/health`).
 
 ## Тесты
 

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -31,6 +32,20 @@ type Config struct {
 	// SMTPEncryption — "plain" | "starttls" | "tls", см. internal/infrastructure/mailer.
 	SMTPEncryption  string
 	RecoveryCodeTTL time.Duration
+
+	// Embedding* — настройки генерации векторов желания (TEI).
+	// Provider: "tei" | "stub" | "" (пусто = stub для локальной разработки без TEI).
+	EmbeddingProvider string
+	TEIURL            string
+	VectorDim         int
+	EmbeddingTimeout  time.Duration
+	MaxInputLength    int
+	// MinIO* — настройки объектного хранилища для фото товаров (см. internal/infrastructure/storage).
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
+	MinIOUseSSL    bool
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -59,12 +74,41 @@ func Load() (*Config, error) {
 		SMTPFrom:        envOrDefault("SMTP_FROM", ""),
 		SMTPEncryption:  envOrDefault("SMTP_ENCRYPTION", "starttls"),
 		RecoveryCodeTTL: recoveryCodeTTL,
+
+		EmbeddingProvider: envOrDefault("EMBEDDING_PROVIDER", "stub"),
+		TEIURL:            envOrDefault("TEI_URL", "http://tei:80"),
+		VectorDim:         envIntOrDefault("VECTOR_DIM", 384),
+		EmbeddingTimeout:  envDurationOrDefault("EMBEDDING_TIMEOUT", 2*time.Second),
+		MaxInputLength:    envIntOrDefault("MAX_INPUT_LENGTH", 1500),
+		MinIOEndpoint:  envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
+		MinIOAccessKey: envOrDefault("MINIO_ACCESS_KEY", ""),
+		MinIOSecretKey: envOrDefault("MINIO_SECRET_KEY", ""),
+		MinIOBucket:    envOrDefault("MINIO_BUCKET", "items"),
+		MinIOUseSSL:    envOrDefault("MINIO_USE_SSL", "false") == "true",
 	}, nil
 }
 
 func envOrDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envIntOrDefault(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
+}
+
+func envDurationOrDefault(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
 	}
 	return fallback
 }
