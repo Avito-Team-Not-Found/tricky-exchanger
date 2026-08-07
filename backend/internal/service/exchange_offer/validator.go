@@ -1,4 +1,4 @@
-package exchange_request
+package exchange_offer
 
 import "strings"
 

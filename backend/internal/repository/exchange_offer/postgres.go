@@ -1,4 +1,4 @@
-package exchange_request
+package exchange_offer
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-	requestservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_request"
+	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
 
 // Postgres хранит заявки на обмен в PostgreSQL.
@@ -39,7 +39,7 @@ func (r *Postgres) Create(ctx context.Context, request entity.ExchangeOffer) (en
 	}
 
 	const query = `
-		INSERT INTO exchange_requests (
+		INSERT INTO exchange_offers (
 			user_id, offered_item_id, wanted_description, want_embedding,
 			status, version
 		)
@@ -79,13 +79,13 @@ func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (ent
 	const query = `
 		SELECT id, user_id, offered_item_id, wanted_description,
 		       status, version, created_at, updated_at
-		FROM exchange_requests
+		FROM exchange_offers
 		WHERE id = $1 AND user_id = $2 AND status <> 'REMOVED'
 	`
 
 	request, err := scanExchangeOffer(r.pool.QueryRow(ctx, query, requestID, userID))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ExchangeOffer{}, entity.ErrExchangeRequestNotFound
+		return entity.ExchangeOffer{}, entity.ErrExchangeOfferNotFound
 	}
 	if err != nil {
 		return entity.ExchangeOffer{}, fmt.Errorf("get exchange request: %w", err)
@@ -102,7 +102,7 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOf
 		SELECT er.id, er.user_id, er.offered_item_id, er.wanted_description,
 		       er.status, er.version, er.created_at,
 		       er.updated_at, i.title
-		FROM exchange_requests AS er
+		FROM exchange_offers AS er
 		JOIN items AS i ON i.id = er.offered_item_id
 		WHERE er.user_id = $1 AND er.status <> 'REMOVED'
 		ORDER BY er.created_at DESC, er.id DESC
@@ -157,7 +157,7 @@ func (r *Postgres) Update(ctx context.Context, request entity.ExchangeOffer, exp
 	}
 
 	const query = `
-		UPDATE exchange_requests
+		UPDATE exchange_offers
 		SET offered_item_id = $3,
 		    wanted_description = $4,
 		    want_embedding = $5::vector,
@@ -208,7 +208,7 @@ func (r *Postgres) Archive(ctx context.Context, userID string, requestID, expect
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	const query = `
-		UPDATE exchange_requests
+		UPDATE exchange_offers
 		SET status = 'REMOVED',
 		    version = version + 1,
 		    updated_at = now()
@@ -284,24 +284,24 @@ func ensureMutableRequest(ctx context.Context, tx pgx.Tx, requestID int64, userI
 	var currentVersion int64
 	err := tx.QueryRow(ctx, `
 		SELECT status, version
-		FROM exchange_requests
+		FROM exchange_offers
 		WHERE id = $1 AND user_id = $2
 		FOR UPDATE
 	`, requestID, userID).Scan(&status, &currentVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ErrExchangeRequestNotFound
+		return entity.ErrExchangeOfferNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("lock exchange request for update: %w", err)
 	}
 	if status == entity.RequestStatusLocked {
-		return entity.ErrExchangeRequestLocked
+		return entity.ErrExchangeOfferLocked
 	}
 	if status == entity.RequestStatusRemoved {
-		return entity.ErrExchangeRequestNotFound
+		return entity.ErrExchangeOfferNotFound
 	}
 	if currentVersion != expectedVersion {
-		return entity.ErrExchangeRequestVersionConflict
+		return entity.ErrExchangeOfferVersionConflict
 	}
 	return nil
 }
@@ -336,22 +336,22 @@ func mutationError(ctx context.Context, tx pgx.Tx, requestID int64, userID strin
 	var currentVersion int64
 	err := tx.QueryRow(ctx, `
 		SELECT status, version
-		FROM exchange_requests
+		FROM exchange_offers
 		WHERE id = $1 AND user_id = $2
 	`, requestID, userID).Scan(&status, &currentVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ErrExchangeRequestNotFound
+		return entity.ErrExchangeOfferNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("inspect failed exchange request mutation: %w", err)
 	}
 	if status == entity.RequestStatusLocked {
-		return entity.ErrExchangeRequestLocked
+		return entity.ErrExchangeOfferLocked
 	}
 	if currentVersion != expectedVersion {
-		return entity.ErrExchangeRequestVersionConflict
+		return entity.ErrExchangeOfferVersionConflict
 	}
-	return entity.ErrExchangeRequestNotFound
+	return entity.ErrExchangeOfferNotFound
 }
 
 func vectorLiteral(vector []float32) string {
@@ -362,4 +362,4 @@ func vectorLiteral(vector []float32) string {
 	return "[" + strings.Join(parts, ",") + "]"
 }
 
-var _ requestservice.ExchangeRequestRepository = (*Postgres)(nil)
+var _ offerservice.ExchangeOfferRepository = (*Postgres)(nil)

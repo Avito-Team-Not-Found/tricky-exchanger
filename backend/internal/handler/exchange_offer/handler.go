@@ -1,4 +1,4 @@
-package exchange_request
+package exchange_offer
 
 import (
 	"errors"
@@ -11,16 +11,16 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/api"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
-	requestservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_request"
+	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
 
 // Handler обрабатывает HTTP-запросы CRUD заявок на обмен.
 // Идентификатор пользователя берётся только из JWT-мидлвари, а не из тела запроса.
 type Handler struct {
-	service exchangeRequestService
+	service exchangeOfferService
 }
 
-func NewHandler(service exchangeRequestService) *Handler {
+func NewHandler(service exchangeOfferService) *Handler {
 	return &Handler{service: service}
 }
 
@@ -57,7 +57,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	created, err := h.service.Create(c.Request.Context(), userID, requestservice.CreateInput{
+	created, err := h.service.Create(c.Request.Context(), userID, offerservice.CreateInput{
 		OfferedItemID:     body.OfferedItemID,
 		WantedDescription: body.WantedDescription,
 	})
@@ -91,9 +91,9 @@ func (h *Handler) Get(c *gin.Context) {
 	request, err := h.service.Get(c.Request.Context(), userID, requestID)
 	if err != nil {
 		switch {
-		case errors.Is(err, entity.ErrExchangeRequestNotFound):
+		case errors.Is(err, entity.ErrExchangeOfferNotFound):
 			api.SendError(c, http.StatusNotFound, err.Error())
-		case errors.Is(err, entity.ErrExchangeRequestForbidden):
+		case errors.Is(err, entity.ErrExchangeOfferForbidden):
 			api.SendError(c, http.StatusForbidden, err.Error())
 		default:
 			api.SendError(c, http.StatusInternalServerError, "internal server error")
@@ -144,19 +144,19 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	updated, err := h.service.Update(c.Request.Context(), userID, requestID, requestservice.UpdateInput{
+	updated, err := h.service.Update(c.Request.Context(), userID, requestID, offerservice.UpdateInput{
 		OfferedItemID:     body.OfferedItemID,
 		WantedDescription: body.WantedDescription,
 		Version:           body.Version,
 	})
 	if err != nil {
 		switch {
-		case errors.Is(err, entity.ErrExchangeRequestNotFound):
+		case errors.Is(err, entity.ErrExchangeOfferNotFound):
 			api.SendError(c, http.StatusNotFound, err.Error())
-		case errors.Is(err, entity.ErrExchangeRequestForbidden):
+		case errors.Is(err, entity.ErrExchangeOfferForbidden):
 			api.SendError(c, http.StatusForbidden, err.Error())
-		case errors.Is(err, entity.ErrExchangeRequestVersionConflict),
-			errors.Is(err, entity.ErrExchangeRequestLocked):
+		case errors.Is(err, entity.ErrExchangeOfferVersionConflict),
+			errors.Is(err, entity.ErrExchangeOfferLocked):
 			api.SendError(c, http.StatusConflict, err.Error())
 		case errors.Is(err, entity.ErrOfferedItemUnavailable),
 			errors.Is(err, entity.ErrInvalidOfferedItem),
@@ -192,12 +192,12 @@ func (h *Handler) Delete(c *gin.Context) {
 
 	if err := h.service.Delete(c.Request.Context(), userID, requestID, version); err != nil {
 		switch {
-		case errors.Is(err, entity.ErrExchangeRequestNotFound):
+		case errors.Is(err, entity.ErrExchangeOfferNotFound):
 			api.SendError(c, http.StatusNotFound, err.Error())
-		case errors.Is(err, entity.ErrExchangeRequestForbidden):
+		case errors.Is(err, entity.ErrExchangeOfferForbidden):
 			api.SendError(c, http.StatusForbidden, err.Error())
-		case errors.Is(err, entity.ErrExchangeRequestVersionConflict),
-			errors.Is(err, entity.ErrExchangeRequestLocked):
+		case errors.Is(err, entity.ErrExchangeOfferVersionConflict),
+			errors.Is(err, entity.ErrExchangeOfferLocked):
 			api.SendError(c, http.StatusConflict, err.Error())
 		case errors.Is(err, entity.ErrInvalidVersion):
 			api.SendError(c, http.StatusUnprocessableEntity, err.Error())

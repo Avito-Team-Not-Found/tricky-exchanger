@@ -1,4 +1,4 @@
-package exchange_request_test
+package exchange_offer_test
 
 import (
 	"context"
@@ -7,16 +7,16 @@ import (
 	"time"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-	requestservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_request"
+	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
 
 func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
 	store := &fakeStore{}
 	embeddings := &fakeEmbedding{vector: []float32{0.1, 0.2}}
 	matcher := &fakeMatcher{}
-	service := requestservice.NewService(store, embeddings, matcher)
+	service := offerservice.NewService(store, embeddings, matcher)
 
-	created, err := service.Create(context.Background(), "user-1", requestservice.CreateInput{
+	created, err := service.Create(context.Background(), "user-1", offerservice.CreateInput{
 		OfferedItemID:     42,
 		WantedDescription: "  кофемашина  ",
 	})
@@ -41,9 +41,9 @@ func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
 func TestUpdatePropagatesVersionAndRebuildsMatching(t *testing.T) {
 	store := &fakeStore{updated: entity.ExchangeOffer{ID: 7, Version: 3}}
 	matcher := &fakeMatcher{}
-	service := requestservice.NewService(store, &fakeEmbedding{vector: []float32{0.3}}, matcher)
+	service := offerservice.NewService(store, &fakeEmbedding{vector: []float32{0.3}}, matcher)
 
-	updated, err := service.Update(context.Background(), "user-1", 7, requestservice.UpdateInput{
+	updated, err := service.Update(context.Background(), "user-1", 7, offerservice.UpdateInput{
 		OfferedItemID:     44,
 		WantedDescription: "ноутбук",
 		Version:           2,
@@ -62,7 +62,7 @@ func TestUpdatePropagatesVersionAndRebuildsMatching(t *testing.T) {
 func TestDeleteArchivesThenRemovesFromMatching(t *testing.T) {
 	store := &fakeStore{archived: entity.ExchangeOffer{ID: 9, Status: entity.RequestStatusRemoved, Version: 2}}
 	matcher := &fakeMatcher{}
-	service := requestservice.NewService(store, &fakeEmbedding{}, matcher)
+	service := offerservice.NewService(store, &fakeEmbedding{}, matcher)
 
 	if err := service.Delete(context.Background(), "user-1", 9, 1); err != nil {
 		t.Fatalf("Delete() error = %v", err)
@@ -74,9 +74,9 @@ func TestDeleteArchivesThenRemovesFromMatching(t *testing.T) {
 
 func TestUpdateRejectsEmptyDescriptionBeforeEmbedding(t *testing.T) {
 	embeddings := &fakeEmbedding{vector: []float32{0.1}}
-	service := requestservice.NewService(&fakeStore{}, embeddings, &fakeMatcher{})
+	service := offerservice.NewService(&fakeStore{}, embeddings, &fakeMatcher{})
 
-	_, err := service.Update(context.Background(), "user-1", 1, requestservice.UpdateInput{
+	_, err := service.Update(context.Background(), "user-1", 1, offerservice.UpdateInput{
 		OfferedItemID:     2,
 		WantedDescription: " ",
 		Version:           1,
@@ -105,7 +105,7 @@ func (s *fakeStore) Create(_ context.Context, request entity.ExchangeOffer) (ent
 }
 
 func (s *fakeStore) Get(_ context.Context, _ string, _ int64) (entity.ExchangeOffer, error) {
-	return entity.ExchangeOffer{}, entity.ErrExchangeRequestNotFound
+	return entity.ExchangeOffer{}, entity.ErrExchangeOfferNotFound
 }
 
 func (s *fakeStore) List(_ context.Context, _ string) ([]entity.ExchangeOfferListItem, error) {
@@ -124,7 +124,7 @@ func (s *fakeStore) Update(_ context.Context, request entity.ExchangeOffer, expe
 func (s *fakeStore) Archive(_ context.Context, _ string, _ int64, expectedVersion int64) (entity.ExchangeOffer, error) {
 	s.expectedVersion = expectedVersion
 	if s.archived.ID == 0 {
-		return entity.ExchangeOffer{}, entity.ErrExchangeRequestNotFound
+		return entity.ExchangeOffer{}, entity.ErrExchangeOfferNotFound
 	}
 	return s.archived, nil
 }

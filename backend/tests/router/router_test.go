@@ -11,9 +11,9 @@ import (
 
 	router "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-	exchangeRequestHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_request"
+	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
-	exchangeRequestService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_request"
+	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
 
 // stubUserService — заглушка Service для тестов роутера: важна только маршрутизация,
@@ -60,29 +60,29 @@ func newTestEngine() *gin.Engine {
 		stubTokenParser{},
 		router.NewPingHandler(),
 		userHandler.NewHandler(stubUserService{}),
-		exchangeRequestHandler.NewHandler(stubExchangeRequestService{}),
+		exchangeOfferHandler.NewHandler(stubExchangeOfferService{}),
 	)
 }
 
-type stubExchangeRequestService struct{}
+type stubExchangeOfferService struct{}
 
-func (stubExchangeRequestService) Create(_ context.Context, _ string, _ exchangeRequestService.CreateInput) (entity.ExchangeOffer, error) {
+func (stubExchangeOfferService) Create(_ context.Context, _ string, _ exchangeOfferService.CreateInput) (entity.ExchangeOffer, error) {
 	return entity.ExchangeOffer{}, nil
 }
 
-func (stubExchangeRequestService) Get(_ context.Context, _ string, _ int64) (entity.ExchangeOffer, error) {
+func (stubExchangeOfferService) Get(_ context.Context, _ string, _ int64) (entity.ExchangeOffer, error) {
 	return entity.ExchangeOffer{}, nil
 }
 
-func (stubExchangeRequestService) List(_ context.Context, _ string) ([]entity.ExchangeOfferListItem, error) {
+func (stubExchangeOfferService) List(_ context.Context, _ string) ([]entity.ExchangeOfferListItem, error) {
 	return nil, nil
 }
 
-func (stubExchangeRequestService) Update(_ context.Context, _ string, _ int64, _ exchangeRequestService.UpdateInput) (entity.ExchangeOffer, error) {
+func (stubExchangeOfferService) Update(_ context.Context, _ string, _ int64, _ exchangeOfferService.UpdateInput) (entity.ExchangeOffer, error) {
 	return entity.ExchangeOffer{}, nil
 }
 
-func (stubExchangeRequestService) Delete(_ context.Context, _ string, _ int64, _ int64) error {
+func (stubExchangeOfferService) Delete(_ context.Context, _ string, _ int64, _ int64) error {
 	return nil
 }
 
@@ -118,6 +118,21 @@ func TestLogin_RouteRegistered(t *testing.T) {
 
 	if rec.Code == http.StatusNotFound {
 		t.Fatalf("expected /api/v1/auth/login to be registered, got 404")
+	}
+}
+
+func TestExchangeOffers_RequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/exchange-offers", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d for /api/v1/exchange-offers without Authorization header, got %d", http.StatusUnauthorized, rec.Code)
 	}
 }
 

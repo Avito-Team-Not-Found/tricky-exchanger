@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	exchangeRequestHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_request"
+	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 )
@@ -21,7 +21,7 @@ func New(
 	tokenParser middleware.TokenParser,
 	pingH *PingHandler,
 	userH *userHandler.Handler,
-	exchangeRequestH *exchangeRequestHandler.Handler,
+	exchangeOfferH *exchangeOfferHandler.Handler,
 ) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Logger())
@@ -50,14 +50,14 @@ func New(
 			authProtected.POST("/change-password", userH.ChangePassword)
 		}
 
-		exchangeRequests := api.Group("/exchange-requests")
-		exchangeRequests.Use(middleware.Auth(tokenParser))
+		exchangeOffers := api.Group("/exchange-offers")
+		exchangeOffers.Use(middleware.Auth(tokenParser))
 		{
-			exchangeRequests.POST("", exchangeRequestH.Create)
-			exchangeRequests.GET("", exchangeRequestH.List)
-			exchangeRequests.GET("/:id", exchangeRequestH.Get)
-			exchangeRequests.PUT("/:id", exchangeRequestH.Update)
-			exchangeRequests.DELETE("/:id", exchangeRequestH.Delete)
+			exchangeOffers.POST("", exchangeOfferH.Create)
+			exchangeOffers.GET("", exchangeOfferH.List)
+			exchangeOffers.GET("/:id", exchangeOfferH.Get)
+			exchangeOffers.PUT("/:id", exchangeOfferH.Update)
+			exchangeOffers.DELETE("/:id", exchangeOfferH.Delete)
 		}
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен
