@@ -35,22 +35,6 @@ import (
 
 // CandidateSearcher — контракт векторного поиска кандидатов.
 // Реализация опирается на индекс vector_cosine_ops, поэтому метрика всегда cosine.
-type CandidateSearcher interface {
-	// FindOutgoingByThreshold возвращает чужие активные предметы, похожие на want
-	// (подобие >= threshold). Без LIMIT — это множество для построения кластеров.
-	FindOutgoingByThreshold(ctx context.Context, want []float32, excludeUserID string, threshold float64) ([]entity.Candidate, error)
-
-	// FindIncomingByThreshold возвращает чужие активные заявки, чей want_embedding
-	// похож на предмет запроса (подобие >= threshold). Без LIMIT — множество для кластеров.
-	FindIncomingByThreshold(ctx context.Context, mine []float32, excludeUserID string, threshold float64) ([]entity.Candidate, error)
-
-	// FindOutgoingTopK — то же направление, что выше, но ограничено K лучшими.
-	// Предназначено для расширения узла при BFS-поиске цепочек.
-	FindOutgoingTopK(ctx context.Context, want []float32, excludeUserID string, k int) ([]entity.Candidate, error)
-
-	// FindIncomingTopK — входящее направление, ограниченное K лучшими (для BFS).
-	FindIncomingTopK(ctx context.Context, mine []float32, excludeUserID string, k int) ([]entity.Candidate, error)
-}
 
 // Search реализует CandidateSearcher поверх пула PostgreSQL.
 type Search struct {
@@ -62,7 +46,6 @@ func New(pool *pgxpool.Pool) *Search {
 	return &Search{pool: pool}
 }
 
-var _ CandidateSearcher = (*Search)(nil)
 
 // constQueryOutgoing — поиск предметов, близких к want_embedding.
 // Параметры: $1 вектор, $2 исключаемый пользователь, $3 порог | $4 = k.
