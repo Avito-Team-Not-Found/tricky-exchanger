@@ -140,6 +140,26 @@ describe('ItemForm', () => {
     expect(screen.getByRole('button', { name: /Сохранить изменения/ })).toBeDisabled();
   });
 
+  // без Object URL API превью нет, но файл выбран: <img> без src рисуется битой картинкой,
+  // поэтому вместо него показываем заглушку
+  it('shows a placeholder instead of a broken image when object URLs are unavailable', async () => {
+    const user = userEvent.setup();
+    const original = URL.createObjectURL;
+    // намеренно воспроизводим окружение без Object URL API (через Reflect, чтобы не зависеть
+    // от строгости tsconfig: присваивание undefined напрямую типизируется по-разному)
+    Reflect.set(URL, 'createObjectURL', undefined);
+    try {
+      const { container } = renderWithProviders(<ItemForm />);
+      await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
+
+      expect(screen.getByText('Фото выбрано')).toBeInTheDocument();
+      expect(screen.queryByRole('img', { name: 'Фото товара' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Добавить фото')).not.toBeInTheDocument();
+    } finally {
+      Reflect.set(URL, 'createObjectURL', original);
+    }
+  });
+
   it('archives an item through the confirmation modal and redirects', async () => {
     const user = userEvent.setup();
     mockedUseItem.mockReturnValue(queryOk(existingItem));

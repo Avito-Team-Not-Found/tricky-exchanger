@@ -1,6 +1,6 @@
 import { useImperativeHandle, type Ref } from 'react';
 
-import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PictureOutlined, UploadOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Form, Input, Select, Skeleton, Upload } from 'antd';
 import { useNavigate } from 'react-router';
 
@@ -86,11 +86,16 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
         <div className="item-form__photo">
           {hasPhoto ? (
             <div className="item-form__photo-preview item-form__photo-preview--filled">
-              <img
-                className="item-form__photo-image"
-                src={previewUrl ?? undefined}
-                alt="Фото товара"
-              />
+              {previewUrl ? (
+                <img className="item-form__photo-image" src={previewUrl} alt="Фото товара" />
+              ) : (
+                // файл выбран, но превью недоступно (окружение без Object URL API) —
+                // заглушка вместо <img> без src, который рисуется битой картинкой
+                <>
+                  <PictureOutlined className="item-form__photo-add-icon" aria-hidden />
+                  <span className="item-form__photo-add">Фото выбрано</span>
+                </>
+              )}
             </div>
           ) : (
             // без фото сама карточка является триггером загрузки («Добавить фото»)
