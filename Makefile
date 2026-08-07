@@ -12,4 +12,4 @@ db-logs:
 
 # Запуск бэкенда
 run:
-	cd backend && go run ./cmd/server
+	cd backend && go run ./cmd/api
