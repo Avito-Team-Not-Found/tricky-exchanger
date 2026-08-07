@@ -14,6 +14,10 @@ skills-lock.json
 settings.local.json
 .continue/
 
+# Референсные проекты (не часть tricky-exchanger, подключаются локально для примера)
+/Master-Orders/
+/test-backend-1-aabbuukkaarr8/
+
 # OS
 .DS_Store
 Thumbs.db

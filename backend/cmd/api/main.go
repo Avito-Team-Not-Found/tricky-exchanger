@@ -16,6 +16,12 @@ import (
 	database "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	appLogger "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/logger"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
+	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/codestore"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
+	userRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/user"
+	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
 )
 
 func main() {
@@ -33,13 +39,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Сначала применяем миграции (создают схему + расширение pgvector).
-	if err := database.RunMigrations(ctx, cfg.DatabaseURL, logger); err != nil {
-		logger.Fatalf("db migrate error: %v", err)
-	}
-	logger.Info("migrations applied")
-
-	// Подключаемся к БД; при недоступной БД — понятная ошибка
+	// Миграции применяются отдельным шагом до старта приложения (см. docker-compose.yml,
+	// сервис migrate) — приложение подключается уже к готовой схеме.
 	pool, err := database.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Fatalf("db connect error: %v", err)
@@ -50,7 +51,22 @@ func main() {
 	// Точка расширения: по мере готовности фич сюда добавляются их Handler'ы
 	// явными параметрами (см. router.New).
 	pingHandler := router.NewPingHandler()
-	engine := router.New(pingHandler)
+
+	tokenService := token.NewService(cfg.JWTSecret, cfg.JWTTokenTTL)
+	userRepository := userRepo.NewRepository(pool)
+	codeStore := codestore.New()
+	mailerSvc := mailer.NewService(mailer.Config{
+		Host:       cfg.SMTPHost,
+		Port:       cfg.SMTPPort,
+		Username:   cfg.SMTPUsername,
+		Password:   cfg.SMTPPassword,
+		From:       cfg.SMTPFrom,
+		Encryption: mailer.Encryption(cfg.SMTPEncryption),
+	})
+	userSvc := userService.NewService(userRepository, tokenService, codeStore, mailerSvc, cfg.RecoveryCodeTTL)
+	userH := userHandler.NewHandler(userSvc)
+
+	engine := router.New(tokenService, pingHandler, userH)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.ServerPort,

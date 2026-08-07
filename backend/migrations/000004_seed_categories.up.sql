@@ -1,4 +1,3 @@
--- +goose Up
 INSERT INTO categories (name) VALUES
     ('Телефоны'),
     ('Аудио и видео'),
@@ -20,6 +19,3 @@ INSERT INTO categories (name) VALUES
     ('Продукты питания'),
     ('Растения'),
     ('Посуда и товары для кухни');
-
--- +goose Down
-TRUNCATE TABLE categories CASCADE;
