@@ -9,15 +9,24 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 )
 
+// fakeService — заглушка handler-контракта Service, общая для всех тестов пакета.
+// Каждый тест заполняет только те поля, что относятся к вызываемому методу.
 type fakeService struct {
 	user  *entity.User
 	token string
 	err   error
+
+	meUser *entity.User
+	meErr  error
+
+	changePasswordErr error
 }
 
 func (f *fakeService) Register(_ context.Context, fullName, email, _ string) (*entity.User, string, error) {
@@ -30,21 +39,64 @@ func (f *fakeService) Register(_ context.Context, fullName, email, _ string) (*e
 	return &entity.User{FullName: fullName, Email: email}, f.token, nil
 }
 
+func (f *fakeService) Login(_ context.Context, email, _ string) (*entity.User, string, error) {
+	if f.err != nil {
+		return nil, "", f.err
+	}
+	if f.user != nil {
+		return f.user, f.token, nil
+	}
+	return &entity.User{Email: email}, f.token, nil
+}
+
+func (f *fakeService) Me(_ context.Context, _ uuid.UUID) (*entity.User, error) {
+	return f.meUser, f.meErr
+}
+
+func (f *fakeService) ChangePassword(_ context.Context, _ uuid.UUID, _, _ string) error {
+	return f.changePasswordErr
+}
+
+// fakeParser — заглушка middleware.TokenParser: не проверяет строку токена,
+// просто возвращает предопределённые userID/err.
+type fakeParser struct {
+	userID uuid.UUID
+	err    error
+}
+
+func (f fakeParser) Parse(_ string) (uuid.UUID, error) {
+	return f.userID, f.err
+}
+
 func newEngine(svc *fakeService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	h := userHandler.NewHandler(svc)
 	engine.POST("/api/v1/auth/register", h.Register)
+	engine.POST("/api/v1/auth/login", h.Login)
+
+	protected := engine.Group("/api/v1/auth", middleware.Auth(fakeParser{userID: uuid.New()}))
+	protected.GET("/me", h.Me)
+	protected.POST("/change-password", h.ChangePassword)
+	protected.POST("/logout", h.Logout)
+
 	return engine
 }
 
-func doRegister(engine *gin.Engine, body map[string]any) *httptest.ResponseRecorder {
+func doJSON(engine *gin.Engine, method, path string, body map[string]any, withAuth bool) *httptest.ResponseRecorder {
 	payload, _ := json.Marshal(body)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(payload))
+	req := httptest.NewRequest(method, path, bytes.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
+	if withAuth {
+		req.Header.Set("Authorization", "Bearer irrelevant-for-fake-parser")
+	}
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 	return rec
+}
+
+func doRegister(engine *gin.Engine, body map[string]any) *httptest.ResponseRecorder {
+	return doJSON(engine, http.MethodPost, "/api/v1/auth/register", body, false)
 }
 
 func TestRegister_Success(t *testing.T) {

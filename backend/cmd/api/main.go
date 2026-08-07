@@ -53,7 +53,7 @@ func main() {
 	userSvc := userService.NewService(userRepository, tokenService)
 	userH := userHandler.NewHandler(userSvc)
 
-	engine := router.New(pingHandler, userH)
+	engine := router.New(tokenService, pingHandler, userH)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.ServerPort,

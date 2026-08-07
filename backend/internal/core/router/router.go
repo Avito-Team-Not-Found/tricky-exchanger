@@ -11,10 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 )
 
 // New создаёт gin.Engine и регистрирует маршруты приложения.
-func New(pingH *PingHandler, userH *userHandler.Handler) *gin.Engine {
+// tokenParser проверяет JWT для защищённых маршрутов (см. middleware.Auth).
+func New(tokenParser middleware.TokenParser, pingH *PingHandler, userH *userHandler.Handler) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Logger())
 	engine.Use(gin.Recovery())
@@ -29,9 +31,18 @@ func New(pingH *PingHandler, userH *userHandler.Handler) *gin.Engine {
 		// ping — тестовая ручка каркаса, удалить с появлением первой настоящей фичи
 		api.GET("/ping", pingH.Ping)
 
-		// auth
+		// auth — регистрация и вход не защищены, остальное требует Bearer-токен
 		auth := api.Group("/auth")
 		auth.POST("/register", userH.Register)
+		auth.POST("/login", userH.Login)
+
+		authProtected := auth.Group("")
+		authProtected.Use(middleware.Auth(tokenParser))
+		{
+			authProtected.POST("/logout", userH.Logout)
+			authProtected.GET("/me", userH.Me)
+			authProtected.POST("/change-password", userH.ChangePassword)
+		}
 
 		// сюда команда добавляет маршруты своих фич по мере готовности, например:
 		//
