@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, screen } from '@testing-library/react';
 import { App as AntApp } from 'antd';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -140,6 +140,30 @@ describe('useItemForm', () => {
     expect(keys).toContainEqual(['exchange-requests']);
   });
 
+  // диалог ухода отправлял значения формы без валидации: на неполной форме сборка payload
+  // падала до try, форма навсегда оставалась в submitting и блокировала сама себя
+  describe('leave confirmation', () => {
+    const file = new File(['bytes'], 'photo.png', { type: 'image/png' });
+
+    it('does not offer saving an incomplete form and keeps it usable', async () => {
+      const { result } = renderHook(() => useItemForm(), { wrapper });
+
+      await act(async () => {
+        result.current.handleImageSelected(file as never);
+      });
+      await act(async () => {
+        result.current.confirmLeave();
+      });
+
+      expect(
+        await screen.findByRole('button', { name: /Выйти без сохранения/ }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Сохранить изменения/ })).not.toBeInTheDocument();
+      expect(mockedCreateItem).not.toHaveBeenCalled();
+      expect(result.current.submitting).toBe(false);
+    });
+  });
+
   describe('photo preview', () => {
     const file = new File(['bytes'], 'photo.png', { type: 'image/png' });
 
@@ -161,8 +185,9 @@ describe('useItemForm', () => {
     // фото с сервера нельзя — пользователь решит, что его выбор не применился
     it('shows no preview instead of the stale image when object URLs are unavailable', async () => {
       const original = URL.createObjectURL;
-      // @ts-expect-error — намеренно воспроизводим окружение без Object URL API
-      URL.createObjectURL = undefined;
+      // намеренно воспроизводим окружение без Object URL API (через Reflect, чтобы не зависеть
+      // от строгости tsconfig: присваивание undefined напрямую типизируется по-разному)
+      Reflect.set(URL, 'createObjectURL', undefined);
       try {
         mockedUseItem.mockReturnValue(queryOk(existingItem));
         const { result } = renderHook(() => useItemForm('item-1'), { wrapper });
@@ -173,7 +198,7 @@ describe('useItemForm', () => {
 
         expect(result.current.previewUrl).toBeNull();
       } finally {
-        URL.createObjectURL = original;
+        Reflect.set(URL, 'createObjectURL', original);
       }
     });
 

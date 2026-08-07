@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { updateItem, useItem, type Item } from '@entities/item';
+import { createItem, updateItem, useItem, type Item } from '@entities/item';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -10,11 +10,12 @@ import { ItemFormPage } from './ItemFormPage';
 
 vi.mock('@entities/item', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/item')>();
-  return { ...actual, useItem: vi.fn(), updateItem: vi.fn() };
+  return { ...actual, useItem: vi.fn(), updateItem: vi.fn(), createItem: vi.fn() };
 });
 
 const mockedUseItem = vi.mocked(useItem);
 const mockedUpdateItem = vi.mocked(updateItem);
+const mockedCreateItem = vi.mocked(createItem);
 
 function queryOk(data: unknown) {
   return { data, isPending: false, isError: false } as never;
@@ -68,6 +69,32 @@ describe('ItemFormPage', () => {
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedUpdateItem).toHaveBeenCalled();
+  });
+
+  // «Сохранить изменения» уходило в сабмит без валидации: на неполной форме payload
+  // не собирался, сабмит падал молча и оставлял форму заблокированной навсегда
+  it('offers only leaving when a dirty create form is incomplete', async () => {
+    const user = userEvent.setup();
+    mockedUseItem.mockReturnValue(queryOk(undefined));
+    renderWithProviders(<div />, {
+      initialEntries: ['/products/new'],
+      routes: [
+        { path: '/products/new', element: <ItemFormPage /> },
+        { path: '/products', element: <div>products screen</div> },
+      ],
+    });
+
+    await user.type(screen.getByLabelText('Цвет'), 'белый');
+    await user.click(screen.getByRole('button', { name: 'Назад' }));
+
+    const modal = (await screen.findByRole('dialog')) as HTMLElement;
+    expect(
+      within(modal).queryByRole('button', { name: /Сохранить изменения/ }),
+    ).not.toBeInTheDocument();
+    await user.click(within(modal).getByRole('button', { name: /Выйти без сохранения/ }));
+
+    expect(await screen.findByText('products screen')).toBeInTheDocument();
+    expect(mockedCreateItem).not.toHaveBeenCalled();
   });
 
   it('leaves a clean form without confirmation', async () => {

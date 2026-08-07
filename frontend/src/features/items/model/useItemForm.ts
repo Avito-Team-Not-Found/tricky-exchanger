@@ -116,6 +116,20 @@ export function useItemForm(itemId?: string) {
       goBack();
       return;
     }
+    // форма заполнена не полностью — сохранять нечего, предлагаем только уйти или остаться
+    if (!canSubmit) {
+      modal.confirm({
+        title: 'Изменения не сохранены',
+        content: 'Форма заполнена не полностью — сохранить нельзя. Выйти без сохранения?',
+        okText: 'Выйти без сохранения',
+        okButtonProps: { danger: true },
+        cancelText: 'Остаться',
+        closable: false,
+        maskClosable: false,
+        onOk: () => goBack(),
+      });
+      return;
+    }
     modal.confirm({
       title: 'Изменения не сохранены',
       content: 'Хотите сохранить изменения или вернуться назад?',
@@ -124,9 +138,7 @@ export function useItemForm(itemId?: string) {
       closable: false,
       maskClosable: false,
       // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
-      // берём значения синхронно и шлём сами (валидация формы уже ограничивает кнопку сохранения)
-      // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
-      // берём значения синхронно и шлём сами (валидация формы уже ограничивает кнопку сохранения)
+      // берём значения синхронно и шлём сами (сюда попадаем только при canSubmit)
       onOk: () => {
         handleSubmit(form.getFieldsValue() as ItemFormValues);
       },
@@ -138,14 +150,16 @@ export function useItemForm(itemId?: string) {
     // повторная отправка при активном запросе недопустима — кнопка блокируется на время сабмита
     if (submitting) return;
     setSubmitting(true);
-    const payload: ItemPayload = {
-      title: values.title.trim(),
-      description: values.description.trim(),
-      condition: values.condition,
-      color: values.color?.trim() || null,
-      material: values.material?.trim() || null,
-    };
     try {
+      // сборка payload — внутри try: на неполных значениях она бросает, и без catch
+      // форма осталась бы навсегда заблокированной (disabled={submitting})
+      const payload: ItemPayload = {
+        title: values.title.trim(),
+        description: values.description.trim(),
+        condition: values.condition,
+        color: values.color?.trim() || null,
+        material: values.material?.trim() || null,
+      };
       if (isEdit) {
         await updateItem(itemId as string, payload, pendingFile ?? undefined);
         message.success('Товар обновлён');
