@@ -37,6 +37,7 @@ CREATE TABLE exchange_requests (
     user_id            UUID NOT NULL REFERENCES users(id),
     offered_item_id    BIGINT NOT NULL REFERENCES items(id),
     wanted_description TEXT,
+    wanted_category_id BIGINT REFERENCES categories(id),
     want_embedding     VECTOR(384),
     status             VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'
                        CHECK (status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED', 'DONE',
