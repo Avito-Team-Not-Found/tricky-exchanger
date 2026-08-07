@@ -11,7 +11,9 @@ import (
 
 	router "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	exchangeRequestHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_request"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	exchangeRequestService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_request"
 )
 
 // stubUserService — заглушка Service для тестов роутера: важна только маршрутизация,
@@ -54,7 +56,34 @@ func (stubTokenParser) Parse(_ string) (uuid.UUID, error) {
 }
 
 func newTestEngine() *gin.Engine {
-	return router.New(stubTokenParser{}, router.NewPingHandler(), userHandler.NewHandler(stubUserService{}))
+	return router.New(
+		stubTokenParser{},
+		router.NewPingHandler(),
+		userHandler.NewHandler(stubUserService{}),
+		exchangeRequestHandler.NewHandler(stubExchangeRequestService{}),
+	)
+}
+
+type stubExchangeRequestService struct{}
+
+func (stubExchangeRequestService) Create(_ context.Context, _ string, _ exchangeRequestService.CreateInput) (entity.ExchangeRequest, error) {
+	return entity.ExchangeRequest{}, nil
+}
+
+func (stubExchangeRequestService) Get(_ context.Context, _ string, _ int64) (entity.ExchangeRequest, error) {
+	return entity.ExchangeRequest{}, nil
+}
+
+func (stubExchangeRequestService) List(_ context.Context, _ string) ([]entity.ExchangeRequestListItem, error) {
+	return nil, nil
+}
+
+func (stubExchangeRequestService) Update(_ context.Context, _ string, _ int64, _ exchangeRequestService.UpdateInput) (entity.ExchangeRequest, error) {
+	return entity.ExchangeRequest{}, nil
+}
+
+func (stubExchangeRequestService) Delete(_ context.Context, _ string, _ int64, _ int64) error {
+	return nil
 }
 
 func TestPingHandler(t *testing.T) {
