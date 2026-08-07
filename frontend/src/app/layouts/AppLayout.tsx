@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { AppstoreOutlined, SwapOutlined, UserOutlined } from '@ant-design/icons';
-import { NavLink, Outlet } from 'react-router';
+import { NavLink, Outlet, useLocation } from 'react-router';
 
 import { BrandLogo } from '@shared/ui';
 import './AppLayout.scss';
@@ -22,14 +22,28 @@ function navClassName({ isActive }: { isActive: boolean }) {
   return `app-nav-item${isActive ? ' app-nav-item--active' : ''}`;
 }
 
+// на экранах форм глобальная шапка не показывается — у экрана своя (назад + заголовок);
+// меню (нижний таб-бар / боковое) остаётся на всех брейкпоинтах
+const FORM_SCREEN_PATTERNS = [
+  /^\/products\/new$/,
+  /^\/products\/[^/]+\/edit$/,
+  /^\/exchange-requests\/new$/,
+  /^\/exchange-requests\/[^/]+\/edit$/,
+];
+
 export function AppLayout() {
+  const { pathname } = useLocation();
+  const isFormScreen = FORM_SCREEN_PATTERNS.some((pattern) => pattern.test(pathname));
+
   return (
     <div className="app-layout">
-      <header className="app-header">
-        <div className="app-header__inner">
-          <BrandLogo className="app-header__brand" />
-        </div>
-      </header>
+      {!isFormScreen ? (
+        <header className="app-header">
+          <div className="app-header__inner">
+            <BrandLogo className="app-header__brand" />
+          </div>
+        </header>
+      ) : null}
       <div className="app-body">
         <aside className="app-side-menu">
           <BrandLogo />

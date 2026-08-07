@@ -18,6 +18,22 @@ if (typeof window !== 'undefined') {
       dispatchEvent: () => false,
     }),
   });
+
+  // antd (Upload, Select и др.) опирается на ResizeObserver, которого нет в jsdom
+  class ResizeObserverMock {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  window.ResizeObserver = ResizeObserverMock as unknown as typeof ResizeObserver;
+
+  // jsdom не реализует Object URL API. Без шима превью выбранного фото всегда было бы
+  // null, и тесты формы товара «проходили» бы, не проверяя превью вообще
+  if (typeof URL.createObjectURL !== 'function') {
+    let counter = 0;
+    URL.createObjectURL = () => `blob:mock/${++counter}`;
+    URL.revokeObjectURL = () => {};
+  }
 }
 
 afterEach(() => {

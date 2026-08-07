@@ -84,7 +84,8 @@
     padding-bottom: 0;
   }
 
-  .app-header__brand {
+  // на десктопе глобальная шапка не нужна: логотип уже есть в боковом меню
+  .app-header {
     display: none;
   }
 
@@ -104,7 +105,7 @@
     flex-shrink: 0;
     align-self: flex-start;
     position: sticky;
-    top: calc(56px + var(--spacing-md));
+    top: var(--spacing-md);
     padding: var(--spacing-lg) var(--spacing-md);
     background: var(--color-bg-card);
     border-radius: var(--radius-lg);

@@ -7,8 +7,10 @@ import {
   ChangePasswordPage,
   ExchangeRequestsPage,
   ForgotPasswordPage,
+  ItemFormPage,
   ProductsPage,
   ProfilePage,
+  RequestFormPage,
 } from '@pages/index';
 
 import { RedirectIfAuthed } from './RedirectIfAuthed';
@@ -49,7 +51,11 @@ export function AppRoutes() {
         }
       >
         <Route path="/products" element={<ProductsPage />} />
+        <Route path="/products/new" element={<ItemFormPage />} />
+        <Route path="/products/:itemId/edit" element={<ItemFormPage />} />
         <Route path="/exchange-requests" element={<ExchangeRequestsPage />} />
+        <Route path="/exchange-requests/new" element={<RequestFormPage />} />
+        <Route path="/exchange-requests/:requestId/edit" element={<RequestFormPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
       {/* смена пароля — отдельный экран без таб-бара/бокового меню (DESIGN.md §4.8) */}

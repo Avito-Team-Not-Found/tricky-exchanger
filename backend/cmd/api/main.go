@@ -16,11 +16,16 @@ import (
 	database "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	appLogger "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/logger"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
+	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/codestore"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
+	exchangeOfferRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/exchange_offer"
 	userRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/user"
+	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
 )
 
@@ -66,7 +71,16 @@ func main() {
 	userSvc := userService.NewService(userRepository, tokenService, codeStore, mailerSvc, cfg.RecoveryCodeTTL)
 	userH := userHandler.NewHandler(userSvc)
 
-	engine := router.New(tokenService, pingHandler, userH)
+	exchangeOfferRepository := exchangeOfferRepo.NewRepository(pool)
+	exchangeOfferSvc := exchangeOfferService.NewService(
+		exchangeOfferRepository,
+		// TODO: ЭТО БЫЛО ЗАМОКАНО!!!!!
+		embedding.NewStubClient(),
+		matching.NewNoopFacade(),
+	)
+	exchangeOfferH := exchangeOfferHandler.NewHandler(exchangeOfferSvc)
+
+	engine := router.New(tokenService, pingHandler, userH, exchangeOfferH)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.ServerPort,
