@@ -52,7 +52,13 @@ func New(
 
 		exchangeRequests := api.Group("/exchange-requests")
 		exchangeRequests.Use(middleware.Auth(tokenParser))
-		exchangeRequestH.RegisterRoutes(exchangeRequests)
+		{
+			exchangeRequests.POST("", exchangeRequestH.Create)
+			exchangeRequests.GET("", exchangeRequestH.List)
+			exchangeRequests.GET("/:id", exchangeRequestH.Get)
+			exchangeRequests.PUT("/:id", exchangeRequestH.Update)
+			exchangeRequests.DELETE("/:id", exchangeRequestH.Delete)
+		}
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен
 		recovery := api.Group("/account/password-recovery")

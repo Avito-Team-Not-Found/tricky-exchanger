@@ -74,7 +74,7 @@ func (stubExchangeRequestService) Get(_ context.Context, _ string, _ int64) (ent
 	return entity.ExchangeRequest{}, nil
 }
 
-func (stubExchangeRequestService) List(_ context.Context, _ string) ([]entity.ExchangeRequestListItem, error) {
+func (stubExchangeRequestService) List(_ context.Context, _ string) ([]exchangeRequestService.ListItem, error) {
 	return nil, nil
 }
 

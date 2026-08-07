@@ -18,7 +18,7 @@ import (
 func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	service := &handlerFakeService{
-		list: []entity.ExchangeRequestListItem{{
+		list: []requestservice.ListItem{{
 			ExchangeRequest: entity.ExchangeRequest{
 				ID:                12,
 				OfferedItemID:     5,
@@ -38,7 +38,8 @@ func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
 		c.Set("userID", uuid.MustParse("11111111-1111-1111-1111-111111111111"))
 		c.Next()
 	})
-	handler.RegisterRoutes(engine.Group("/exchange-requests"))
+	routes := engine.Group("/exchange-requests")
+	routes.GET("", handler.List)
 
 	request := httptest.NewRequest(http.MethodGet, "/exchange-requests", nil)
 	recorder := httptest.NewRecorder()
@@ -60,7 +61,8 @@ func TestListRequiresAuthenticatedUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := requesthandler.NewHandler(&handlerFakeService{})
 	engine := gin.New()
-	handler.RegisterRoutes(engine.Group("/exchange-requests"))
+	routes := engine.Group("/exchange-requests")
+	routes.GET("", handler.List)
 
 	request := httptest.NewRequest(http.MethodGet, "/exchange-requests", nil)
 	recorder := httptest.NewRecorder()
@@ -72,7 +74,7 @@ func TestListRequiresAuthenticatedUser(t *testing.T) {
 }
 
 type handlerFakeService struct {
-	list       []entity.ExchangeRequestListItem
+	list       []requestservice.ListItem
 	listUserID string
 }
 
@@ -84,7 +86,7 @@ func (s *handlerFakeService) Get(context.Context, string, int64) (entity.Exchang
 	return entity.ExchangeRequest{}, nil
 }
 
-func (s *handlerFakeService) List(_ context.Context, userID string) ([]entity.ExchangeRequestListItem, error) {
+func (s *handlerFakeService) List(_ context.Context, userID string) ([]requestservice.ListItem, error) {
 	s.listUserID = userID
 	return s.list, nil
 }

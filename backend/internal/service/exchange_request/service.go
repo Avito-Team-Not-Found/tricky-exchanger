@@ -10,17 +10,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 )
 
-// ExchangeRequestRepository сохраняет заявки на обмен.
-// Методы изменения должны инвалидировать кандидатные цепочки в той же
-// транзакции, до публикации новой версии заявки.
-type ExchangeRequestRepository interface {
-	Create(ctx context.Context, request entity.ExchangeRequest) (entity.ExchangeRequest, error)
-	Get(ctx context.Context, userID string, requestID int64) (entity.ExchangeRequest, error)
-	List(ctx context.Context, userID string) ([]entity.ExchangeRequestListItem, error)
-	Update(ctx context.Context, request entity.ExchangeRequest, expectedVersion int64) (entity.ExchangeRequest, error)
-	Archive(ctx context.Context, userID string, requestID, expectedVersion int64) (entity.ExchangeRequest, error)
-}
-
 // CreateInput содержит данные для создания заявки на обмен.
 type CreateInput struct {
 	OfferedItemID     int64
@@ -91,7 +80,7 @@ func (s *Service) Get(ctx context.Context, userID string, requestID int64) (enti
 }
 
 // List возвращает все неархивные заявки пользователя.
-func (s *Service) List(ctx context.Context, userID string) ([]entity.ExchangeRequestListItem, error) {
+func (s *Service) List(ctx context.Context, userID string) ([]ListItem, error) {
 	return s.repository.List(ctx, userID)
 }
 
@@ -167,5 +156,3 @@ func (s *Service) embedWanted(ctx context.Context, description string) ([]float3
 
 	return result, nil
 }
-
-var _ ExchangeRequestService = (*Service)(nil)

@@ -108,7 +108,7 @@ func (s *fakeStore) Get(_ context.Context, _ string, _ int64) (entity.ExchangeRe
 	return entity.ExchangeRequest{}, entity.ErrExchangeRequestNotFound
 }
 
-func (s *fakeStore) List(_ context.Context, _ string) ([]entity.ExchangeRequestListItem, error) {
+func (s *fakeStore) List(_ context.Context, _ string) ([]requestservice.ListItem, error) {
 	return nil, nil
 }
 

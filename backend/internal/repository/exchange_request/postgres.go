@@ -95,7 +95,7 @@ func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (ent
 }
 
 // List возвращает неархивные заявки пользователя вместе с названиями товаров.
-func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeRequestListItem, error) {
+func (r *Postgres) List(ctx context.Context, userID string) ([]requestservice.ListItem, error) {
 	// The join fetches card data in this single query, avoiding N+1 lookups of
 	// offered item titles in the HTTP list endpoint.
 	const query = `
@@ -114,9 +114,9 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeRe
 	}
 	defer rows.Close()
 
-	requests := make([]entity.ExchangeRequestListItem, 0)
+	requests := make([]requestservice.ListItem, 0)
 	for rows.Next() {
-		var item entity.ExchangeRequestListItem
+		var item requestservice.ListItem
 		if err := rows.Scan(
 			&item.ID,
 			&item.UserID,
