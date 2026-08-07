@@ -39,7 +39,7 @@ func (r *Postgres) Create(ctx context.Context, request entity.ExchangeOffer) (en
 	}
 
 	const query = `
-		INSERT INTO exchange_offers (
+		INSERT INTO exchange_requests (
 			user_id, offered_item_id, wanted_description, want_embedding,
 			status, version
 		)
@@ -79,7 +79,7 @@ func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (ent
 	const query = `
 		SELECT id, user_id, offered_item_id, wanted_description,
 		       status, version, created_at, updated_at
-		FROM exchange_offers
+		FROM exchange_requests
 		WHERE id = $1 AND user_id = $2 AND status <> 'REMOVED'
 	`
 
@@ -102,7 +102,7 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOf
 		SELECT er.id, er.user_id, er.offered_item_id, er.wanted_description,
 		       er.status, er.version, er.created_at,
 		       er.updated_at, i.title
-		FROM exchange_offers AS er
+		FROM exchange_requests AS er
 		JOIN items AS i ON i.id = er.offered_item_id
 		WHERE er.user_id = $1 AND er.status <> 'REMOVED'
 		ORDER BY er.created_at DESC, er.id DESC
@@ -157,7 +157,7 @@ func (r *Postgres) Update(ctx context.Context, request entity.ExchangeOffer, exp
 	}
 
 	const query = `
-		UPDATE exchange_offers
+		UPDATE exchange_requests
 		SET offered_item_id = $3,
 		    wanted_description = $4,
 		    want_embedding = $5::vector,
@@ -208,7 +208,7 @@ func (r *Postgres) Archive(ctx context.Context, userID string, requestID, expect
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	const query = `
-		UPDATE exchange_offers
+		UPDATE exchange_requests
 		SET status = 'REMOVED',
 		    version = version + 1,
 		    updated_at = now()
@@ -284,7 +284,7 @@ func ensureMutableRequest(ctx context.Context, tx pgx.Tx, requestID int64, userI
 	var currentVersion int64
 	err := tx.QueryRow(ctx, `
 		SELECT status, version
-		FROM exchange_offers
+		FROM exchange_requests
 		WHERE id = $1 AND user_id = $2
 		FOR UPDATE
 	`, requestID, userID).Scan(&status, &currentVersion)
@@ -336,7 +336,7 @@ func mutationError(ctx context.Context, tx pgx.Tx, requestID int64, userID strin
 	var currentVersion int64
 	err := tx.QueryRow(ctx, `
 		SELECT status, version
-		FROM exchange_offers
+		FROM exchange_requests
 		WHERE id = $1 AND user_id = $2
 	`, requestID, userID).Scan(&status, &currentVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
