@@ -1,22 +1,24 @@
-.PHONY: db-up db-down db-logs run migrate-up migrate-down
+COMPOSE := $(shell if docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "docker-compose"; fi)
 
-# База данных
-db-up:
-	docker compose up -d db
+.PHONY: up down logs db-logs run test
 
-db-down:
-	docker compose down
+# Поднять весь проект (БД + миграции + бэкенд) одной командой
+up:
+	$(COMPOSE) up -d --build
+
+# Остановить и удалить все контейнеры и volume'ы
+down:
+	$(COMPOSE) down -v
+
+logs:
+	$(COMPOSE) logs -f app
 
 db-logs:
-	docker compose logs -f db
+	$(COMPOSE) logs -f db
 
-# Миграции
-migrate-up:
-	cd backend && go run ./cmd/migrate up
-
-migrate-down:
-	cd backend && go run ./cmd/migrate down
-
-# Запуск бэкенда
+# Локальный запуск бэкенда без Docker (нужна поднятая БД, см. `make up`)
 run:
 	cd backend && go run ./cmd/api
+
+test:
+	cd backend && go test ./...

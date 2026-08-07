@@ -30,7 +30,7 @@ func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 
 	if !hasVector {
 		pool.Close()
-		return nil, fmt.Errorf("pgvector extension is NOT installed. Run `make migrate-up` first")
+		return nil, fmt.Errorf("pgvector extension is NOT installed. Run `make up` (docker-compose migrate service) first")
 	}
 
 	return pool, nil

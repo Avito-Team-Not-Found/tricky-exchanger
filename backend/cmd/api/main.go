@@ -29,6 +29,7 @@ func main() {
 	_ = godotenv.Load()
 
 	cfg, err := config.Load()
+
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
@@ -38,7 +39,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Подключаемся к БД; при недоступной БД — понятная ошибка
+	// Миграции применяются отдельным шагом до старта приложения (см. docker-compose.yml,
+	// сервис migrate) — приложение подключается уже к готовой схеме.
 	pool, err := database.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Fatalf("db connect error: %v", err)
