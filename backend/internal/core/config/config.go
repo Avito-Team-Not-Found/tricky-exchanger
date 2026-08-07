@@ -23,11 +23,13 @@ type Config struct {
 	// SMTP* — настройки почтового сервера для отправки кода восстановления пароля.
 	// Намеренно не required: без них поднимется весь остальной бэкенд, а сломается
 	// только сама отправка письма (see mailer.ErrNotConfigured).
-	SMTPHost        string
-	SMTPPort        string
-	SMTPUsername    string
-	SMTPPassword    string
-	SMTPFrom        string
+	SMTPHost     string
+	SMTPPort     string
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
+	// SMTPEncryption — "plain" | "starttls" | "tls", см. internal/infrastructure/mailer.
+	SMTPEncryption  string
 	RecoveryCodeTTL time.Duration
 }
 
@@ -55,6 +57,7 @@ func Load() (*Config, error) {
 		SMTPUsername:    envOrDefault("SMTP_USERNAME", ""),
 		SMTPPassword:    envOrDefault("SMTP_PASSWORD", ""),
 		SMTPFrom:        envOrDefault("SMTP_FROM", ""),
+		SMTPEncryption:  envOrDefault("SMTP_ENCRYPTION", "starttls"),
 		RecoveryCodeTTL: recoveryCodeTTL,
 	}, nil
 }

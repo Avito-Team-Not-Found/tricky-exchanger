@@ -54,11 +54,12 @@ func main() {
 	userRepository := userRepo.NewRepository(pool)
 	codeStore := codestore.New()
 	mailerSvc := mailer.NewService(mailer.Config{
-		Host:     cfg.SMTPHost,
-		Port:     cfg.SMTPPort,
-		Username: cfg.SMTPUsername,
-		Password: cfg.SMTPPassword,
-		From:     cfg.SMTPFrom,
+		Host:       cfg.SMTPHost,
+		Port:       cfg.SMTPPort,
+		Username:   cfg.SMTPUsername,
+		Password:   cfg.SMTPPassword,
+		From:       cfg.SMTPFrom,
+		Encryption: mailer.Encryption(cfg.SMTPEncryption),
 	})
 	userSvc := userService.NewService(userRepository, tokenService, codeStore, mailerSvc, cfg.RecoveryCodeTTL)
 	userH := userHandler.NewHandler(userSvc)
