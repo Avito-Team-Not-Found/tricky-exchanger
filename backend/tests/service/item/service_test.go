@@ -15,9 +15,14 @@ import (
 
 var ownerID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
 
+func newItemService(repo *fakeRepo, reservations *fakeReservations) (*itemservice.Service, *fakeEmbedding) {
+	embeddings := &fakeEmbedding{vector: []float32{0.1, 0.2}}
+	return itemservice.NewService(repo, reservations, embeddings), embeddings
+}
+
 func TestCreateTrimsAndPersistsActiveItem(t *testing.T) {
 	repo := &fakeRepo{}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, embeddings := newItemService(repo, &fakeReservations{})
 
 	created, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
 		Title:       "  PlayStation 5  ",
@@ -36,11 +41,17 @@ func TestCreateTrimsAndPersistsActiveItem(t *testing.T) {
 	if repo.created == nil {
 		t.Fatalf("expected repository.Create to be called")
 	}
+	if embeddings.prompt != "passage: PlayStation 5\nв отличном состоянии" {
+		t.Fatalf("embedding prompt = %q", embeddings.prompt)
+	}
+	if len(created.Embedding) != 2 {
+		t.Fatalf("embedding = %v, want generated vector", created.Embedding)
+	}
 }
 
 func TestCreateRejectsEmptyTitle(t *testing.T) {
 	repo := &fakeRepo{}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, _ := newItemService(repo, &fakeReservations{})
 
 	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{Title: "   "})
 	if !errors.Is(err, entity.ErrTitleRequired) {
@@ -53,7 +64,7 @@ func TestCreateRejectsEmptyTitle(t *testing.T) {
 
 func TestCreateRejectsUnknownCategory(t *testing.T) {
 	repo := &fakeRepo{categoryExists: false}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, _ := newItemService(repo, &fakeReservations{})
 
 	categoryID := int64(999)
 	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
@@ -67,7 +78,7 @@ func TestCreateRejectsUnknownCategory(t *testing.T) {
 
 func TestGetReturnsNotFoundForOtherOwner(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: uuid.New()}}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, _ := newItemService(repo, &fakeReservations{})
 
 	_, err := service.Get(context.Background(), ownerID, 1)
 	if !errors.Is(err, entity.ErrItemForbidden) {
@@ -77,7 +88,7 @@ func TestGetReturnsNotFoundForOtherOwner(t *testing.T) {
 
 func TestGetReturnsNotFoundWhenMissing(t *testing.T) {
 	repo := &fakeRepo{getErr: repository.ErrNotFound}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, _ := newItemService(repo, &fakeReservations{})
 
 	_, err := service.Get(context.Background(), ownerID, 1)
 	if !errors.Is(err, entity.ErrItemNotFound) {
@@ -87,7 +98,7 @@ func TestGetReturnsNotFoundWhenMissing(t *testing.T) {
 
 func TestListNormalizesPagination(t *testing.T) {
 	repo := &fakeRepo{}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, _ := newItemService(repo, &fakeReservations{})
 
 	if _, _, err := service.List(context.Background(), ownerID, 0, 0); err != nil {
 		t.Fatalf("List() error = %v", err)
@@ -106,7 +117,7 @@ func TestListNormalizesPagination(t *testing.T) {
 
 func TestUpdateRejectsArchivedItem(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, _ := newItemService(repo, &fakeReservations{})
 
 	title := "new title"
 	_, err := service.Update(context.Background(), ownerID, 1, itemservice.UpdateInput{Title: &title})
@@ -117,7 +128,7 @@ func TestUpdateRejectsArchivedItem(t *testing.T) {
 
 func TestUpdateRejectsHardReservation(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service := itemservice.NewService(repo, &fakeReservations{reserved: true})
+	service, _ := newItemService(repo, &fakeReservations{reserved: true})
 
 	title := "new title"
 	_, err := service.Update(context.Background(), ownerID, 1, itemservice.UpdateInput{Title: &title})
@@ -126,9 +137,36 @@ func TestUpdateRejectsHardReservation(t *testing.T) {
 	}
 }
 
+func TestUpdateTextRegeneratesEmbedding(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{
+		ID:          1,
+		OwnerUserID: ownerID,
+		Title:       "Старая кружка",
+		Description: "Старая",
+		Status:      entity.ItemStatusActive,
+	}}
+	service, embeddings := newItemService(repo, &fakeReservations{})
+
+	title := "Белая кружка"
+	description := "Керамическая, 350 мл"
+	updated, err := service.Update(context.Background(), ownerID, 1, itemservice.UpdateInput{
+		Title:       &title,
+		Description: &description,
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if embeddings.prompt != "passage: Белая кружка\nКерамическая, 350 мл" {
+		t.Fatalf("embedding prompt = %q", embeddings.prompt)
+	}
+	if len(updated.Embedding) != 2 {
+		t.Fatalf("embedding = %v, want regenerated vector", updated.Embedding)
+	}
+}
+
 func TestArchiveRejectsAlreadyArchivedItem(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, _ := newItemService(repo, &fakeReservations{})
 
 	if err := service.Archive(context.Background(), ownerID, 1); !errors.Is(err, entity.ErrItemArchived) {
 		t.Fatalf("Archive() error = %v, want ErrItemArchived", err)
@@ -137,7 +175,7 @@ func TestArchiveRejectsAlreadyArchivedItem(t *testing.T) {
 
 func TestArchiveUpdatesStatus(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service := itemservice.NewService(repo, &fakeReservations{})
+	service, _ := newItemService(repo, &fakeReservations{})
 
 	if err := service.Archive(context.Background(), ownerID, 1); err != nil {
 		t.Fatalf("Archive() error = %v", err)
@@ -201,4 +239,14 @@ type fakeReservations struct {
 
 func (f *fakeReservations) HasActiveHardReservation(_ context.Context, _ int64) (bool, error) {
 	return f.reserved, nil
+}
+
+type fakeEmbedding struct {
+	vector []float32
+	prompt string
+}
+
+func (e *fakeEmbedding) Embed(_ context.Context, prompt string) ([]float32, error) {
+	e.prompt = prompt
+	return e.vector, nil
 }

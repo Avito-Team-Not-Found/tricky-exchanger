@@ -16,3 +16,11 @@ type ExchangeOfferRepository interface {
 	Update(ctx context.Context, tx database.Tx, request entity.ExchangeOffer, expectedVersion int64) (entity.ExchangeOffer, error)
 	Archive(ctx context.Context, tx database.Tx, userID string, requestID, expectedVersion int64) (entity.ExchangeOffer, error)
 }
+
+// MatchingFacade описывает нужную сервису заявок часть подсистемы matching.
+// Интерфейс объявлен у потребителя, чтобы реализация matching не навязывала
+// свой контракт остальному приложению.
+type MatchingFacade interface {
+	RebuildForRequest(ctx context.Context, tx database.Tx, requestID int64) error
+	RemoveRequest(ctx context.Context, tx database.Tx, requestID int64) error
+}

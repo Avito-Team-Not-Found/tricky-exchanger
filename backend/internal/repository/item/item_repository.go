@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -27,14 +29,15 @@ func NewRepository(pool *pgxpool.Pool) *Postgres {
 // Create сохраняет новый товар. Заполняет ID, Status, CreatedAt, UpdatedAt в переданной структуре.
 func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 	const q = `
-		INSERT INTO items (owner_user_id, title, description, category_id, status)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO items (owner_user_id, title, description, category_id, embedding, status)
+		VALUES ($1, $2, $3, $4, $5::vector, $6)
 		RETURNING id, created_at, updated_at
 	`
 
 	err := r.pool.QueryRow(
 		ctx, q,
-		item.OwnerUserID, item.Title, item.Description, item.CategoryID, item.Status,
+		item.OwnerUserID, item.Title, item.Description, item.CategoryID,
+		vectorLiteral(item.Embedding), item.Status,
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("insert item: %w", repository.MapDBError(err))
@@ -110,6 +113,7 @@ func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 		    description = $3,
 		    category_id = $4,
 		    status = $5,
+		    embedding = COALESCE($6::vector, embedding),
 		    updated_at = now()
 		WHERE id = $1
 		RETURNING updated_at
@@ -118,6 +122,7 @@ func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 	err := r.pool.QueryRow(
 		ctx, q,
 		item.ID, item.Title, item.Description, item.CategoryID, item.Status,
+		optionalVectorLiteral(item.Embedding),
 	).Scan(&item.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return repository.ErrNotFound
@@ -176,4 +181,19 @@ func scanItem(row rowScanner) (*entity.Item, error) {
 		return nil, err
 	}
 	return &it, nil
+}
+
+func optionalVectorLiteral(vector []float32) any {
+	if len(vector) == 0 {
+		return nil
+	}
+	return vectorLiteral(vector)
+}
+
+func vectorLiteral(vector []float32) string {
+	parts := make([]string, len(vector))
+	for i, value := range vector {
+		parts[i] = strconv.FormatFloat(float64(value), 'f', -1, 32)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }

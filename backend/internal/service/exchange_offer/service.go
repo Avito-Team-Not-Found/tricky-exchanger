@@ -8,8 +8,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
-	clusterservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/cluster"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 )
 
 // CreateInput содержит данные для создания заявки на обмен.
@@ -30,8 +28,7 @@ type UpdateInput struct {
 type Service struct {
 	repository   ExchangeOfferRepository
 	embedding    embedding.Client
-	matching     matching.Facade
-	clusters     *clusterservice.Service
+	matching     MatchingFacade
 	transactions database.TransactionManager
 }
 
@@ -39,15 +36,13 @@ type Service struct {
 func NewService(
 	repository ExchangeOfferRepository,
 	embeddingClient embedding.Client,
-	matchingFacade matching.Facade,
-	clusterService *clusterservice.Service,
+	matchingFacade MatchingFacade,
 	transactionManager database.TransactionManager,
 ) *Service {
 	return &Service{
 		repository:   repository,
 		embedding:    embeddingClient,
 		matching:     matchingFacade,
-		clusters:     clusterService,
 		transactions: transactionManager,
 	}
 }
@@ -63,8 +58,8 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 		return entity.ExchangeOffer{}, err
 	}
 
-	if s.transactions == nil || s.clusters == nil {
-		return entity.ExchangeOffer{}, entity.ErrClusterNotConfigured
+	if s.transactions == nil || s.matching == nil {
+		return entity.ExchangeOffer{}, entity.ErrMatchingNotConfigured
 	}
 
 	var created entity.ExchangeOffer
@@ -81,18 +76,10 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 		if createErr != nil {
 			return createErr
 		}
-		return s.clusters.Synchronize(ctx, tx, created.ID)
+		return s.matching.RebuildForRequest(ctx, tx, created.ID)
 	})
 	if err != nil {
 		return entity.ExchangeOffer{}, err
-	}
-
-	if s.matching == nil {
-		return created, entity.ErrMatchingNotConfigured
-	}
-
-	if err := s.matching.RebuildForRequest(ctx, created.ID); err != nil {
-		return created, fmt.Errorf("request was saved but matching failed: %w", err)
 	}
 
 	return created, nil
@@ -119,8 +106,8 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 		return entity.ExchangeOffer{}, err
 	}
 
-	if s.transactions == nil || s.clusters == nil {
-		return entity.ExchangeOffer{}, entity.ErrClusterNotConfigured
+	if s.transactions == nil || s.matching == nil {
+		return entity.ExchangeOffer{}, entity.ErrMatchingNotConfigured
 	}
 
 	var updated entity.ExchangeOffer
@@ -136,18 +123,10 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 		if updateErr != nil {
 			return updateErr
 		}
-		return s.clusters.Synchronize(ctx, tx, updated.ID)
+		return s.matching.RebuildForRequest(ctx, tx, updated.ID)
 	})
 	if err != nil {
 		return entity.ExchangeOffer{}, err
-	}
-
-	if s.matching == nil {
-		return updated, entity.ErrMatchingNotConfigured
-	}
-
-	if err := s.matching.RebuildForRequest(ctx, updated.ID); err != nil {
-		return updated, fmt.Errorf("request was updated but matching failed: %w", err)
 	}
 
 	return updated, nil
@@ -159,8 +138,8 @@ func (s *Service) Delete(ctx context.Context, userID string, requestID, version 
 		return entity.ErrInvalidVersion
 	}
 
-	if s.transactions == nil || s.clusters == nil {
-		return entity.ErrClusterNotConfigured
+	if s.transactions == nil || s.matching == nil {
+		return entity.ErrMatchingNotConfigured
 	}
 
 	var archived entity.ExchangeOffer
@@ -170,18 +149,10 @@ func (s *Service) Delete(ctx context.Context, userID string, requestID, version 
 		if archiveErr != nil {
 			return archiveErr
 		}
-		return s.clusters.Remove(ctx, tx, archived.ID)
+		return s.matching.RemoveRequest(ctx, tx, archived.ID)
 	})
 	if err != nil {
 		return err
-	}
-
-	if s.matching == nil {
-		return entity.ErrMatchingNotConfigured
-	}
-
-	if err := s.matching.RemoveRequest(ctx, archived.ID); err != nil {
-		return fmt.Errorf("request was archived but matching cleanup failed: %w", err)
 	}
 
 	return nil
@@ -192,7 +163,7 @@ func (s *Service) embedWanted(ctx context.Context, description string) ([]float3
 		return nil, entity.ErrEmbeddingNotConfigured
 	}
 
-	prompt := strings.TrimSpace(description)
+	prompt := "query: " + strings.TrimSpace(description)
 
 	result, err := s.embedding.Embed(ctx, prompt)
 	if err != nil {

@@ -3,11 +3,13 @@ package item
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
@@ -31,11 +33,12 @@ type UpdateInput struct {
 type Service struct {
 	repo         ItemRepository
 	reservations ReservationChecker
+	embedding    embedding.Client
 }
 
 // NewService создаёт сервис товаров с зависимостями для хранения и проверки hard-резерваций.
-func NewService(repo ItemRepository, reservations ReservationChecker) *Service {
-	return &Service{repo: repo, reservations: reservations}
+func NewService(repo ItemRepository, reservations ReservationChecker, embeddingClient embedding.Client) *Service {
+	return &Service{repo: repo, reservations: reservations, embedding: embeddingClient}
 }
 
 // Create создаёт активный товар от имени владельца.
@@ -53,11 +56,17 @@ func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, input CreateInp
 		return nil, err
 	}
 
+	embeddingValue, err := s.embedItem(ctx, title, description)
+	if err != nil {
+		return nil, err
+	}
+
 	item := &entity.Item{
 		OwnerUserID: ownerID,
 		Title:       title,
 		Description: description,
 		CategoryID:  input.CategoryID,
+		Embedding:   embeddingValue,
 		Status:      entity.ItemStatusActive,
 	}
 
@@ -125,6 +134,14 @@ func (s *Service) Update(ctx context.Context, requesterID uuid.UUID, itemID int6
 			return nil, entity.ErrInvalidItemStatus
 		}
 		item.Status = *input.Status
+	}
+
+	if input.Title != nil || input.Description != nil {
+		embeddingValue, err := s.embedItem(ctx, item.Title, item.Description)
+		if err != nil {
+			return nil, err
+		}
+		item.Embedding = embeddingValue
 	}
 
 	if err := s.repo.Update(ctx, item); err != nil {
@@ -199,4 +216,24 @@ func (s *Service) ensureNoHardReservation(ctx context.Context, itemID int64) err
 	}
 
 	return nil
+}
+
+func (s *Service) embedItem(ctx context.Context, title, description string) ([]float32, error) {
+	if s.embedding == nil {
+		return nil, entity.ErrEmbeddingNotConfigured
+	}
+
+	prompt := "passage: " + title
+	if description != "" {
+		prompt += "\n" + description
+	}
+
+	result, err := s.embedding.Embed(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("embed item: %w", err)
+	}
+	if len(result) == 0 {
+		return nil, entity.ErrEmptyEmbedding
+	}
+	return result, nil
 }

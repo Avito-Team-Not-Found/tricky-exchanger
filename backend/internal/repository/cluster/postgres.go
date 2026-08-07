@@ -14,25 +14,14 @@ import (
 	clusterservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/cluster"
 )
 
-const (
-	defaultCandidateLimit = 50
-	defaultMaxDistance    = 0.20
-)
-
 // Postgres управляет составом кластеров в переданной транзакции.
 type Postgres struct {
-	pool        *pgxpool.Pool
-	candidateN  int
-	maxDistance float64
+	pool *pgxpool.Pool
 }
 
 // NewRepository создаёт репозиторий кластеров с ограниченным Top-K поиском.
 func NewRepository(pool *pgxpool.Pool) *Postgres {
-	return &Postgres{
-		pool:        pool,
-		candidateN:  defaultCandidateLimit,
-		maxDistance: defaultMaxDistance,
-	}
+	return &Postgres{pool: pool}
 }
 
 // ListActiveMembers возвращает текущий состав активного кластера. Метод нужен
@@ -81,12 +70,13 @@ func (r *Postgres) ListActiveMembers(ctx context.Context, clusterID int64) ([]en
 func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int64) (clusterservice.OfferVectors, error) {
 	var offerEmbedding *string
 	var wantEmbedding *string
+	var categoryID *int64
 	err := tx.QueryRow(ctx, `
-		SELECT i.embedding::text, eo.want_embedding::text
+		SELECT i.embedding::text, eo.want_embedding::text, i.category_id
 		FROM exchange_offers AS eo
 		JOIN items AS i ON i.id = eo.offered_item_id
 		WHERE eo.id = $1 AND eo.status = 'ACTIVE'
-	`, offerID).Scan(&offerEmbedding, &wantEmbedding)
+	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &categoryID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return clusterservice.OfferVectors{}, entity.ErrExchangeOfferNotFound
 	}
@@ -96,7 +86,11 @@ func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int6
 	if offerEmbedding == nil || wantEmbedding == nil {
 		return clusterservice.OfferVectors{}, entity.ErrOfferEmbeddingMissing
 	}
-	return clusterservice.OfferVectors{OfferEmbedding: *offerEmbedding, WantEmbedding: *wantEmbedding}, nil
+	return clusterservice.OfferVectors{
+		OfferEmbedding: *offerEmbedding,
+		WantEmbedding:  *wantEmbedding,
+		CategoryID:     categoryID,
+	}, nil
 }
 
 // DeleteMembership удаляет строку membership и возвращает прежний кластер.
@@ -116,44 +110,32 @@ func (r *Postgres) DeleteMembership(ctx context.Context, tx database.Tx, offerID
 	return &clusterID, nil
 }
 
-// FindCandidateCluster возвращает кластер ближайшего предложения,
-// совпадающего по embeddings отдаваемого и желаемого товара.
-func (r *Postgres) FindCandidateCluster(
-	ctx context.Context,
-	tx database.Tx,
-	offerID int64,
-	vectors clusterservice.OfferVectors,
-) (*int64, error) {
+// FindClusterForCandidates одним запросом возвращает кластер первого кандидата
+// в порядке релевантности, полученном от pgvector-поиска.
+func (r *Postgres) FindClusterForCandidates(ctx context.Context, tx database.Tx, offerIDs []int64) (*int64, error) {
+	if len(offerIDs) == 0 {
+		return nil, nil
+	}
+
 	const query = `
-		WITH nearest_by_offer AS MATERIALIZED (
-			SELECT cm.cluster_id,
-			       eo.want_embedding <=> $2::vector AS want_distance,
-			       i.embedding <=> $1::vector AS offer_distance
-			FROM items AS i
-			JOIN exchange_offers AS eo ON eo.offered_item_id = i.id
-			JOIN cluster_members AS cm ON cm.request_id = eo.id
-			WHERE eo.status = 'ACTIVE'
-			  AND eo.id <> $3
-			  AND i.embedding IS NOT NULL
-			  AND eo.want_embedding IS NOT NULL
-			ORDER BY i.embedding <=> $1::vector
-			LIMIT $4
+		WITH candidates AS (
+			SELECT request_id, position
+			FROM unnest($1::bigint[]) WITH ORDINALITY AS candidate(request_id, position)
 		)
-		SELECT cluster_id
-		FROM nearest_by_offer
-		WHERE offer_distance <= $5
-		  AND want_distance <= $5
-		ORDER BY offer_distance + want_distance, cluster_id
+		SELECT cm.cluster_id
+		FROM candidates AS candidate
+		JOIN cluster_members AS cm ON cm.request_id = candidate.request_id
+		ORDER BY candidate.position
 		LIMIT 1
 	`
 
 	var clusterID int64
-	err := tx.QueryRow(ctx, query, vectors.OfferEmbedding, vectors.WantEmbedding, offerID, r.candidateN, r.maxDistance).Scan(&clusterID)
+	err := tx.QueryRow(ctx, query, offerIDs).Scan(&clusterID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("find similar offers for cluster: %w", err)
+		return nil, fmt.Errorf("find cluster for similar offers: %w", err)
 	}
 	return &clusterID, nil
 }

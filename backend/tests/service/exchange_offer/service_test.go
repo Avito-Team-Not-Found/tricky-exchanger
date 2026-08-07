@@ -8,7 +8,6 @@ import (
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-	clusterservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/cluster"
 	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
 
@@ -32,7 +31,7 @@ func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
 	if store.created.WantedDescription != "кофемашина" {
 		t.Fatalf("description was not trimmed: %q", store.created.WantedDescription)
 	}
-	if got, want := embeddings.prompt, "кофемашина"; got != want {
+	if got, want := embeddings.prompt, "query: кофемашина"; got != want {
 		t.Fatalf("embedding prompt = %q, want %q", got, want)
 	}
 	if matcher.rebuiltID != created.ID {
@@ -142,7 +141,6 @@ func newService(store *fakeStore, embeddings *fakeEmbedding, matcher *fakeMatche
 		store,
 		embeddings,
 		matcher,
-		clusterservice.NewService(&fakeClusterRepository{}),
 		&fakeTransactionManager{},
 	)
 }
@@ -151,36 +149,6 @@ type fakeTransactionManager struct{}
 
 func (m *fakeTransactionManager) WithinTransaction(_ context.Context, fn func(database.Tx) error) error {
 	return fn(nil)
-}
-
-type fakeClusterRepository struct{}
-
-func (r *fakeClusterRepository) LoadVectors(context.Context, database.Tx, int64) (clusterservice.OfferVectors, error) {
-	return clusterservice.OfferVectors{}, nil
-}
-
-func (r *fakeClusterRepository) DeleteMembership(context.Context, database.Tx, int64) (*int64, error) {
-	return nil, nil
-}
-
-func (r *fakeClusterRepository) FindCandidateCluster(context.Context, database.Tx, int64, clusterservice.OfferVectors) (*int64, error) {
-	return nil, nil
-}
-
-func (r *fakeClusterRepository) Create(context.Context, database.Tx) (int64, error) {
-	return 1, nil
-}
-
-func (r *fakeClusterRepository) AddMember(context.Context, database.Tx, int64, int64) error {
-	return nil
-}
-
-func (r *fakeClusterRepository) Refresh(context.Context, database.Tx, int64) error {
-	return nil
-}
-
-func (r *fakeClusterRepository) ListActiveMembers(context.Context, int64) ([]entity.ExchangeOffer, error) {
-	return nil, nil
 }
 
 func (e *fakeEmbedding) Embed(_ context.Context, prompt string) ([]float32, error) {
@@ -194,12 +162,12 @@ type fakeMatcher struct {
 	removedID int64
 }
 
-func (m *fakeMatcher) RebuildForRequest(_ context.Context, requestID int64) error {
+func (m *fakeMatcher) RebuildForRequest(_ context.Context, _ database.Tx, requestID int64) error {
 	m.rebuiltID = requestID
 	return nil
 }
 
-func (m *fakeMatcher) RemoveRequest(_ context.Context, requestID int64) error {
+func (m *fakeMatcher) RemoveRequest(_ context.Context, _ database.Tx, requestID int64) error {
 	m.removedID = requestID
 	return nil
 }

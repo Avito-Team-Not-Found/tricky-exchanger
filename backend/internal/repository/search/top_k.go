@@ -14,10 +14,13 @@
 //     отдать свой предмет. Подобие 1 - (er.want_embedding <=> item).
 //
 // Оба направления доступны в двух формах:
-//   - ByThreshold — возвращают ВСЕ кандидаты, прошедшие порог (используется при
-//     формировании кластеров: нужно именно множество, без жёсткого лимита).
+//   - ByThreshold — возвращают ВСЕ соседние по направлению обмена заявки,
+//     прошедшие порог.
 //   - TopK — возвращают K лучших (ORDER BY ... LIMIT K). Используется на этапе
 //     поиска цепочек (BFS), чтобы не раздувать граф.
+//
+// Кластерный поиск использует отдельный FindSimilarOffers: он сравнивает
+// "отдаю" с "отдаю" и "хочу" с "хочу", то есть не смешивает кластер с ребром графа.
 //
 // Все запросы выполняют фильтрацию и сортировку на стороне SQL (WHERE + ORDER BY ... <=>),
 // поэтому используют HNSW-индекс и НЕ загружают все строки таблицы в память.
@@ -45,7 +48,6 @@ type Search struct {
 func New(pool *pgxpool.Pool) *Search {
 	return &Search{pool: pool}
 }
-
 
 // constQueryOutgoing — поиск предметов, близких к want_embedding.
 // Параметры: $1 вектор, $2 исключаемый пользователь, $3 порог | $4 = k.
@@ -116,6 +118,36 @@ const constQueryIncomingTopK = `
 	LIMIT $3
 `
 
+// querySimilarOffers ищет заявки с тем же направлением обмена:
+// одновременно похожи и отдаваемый товар, и описание желаемого товара.
+// Сначала HNSW-индекс ограничивает выборку ближайшими отдаваемыми товарами,
+// затем внутри Top-K применяется второй порог по want_embedding.
+const querySimilarOffers = `
+	WITH nearest_by_offer AS MATERIALIZED (
+		SELECT eo.id AS request_id,
+		       eo.offered_item_id AS item_id,
+		       eo.user_id AS owner_id,
+		       1 - (i.embedding <=> $1::vector) AS offer_score,
+		       1 - (eo.want_embedding <=> $2::vector) AS want_score
+		FROM exchange_offers AS eo
+		JOIN items AS i ON i.id = eo.offered_item_id
+		WHERE eo.status = 'ACTIVE'
+		  AND i.status = 'ACTIVE'
+		  AND eo.id <> $3
+		  AND i.category_id IS NOT DISTINCT FROM $4::bigint
+		  AND i.embedding IS NOT NULL
+		  AND eo.want_embedding IS NOT NULL
+		ORDER BY i.embedding <=> $1::vector
+		LIMIT $6
+	)
+	SELECT request_id, item_id, owner_id,
+	       LEAST(offer_score, want_score) AS score
+	FROM nearest_by_offer
+	WHERE offer_score >= $5
+	  AND want_score >= $5
+	ORDER BY offer_score + want_score DESC, request_id
+`
+
 // FindOutgoingByThreshold ищет чужие предметы, похожие на want, с порогом подобия.
 func (s *Search) FindOutgoingByThreshold(ctx context.Context, want []float32, excludeUserID string, threshold float64) ([]entity.Candidate, error) {
 	rows, err := s.pool.Query(ctx, constQueryOutgoingThreshold, embedLiteral(want), excludeUserID, threshold)
@@ -148,6 +180,24 @@ func (s *Search) FindIncomingTopK(ctx context.Context, mine []float32, excludeUs
 	rows, err := s.pool.Query(ctx, constQueryIncomingTopK, embedLiteral(mine), excludeUserID, k)
 	if err != nil {
 		return nil, fmt.Errorf("search incoming top-k: %w", err)
+	}
+	return collectCandidates(rows)
+}
+
+// FindSimilarOffers возвращает Top-K ACTIVE-заявок с тем же направлением обмена.
+// offer и want передаются как валидные pgvector-литералы, загруженные из БД.
+func (s *Search) FindSimilarOffers(
+	ctx context.Context,
+	offer string,
+	want string,
+	categoryID *int64,
+	excludeOfferID int64,
+	threshold float64,
+	k int,
+) ([]entity.Candidate, error) {
+	rows, err := s.pool.Query(ctx, querySimilarOffers, offer, want, excludeOfferID, categoryID, threshold, k)
+	if err != nil {
+		return nil, fmt.Errorf("search similar offers: %w", err)
 	}
 	return collectCandidates(rows)
 }

@@ -23,6 +23,7 @@ type Item struct {
 	Title       string
 	Description string
 	CategoryID  *int64
+	Embedding   []float32
 	Status      ItemStatus
 	CreatedAt   time.Time
 	UpdatedAt   time.Time

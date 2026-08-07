@@ -8,19 +8,42 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 )
 
+const (
+	defaultTopK      = 50
+	defaultThreshold = 0.8
+)
+
 // Service определяет, в какой кластер должно попасть предложение.
 type Service struct {
 	repository Repository
+	searcher   CandidateSearcher
+	topK       int
+	threshold  float64
 }
 
 // NewService создаёт сервис кластеризации.
-func NewService(repository Repository) *Service {
-	return &Service{repository: repository}
+func NewService(repository Repository, searcher CandidateSearcher, topK int, threshold float64) *Service {
+	if topK <= 0 {
+		topK = defaultTopK
+	}
+	if threshold <= 0 || threshold > 1 {
+		threshold = defaultThreshold
+	}
+	return &Service{
+		repository: repository,
+		searcher:   searcher,
+		topK:       topK,
+		threshold:  threshold,
+	}
 }
 
 // Synchronize удаляет старое членство предложения и добавляет его в кластер,
 // найденный по embeddings отдаваемого и желаемого товаров.
 func (s *Service) Synchronize(ctx context.Context, tx database.Tx, offerID int64) error {
+	if s.repository == nil || s.searcher == nil {
+		return entity.ErrClusterNotConfigured
+	}
+
 	vectors, err := s.repository.LoadVectors(ctx, tx, offerID)
 	if err != nil {
 		return err
@@ -36,7 +59,25 @@ func (s *Service) Synchronize(ctx context.Context, tx database.Tx, offerID int64
 		}
 	}
 
-	clusterID, err := s.repository.FindCandidateCluster(ctx, tx, offerID, vectors)
+	candidates, err := s.searcher.FindSimilarOffers(
+		ctx,
+		vectors.OfferEmbedding,
+		vectors.WantEmbedding,
+		vectors.CategoryID,
+		offerID,
+		s.threshold,
+		s.topK,
+	)
+	if err != nil {
+		return err
+	}
+
+	candidateIDs := make([]int64, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidateIDs = append(candidateIDs, candidate.RequestID)
+	}
+
+	clusterID, err := s.repository.FindClusterForCandidates(ctx, tx, candidateIDs)
 	if err != nil {
 		return err
 	}
@@ -56,6 +97,10 @@ func (s *Service) Synchronize(ctx context.Context, tx database.Tx, offerID int64
 
 // Remove исключает предложение из кластера и обновляет либо удаляет кластер.
 func (s *Service) Remove(ctx context.Context, tx database.Tx, offerID int64) error {
+	if s.repository == nil {
+		return entity.ErrClusterNotConfigured
+	}
+
 	clusterID, err := s.repository.DeleteMembership(ctx, tx, offerID)
 	if err != nil || clusterID == nil {
 		return err
