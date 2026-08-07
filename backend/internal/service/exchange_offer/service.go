@@ -1,4 +1,4 @@
-package exchange_request
+package exchange_offer
 
 import (
 	"context"
@@ -26,13 +26,13 @@ type UpdateInput struct {
 // Service реализует сценарии работы с заявками без привязки к HTTP.
 // Идентификатор аутентифицированного пользователя передаёт вызывающий код.
 type Service struct {
-	repository ExchangeRequestRepository
+	repository ExchangeOfferRepository
 	embedding  embedding.Client
 	matching   matching.Facade
 }
 
 // NewService создаёт сервис заявок с зависимостями для хранения, embeddings и matching.
-func NewService(repository ExchangeRequestRepository, embeddingClient embedding.Client, matchingFacade matching.Facade) *Service {
+func NewService(repository ExchangeOfferRepository, embeddingClient embedding.Client, matchingFacade matching.Facade) *Service {
 	return &Service{
 		repository: repository,
 		embedding:  embeddingClient,

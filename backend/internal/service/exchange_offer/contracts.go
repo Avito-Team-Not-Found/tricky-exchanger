@@ -1,4 +1,4 @@
-package exchange_request
+package exchange_offer
 
 import (
 	"context"
@@ -6,9 +6,9 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 )
 
-// ExchangeRequestRepository описывает хранилище заявок, необходимое сервису.
+// ExchangeOfferRepository описывает хранилище предложений обмена, необходимое сервису.
 // Реализация должна атомарно инвалидировать кандидатные цепочки при изменении заявки.
-type ExchangeRequestRepository interface {
+type ExchangeOfferRepository interface {
 	Create(ctx context.Context, request entity.ExchangeOffer) (entity.ExchangeOffer, error)
 	Get(ctx context.Context, userID string, requestID int64) (entity.ExchangeOffer, error)
 	List(ctx context.Context, userID string) ([]entity.ExchangeOfferListItem, error)

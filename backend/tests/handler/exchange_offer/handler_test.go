@@ -1,4 +1,4 @@
-package exchange_request_test
+package exchange_offer_test
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-	requesthandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_request"
-	requestservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_request"
+	offerhandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
+	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
 
 func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
@@ -31,17 +31,17 @@ func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
 			OfferedItemTitle: "Велосипед",
 		}},
 	}
-	handler := requesthandler.NewHandler(service)
+	handler := offerhandler.NewHandler(service)
 
 	engine := gin.New()
 	engine.Use(func(c *gin.Context) {
 		c.Set("userID", uuid.MustParse("11111111-1111-1111-1111-111111111111"))
 		c.Next()
 	})
-	routes := engine.Group("/exchange-requests")
+	routes := engine.Group("/exchange-offers")
 	routes.GET("", handler.List)
 
-	request := httptest.NewRequest(http.MethodGet, "/exchange-requests", nil)
+	request := httptest.NewRequest(http.MethodGet, "/exchange-offers", nil)
 	recorder := httptest.NewRecorder()
 	engine.ServeHTTP(recorder, request)
 
@@ -59,12 +59,12 @@ func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
 
 func TestListRequiresAuthenticatedUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	handler := requesthandler.NewHandler(&handlerFakeService{})
+	handler := offerhandler.NewHandler(&handlerFakeService{})
 	engine := gin.New()
-	routes := engine.Group("/exchange-requests")
+	routes := engine.Group("/exchange-offers")
 	routes.GET("", handler.List)
 
-	request := httptest.NewRequest(http.MethodGet, "/exchange-requests", nil)
+	request := httptest.NewRequest(http.MethodGet, "/exchange-offers", nil)
 	recorder := httptest.NewRecorder()
 	engine.ServeHTTP(recorder, request)
 
@@ -78,7 +78,7 @@ type handlerFakeService struct {
 	listUserID string
 }
 
-func (s *handlerFakeService) Create(context.Context, string, requestservice.CreateInput) (entity.ExchangeOffer, error) {
+func (s *handlerFakeService) Create(context.Context, string, offerservice.CreateInput) (entity.ExchangeOffer, error) {
 	return entity.ExchangeOffer{}, nil
 }
 
@@ -91,7 +91,7 @@ func (s *handlerFakeService) List(_ context.Context, userID string) ([]entity.Ex
 	return s.list, nil
 }
 
-func (s *handlerFakeService) Update(context.Context, string, int64, requestservice.UpdateInput) (entity.ExchangeOffer, error) {
+func (s *handlerFakeService) Update(context.Context, string, int64, offerservice.UpdateInput) (entity.ExchangeOffer, error) {
 	return entity.ExchangeOffer{}, nil
 }
 
