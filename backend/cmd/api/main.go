@@ -23,6 +23,7 @@ func main() {
 	_ = godotenv.Load()
 
 	cfg, err := config.Load()
+
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
@@ -31,6 +32,12 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Сначала применяем миграции (создают схему + расширение pgvector).
+	if err := database.RunMigrations(ctx, cfg.DatabaseURL, logger); err != nil {
+		logger.Fatalf("db migrate error: %v", err)
+	}
+	logger.Info("migrations applied")
 
 	// Подключаемся к БД; при недоступной БД — понятная ошибка
 	pool, err := database.Connect(ctx, cfg.DatabaseURL)
