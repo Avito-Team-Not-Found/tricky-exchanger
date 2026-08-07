@@ -452,8 +452,15 @@ export function createMockApp({
   server.delete('/api/v1/items/:id', (req, res) => {
     const item = findItem(req.params.id);
     if (!item || item.userId !== req.userId) return fail(res, 404, 'Товар не найден');
-    // забронированный товар уже участвует в согласуемой цепочке — его нельзя выдернуть из сделки
-    if (item.status === 'RESERVED') return fail(res, 409, 'Товар уже участвует в сделке');
+    // «товар в сделке» — это в первую очередь заявка со статусом LOCKED; item.status === 'RESERVED'
+    // лишь её отражение и может отстать, поэтому проверяем оба признака
+    const lockedByRequest = db
+      .get('exchangeRequests')
+      .some((r) => r.offeredItemId === item.id && r.status === 'LOCKED')
+      .value();
+    if (item.status === 'RESERVED' || lockedByRequest) {
+      return fail(res, 409, 'Товар уже участвует в сделке');
+    }
 
     db.get('items').removeById(item.id).write();
     db.get('exchangeRequests')
