@@ -1,17 +1,37 @@
 .request-form {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+}
+
+// ритм формы задают отступы antd: 24px под каждым полем — как в форме товара и формах авторизации.
+// flex-gap у контейнеров не используется, иначе он складывается с этим отступом
+.request-form .ant-form-item {
+  margin-bottom: var(--spacing-lg);
+}
+
+// последнее поле блока отбивает сам блок, иначе отступы складываются
+.request-form__block > :last-child,
+.request-form__profile > :last-child {
+  margin-bottom: 0;
 }
 
 .request-form__skeleton {
   padding: var(--spacing-md) 0;
 }
 
+.request-form__block,
+.request-form__lock {
+  margin-bottom: var(--spacing-lg);
+}
+
 .request-form__block {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+}
+
+.request-form__heading,
+.request-form__subheading {
+  margin-bottom: var(--spacing-md);
 }
 
 .request-form__heading {
@@ -90,8 +110,6 @@
 .request-form__profile {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-sm);
 }
 
 .request-form__lock {
