@@ -1,0 +1,43 @@
+// экран формы внутри AppLayout: глобальная шапка скрыта, меню остаётся; у экрана своя шапка (DESIGN.md §4.3)
+.item-form-page__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 56px;
+  /* растягиваем на всю ширину контента (внутри .app-body с padding 16), снизу margin 0 — отступ до формы */
+  margin: calc(-1 * var(--spacing-md)) calc(-1 * var(--spacing-md)) 0;
+  padding: 0 var(--spacing-md);
+  background: var(--color-bg-page);
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+.item-form-page__back {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.item-form-page__title {
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-heading);
+}
+
+.item-form-page__body {
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-xl);
+}
+
+@media (min-width: 768px) {
+  .item-form-page__body {
+    align-items: center;
+  }
+
+  .item-form-page__body .item-form {
+    width: 100%;
+    max-width: 640px;
+  }
+}

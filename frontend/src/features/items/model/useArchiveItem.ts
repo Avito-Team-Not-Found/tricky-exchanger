@@ -1,0 +1,27 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { App as AntApp } from 'antd';
+
+import { archiveItem } from '@entities/item';
+
+import { getErrorMessage } from '@shared/lib/errorMessage';
+
+export function useArchiveItem(onSuccess?: () => void) {
+  const { message } = AntApp.useApp();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (itemId: string) => archiveItem(itemId),
+    onSuccess: () => {
+      message.success('Товар удалён');
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+      // вместе с товаром сервер удаляет и связанные с ним заявки — иначе их список
+      // остаётся в кеше stale (staleTime 60s) и клик по удалённой заявке уводит в 404
+      queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
+      onSuccess?.();
+    },
+    onError: (error) =>
+      message.error(
+        getErrorMessage(error, { 409: 'Товар уже участвует в сделке' }, 'Не удалось удалить товар'),
+      ),
+  });
+}

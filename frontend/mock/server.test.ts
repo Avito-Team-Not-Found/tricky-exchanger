@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -13,7 +13,9 @@ const mockDir = dirname(fileURLToPath(import.meta.url));
 
 const DEMO_EMAIL = 'anna@example.com';
 const DEMO_PASSWORD = 'demo1234';
-const REQUEST_ID = '20000000-0000-4000-8000-000000000001';
+const LOCKED_REQUEST_ID = '20000000-0000-4000-8000-000000000003';
+const FOREIGN_ITEM_ID = '20000000-0000-4000-8000-000000000001';
+const RESERVED_ITEM_ID = '10000000-0000-4000-8000-000000000003';
 
 let server: Server;
 let baseUrl: string;
@@ -26,7 +28,9 @@ function authHeaders(extra?: Record<string, string>) {
 
 async function request(path: string, init?: RequestInit) {
   const response = await fetch(`${baseUrl}/api/v1${path}`, init);
-  const body = await response.json();
+  // тела ответов мока динамические — тесты читают произвольные поля, типизировать каждое незачем
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body = (await response.json()) as any;
   return { status: response.status, body };
 }
 
@@ -127,7 +131,7 @@ describe('authorization', () => {
   });
 
   it('rejects protected routes without a token', async () => {
-    const { status, body } = await request('/products');
+    const { status, body } = await request('/items');
     expect(status).toBe(401);
     expect(body).toMatchObject({ error: expect.any(String), code: 401 });
   });
@@ -139,7 +143,7 @@ describe('authorization', () => {
     ).toString('base64url');
     const expiredToken = `${header}.${payload}.mock-signature`;
 
-    const { status } = await request('/products', {
+    const { status } = await request('/items', {
       headers: { Authorization: `Bearer ${expiredToken}` },
     });
     expect(status).toBe(401);
@@ -300,34 +304,54 @@ describe('password change', () => {
   });
 });
 
-describe('products', () => {
-  it('lists only the current user products', async () => {
-    const { status, body } = await request('/products', { headers: authHeaders() });
+describe('categories', () => {
+  it('returns the category catalog', async () => {
+    const { status, body } = await request('/categories', { headers: authHeaders() });
 
     expect(status).toBe(200);
-    expect(body).toHaveLength(2);
+    expect(body.length).toBeGreaterThan(0);
+    expect(body[0]).toMatchObject({ id: expect.any(String), name: expect.any(String) });
+  });
+});
+
+describe('items', () => {
+  it('lists only the current user items', async () => {
+    const { status, body } = await request('/items', { headers: authHeaders() });
+
+    expect(status).toBe(200);
+    expect(body).toHaveLength(4);
     expect(body[0]).toMatchObject({
       id: expect.any(String),
       title: expect.any(String),
+      condition: expect.any(String),
       image: expect.any(String),
-      status: 'active',
+      status: 'ACTIVE',
     });
   });
 
-  it('creates a product with an uploaded image', async () => {
+  it('creates an item with an uploaded image and all fields', async () => {
     const form = new FormData();
     form.append('title', 'Смарт-часы');
     form.append('description', 'Работают как новые');
+    form.append('condition', 'LIKE_NEW');
+    form.append('color', 'black');
+    form.append('material', '');
     form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'watch.png');
 
-    const { status, body } = await request('/products', {
+    const { status, body } = await request('/items', {
       method: 'POST',
       headers: authHeaders(),
       body: form,
     });
 
     expect(status).toBe(201);
-    expect(body).toMatchObject({ title: 'Смарт-часы', status: 'active' });
+    expect(body).toMatchObject({
+      title: 'Смарт-часы',
+      condition: 'LIKE_NEW',
+      color: 'black',
+      material: null,
+      status: 'ACTIVE',
+    });
     expect(body.image).toMatch(/^data:image\/png;base64,/);
   });
 
@@ -335,8 +359,9 @@ describe('products', () => {
     const form = new FormData();
     form.append('title', 'Без фото');
     form.append('description', 'Описание');
+    form.append('condition', 'NEW');
 
-    const { status, body } = await request('/products', {
+    const { status, body } = await request('/items', {
       method: 'POST',
       headers: authHeaders(),
       body: form,
@@ -346,26 +371,122 @@ describe('products', () => {
     expect(body.code).toBe(400);
   });
 
-  it('patches a product partially', async () => {
-    const { body: product } = await request('/products', { headers: authHeaders() });
-    const id = product[0].id;
+  it('rejects an unknown condition', async () => {
+    const form = new FormData();
+    form.append('title', 'Странный товар');
+    form.append('description', 'Описание');
+    form.append('condition', 'ALIEN');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
 
-    const { status, body } = await request(`/products/${id}`, {
+    const { status } = await request('/items', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+
+    expect(status).toBe(400);
+  });
+
+  it('patches condition, color and material', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const id = items[0].id;
+
+    const { status, body } = await request(`/items/${id}`, {
       method: 'PATCH',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ title: 'Новое название' }),
+      body: JSON.stringify({ condition: 'NEW', color: 'red', material: 'aluminum' }),
     });
 
     expect(status).toBe(200);
-    expect(body).toMatchObject({ id, title: 'Новое название', status: 'active' });
+    expect(body).toMatchObject({ id, condition: 'NEW', color: 'red', material: 'aluminum' });
   });
 
-  it('returns 404 for a foreign product', async () => {
-    const { status, body } = await request('/products/10000000-0000-4000-8000-000000000003', {
+  // multipart не умеет null: очистка едет пустой строкой. Без этого очистка цвета терялась,
+  // когда пользователь заодно менял фото и запрос уходил как multipart
+  it('clears color through multipart when the photo is replaced too', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const id = items[0].id;
+    await request(`/items/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ color: 'white', material: 'plastic' }),
+    });
+
+    const form = new FormData();
+    form.append('title', 'Товар без цвета');
+    form.append('description', 'Описание');
+    form.append('condition', 'USED');
+    form.append('color', '');
+    form.append('material', '');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
+
+    const { status, body } = await request(`/items/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: form,
+    });
+
+    expect(status).toBe(200);
+    expect(body.color).toBeNull();
+    expect(body.material).toBeNull();
+    expect(body.image).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it('refuses to archive a reserved item', async () => {
+    const { status, body } = await request(`/items/${RESERVED_ITEM_ID}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ code: 409 });
+  });
+
+  it('stores an empty material as null, not the string "null"', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const id = items[0].id;
+
+    const { status, body } = await request(`/items/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ material: null, color: null }),
+    });
+
+    expect(status).toBe(200);
+    expect(body.material).toBeNull();
+    expect(body.color).toBeNull();
+  });
+
+  it('returns 404 for a foreign item', async () => {
+    const { status, body } = await request(`/items/${FOREIGN_ITEM_ID}`, {
       headers: authHeaders(),
     });
     expect(status).toBe(404);
     expect(body.code).toBe(404);
+  });
+
+  it('archives an item', async () => {
+    // архив — на свежесозданном товаре, чтобы каскадное удаление заявок не задело фикстуру
+    const form = new FormData();
+    form.append('title', 'Товар на удаление');
+    form.append('description', 'Проверяем архивирование');
+    form.append('condition', 'USED');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
+    const { body: created } = await request('/items', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+
+    const { status, body } = await request(`/items/${created.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(status).toBe(200);
+    expect(body).toEqual({ message: 'archived' });
+
+    const after = await request('/items', { headers: authHeaders() });
+    expect(after.body.some((i: { id: string }) => i.id === created.id)).toBe(false);
   });
 });
 
@@ -374,45 +495,114 @@ describe('exchange requests', () => {
     const { status, body } = await request('/exchange-requests', { headers: authHeaders() });
 
     expect(status).toBe(200);
+    expect(body).toHaveLength(5);
     expect(body[0]).toMatchObject({
       id: expect.any(String),
       offeredItem: { id: expect.any(String), title: expect.any(String) },
       wantedDescription: expect.any(String),
-      status: 'active',
+      status: expect.any(String),
     });
   });
 
-  it('creates a request', async () => {
-    const { body: products } = await request('/products', { headers: authHeaders() });
-    const productId = products[0].id;
+  it('creates a request, runs matching and returns the result', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const itemId = items.find((i: { status: string }) => i.status === 'ACTIVE').id;
 
     const { status, body } = await postJson('/exchange-requests', {
-      offeredItemId: productId,
-      wantedDescription: 'Наушники',
-      wantedState: 'Б/у',
+      offeredItemId: itemId,
+      wantedDescription: 'Наушники с шумоподавлением',
+      wantedProfile: { categoryId: 'electronics', acceptableCondition: ['NEW', 'LIKE_NEW'] },
     });
 
     expect(status).toBe(201);
-    expect(body).toMatchObject({
-      offeredItemId: productId,
-      wantedDescription: 'Наушники',
-      wantedState: 'Б/у',
-      status: 'active',
+    expect(body.matching.createdCandidateChains).toBeGreaterThan(0);
+    // нашлись цепочки → заявка переходит в IN_PROPOSAL
+    expect(body.request).toMatchObject({
+      offeredItemId: itemId,
+      wantedDescription: 'Наушники с шумоподавлением',
+      wantedProfile: { categoryId: 'electronics' },
+      status: 'IN_PROPOSAL',
     });
   });
 
-  it('cancels a request and blocks further edits', async () => {
-    const { body: products } = await request('/products', { headers: authHeaders() });
+  it('rejects a foreign offered item', async () => {
+    const { status } = await postJson('/exchange-requests', {
+      offeredItemId: FOREIGN_ITEM_ID,
+      wantedDescription: 'Что-то своё',
+    });
+    expect(status).toBe(400);
+  });
+
+  // «товар уже в резерве» — конфликт (409), а не ошибка валидации: у фронта на него свой текст
+  it('rejects a reserved offered item with a conflict', async () => {
+    const { status, body } = await postJson('/exchange-requests', {
+      offeredItemId: RESERVED_ITEM_ID,
+      wantedDescription: 'Что-то своё',
+    });
+    expect(status).toBe(409);
+    expect(body).toMatchObject({ code: 409 });
+  });
+
+  it('rejects a request without wanted description', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const itemId = items.find((i: { status: string }) => i.status === 'ACTIVE').id;
+
+    const { status } = await postJson('/exchange-requests', {
+      offeredItemId: itemId,
+      wantedDescription: '   ',
+    });
+    expect(status).toBe(400);
+  });
+
+  it('patches an active request and recomputes chains', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const itemId = items.find((i: { status: string }) => i.status === 'ACTIVE').id;
     const { body: created } = await postJson('/exchange-requests', {
-      offeredItemId: products[0].id,
-      wantedDescription: 'Книга',
+      offeredItemId: itemId,
+      wantedDescription: 'Книга по дизайну',
     });
 
-    const cancel = await postJson(`/exchange-requests/${created.id}/cancel`, {});
-    expect(cancel.status).toBe(200);
-    expect(cancel.body).toEqual({ message: 'cancelled' });
+    const { status, body } = await request(`/exchange-requests/${created.request.id}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ wantedDescription: 'Кофемашина', wantedProfile: null }),
+    });
 
-    const patch = await request(`/exchange-requests/${created.id}`, {
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ wantedDescription: 'Кофемашина', wantedProfile: null });
+  });
+
+  it('blocks editing a locked request', async () => {
+    const { status, body } = await request(`/exchange-requests/${LOCKED_REQUEST_ID}`, {
+      method: 'PATCH',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ wantedDescription: 'Что-то ещё' }),
+    });
+
+    expect(status).toBe(400);
+    expect(body).toMatchObject({ code: 400 });
+  });
+
+  it('deletes a request softly and blocks further edits', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const itemId = items.find((i: { status: string }) => i.status === 'ACTIVE').id;
+    const { body: created } = await postJson('/exchange-requests', {
+      offeredItemId: itemId,
+      wantedDescription: 'Рюкзак для походов',
+    });
+
+    const { status, body } = await request(`/exchange-requests/${created.request.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(status).toBe(200);
+    expect(body).toEqual({ message: 'deleted' });
+
+    const after = await request('/exchange-requests', { headers: authHeaders() });
+    const removed = after.body.find((r: { id: string }) => r.id === created.request.id);
+    expect(removed).toMatchObject({ status: 'REMOVED' });
+
+    const patch = await request(`/exchange-requests/${created.request.id}`, {
       method: 'PATCH',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ wantedDescription: 'Что-то ещё' }),
@@ -422,56 +612,211 @@ describe('exchange requests', () => {
 });
 
 describe('chains', () => {
-  it('generates chains once and sorts them by probability descending', async () => {
-    const first = await request(`/exchange-requests/${REQUEST_ID}/chains`, {
+  it('selecting a chain locks the request', async () => {
+    const { body: requests } = await request('/exchange-requests', { headers: authHeaders() });
+    const active = requests.find((r: { status: string }) => r.status === 'ACTIVE');
+
+    const { body: created } = await postJson('/exchange-requests', {
+      offeredItemId: active.offeredItemId,
+      wantedDescription: 'Фитнес-браслет в подарок',
+    });
+    const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
       headers: authHeaders(),
     });
-    const second = await request(`/exchange-requests/${REQUEST_ID}/chains`, {
+
+    const { status, body } = await postJson(`/chains/${chains[0].id}/select`, {});
+    expect(status).toBe(200);
+    expect(body).toEqual({ id: chains[0].id, selected: true });
+
+    const detail = await request(`/exchange-requests/${created.request.id}`, {
       headers: authHeaders(),
     });
-
-    expect(first.status).toBe(200);
-    expect(first.body.length).toBeGreaterThan(0);
-    expect(first.body.map((c: { id: string }) => c.id)).toEqual(
-      second.body.map((c: { id: string }) => c.id),
-    );
-
-    const probabilities = first.body.map(
-      (c: { successProbability: number }) => c.successProbability,
-    );
-    expect(probabilities).toEqual([...probabilities].sort((a, b) => b - a));
-
-    const chain = first.body[0];
-    expect(chain).toMatchObject({
-      id: expect.any(String),
-      length: expect.any(Number),
-      successProbability: expect.any(Number),
-      selected: false,
-      participants: expect.any(Array),
-    });
-    expect(chain.participants[0]).toMatchObject({
-      userId: expect.any(String),
-      name: expect.any(String),
-      offers: { id: expect.any(String), title: expect.any(String) },
-      wants: { id: expect.any(String), title: expect.any(String) },
-    });
+    expect(detail.body.status).toBe('LOCKED');
   });
 
-  it('selects and deselects a chain', async () => {
-    const { body: chains } = await request(`/exchange-requests/${REQUEST_ID}/chains`, {
+  it('rejects selecting a chain that belongs to another user', async () => {
+    const { body: login } = await postJson(
+      '/account/login/',
+      { email: 'ivan@example.com', password: 'demo1234' },
+      false,
+    );
+    // цепочка 3001 привязана к заявке Анны — Иван её выбирать не может
+    const { status, body } = await request('/chains/30000000-0000-4000-8000-000000000001/select', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${login.token}` },
+    });
+    expect(status).toBe(403);
+    expect(body.code).toBe(403);
+  });
+
+  // удаление товара уносит его заявки каскадом — вместе с ними должны уходить и цепочки,
+  // иначе осиротевшая цепочка ссылается на несуществующую заявку и отвечает 403 вместо 404
+  it('removes the chains of the requests deleted together with the item', async () => {
+    const form = new FormData();
+    form.append('title', 'Товар с цепочками');
+    form.append('description', 'Удаляется вместе с заявкой');
+    form.append('condition', 'USED');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
+    const { body: item } = await request('/items', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+
+    const { body: created } = await postJson('/exchange-requests', {
+      offeredItemId: item.id,
+      wantedDescription: 'Электронная книга',
+    });
+    const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
       headers: authHeaders(),
     });
-    const chainId = chains[0].id;
+    expect(chains.length).toBeGreaterThan(0);
 
-    const select = await postJson(`/exchange-requests/${REQUEST_ID}/chains/${chainId}/select`, {});
-    expect(select.status).toBe(200);
-    expect(select.body).toEqual({ id: chainId, selected: true });
+    const archived = await request(`/items/${item.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(archived.status).toBe(200);
 
-    const deselect = await postJson(
-      `/exchange-requests/${REQUEST_ID}/chains/${chainId}/deselect`,
-      {},
+    const { status } = await request(`/chains/${chains[0].id}/select`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    expect(status).toBe(404);
+  });
+
+  it('removes candidate chains when the request is removed', async () => {
+    // берём именно свободный товар: выбор цепочки выше мог забронировать тот, что в фикстуре
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const free = items.find((i: { status: string }) => i.status === 'ACTIVE');
+    const { body: created } = await postJson('/exchange-requests', {
+      offeredItemId: free.id,
+      wantedDescription: 'Рюкзак для походов',
+    });
+    const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
+      headers: authHeaders(),
+    });
+    expect(chains.length).toBeGreaterThan(0);
+
+    await request(`/exchange-requests/${created.request.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+
+    const { status } = await request(`/chains/${chains[0].id}/select`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    expect(status).toBe(404);
+  });
+});
+
+describe('exchange request validation', () => {
+  it('rejects an unknown acceptable condition in the profile', async () => {
+    const { body: items } = await request('/items', { headers: authHeaders() });
+    const itemId = items.find((i: { status: string }) => i.status === 'ACTIVE').id;
+
+    const { status, body } = await postJson('/exchange-requests', {
+      offeredItemId: itemId,
+      wantedDescription: 'Что-то',
+      wantedProfile: { acceptableCondition: ['ALIEN'] },
+    });
+    expect(status).toBe(400);
+    expect(body.code).toBe(400);
+  });
+});
+
+// Бронь товара — по PROJECT.md §1: её ставит выбор цепочки, а не создание заявки
+describe('item reservation lifecycle', () => {
+  async function createItem(title: string) {
+    const form = new FormData();
+    form.append('title', title);
+    form.append('description', 'Товар для проверки брони');
+    form.append('condition', 'USED');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
+    const { body } = await request('/items', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+    return body;
+  }
+
+  const itemStatus = async (itemId: string) => {
+    const { body } = await request(`/items/${itemId}`, { headers: authHeaders() });
+    return body.status;
+  };
+
+  it('reserves the item on chain select and frees it when the request is dropped', async () => {
+    const item = await createItem('Товар под бронь');
+    expect(await itemStatus(item.id)).toBe('ACTIVE');
+
+    const { body: created } = await postJson('/exchange-requests', {
+      offeredItemId: item.id,
+      wantedDescription: 'Наушники',
+    });
+    // до выбора цепочки товар остаётся свободным
+    expect(await itemStatus(item.id)).toBe('ACTIVE');
+
+    const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
+      headers: authHeaders(),
+    });
+    expect(chains.length).toBeGreaterThan(0);
+
+    const { status: selectStatus } = await request(`/chains/${chains[0].id}/select`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    expect(selectStatus).toBe(200);
+    expect(await itemStatus(item.id)).toBe('RESERVED');
+
+    // забронированный товар нельзя предложить в новой заявке — это конфликт, а не валидация
+    const { status: conflictStatus } = await postJson('/exchange-requests', {
+      offeredItemId: item.id,
+      wantedDescription: 'Что-то ещё',
+    });
+    expect(conflictStatus).toBe(409);
+
+    await request(`/exchange-requests/${created.request.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(await itemStatus(item.id)).toBe('ACTIVE');
+  });
+});
+
+// Фикстура — часть контракта мока: код опирается на «RESERVED ⟺ есть заявка в LOCKED»
+// (releaseItemIfUnused, запрет архивации), а рассинхрон в сидах ломает демо-сценарии
+describe('seed fixture', () => {
+  interface SeedDb {
+    items: { id: string; status: string }[];
+    exchangeRequests: { id: string; status: string; offeredItemId: string }[];
+    chains: { id: string; requestId: string }[];
+  }
+
+  const seed: SeedDb = JSON.parse(readFileSync(join(mockDir, 'db.json'), 'utf8'));
+
+  it('reserves exactly the items held by a locked request', () => {
+    const lockedItemIds = new Set(
+      seed.exchangeRequests.filter((r) => r.status === 'LOCKED').map((r) => r.offeredItemId),
     );
-    expect(deselect.status).toBe(200);
-    expect(deselect.body).toEqual({ id: chainId, selected: false });
+
+    for (const item of seed.items) {
+      expect([item.id, item.status === 'RESERVED']).toEqual([item.id, lockedItemIds.has(item.id)]);
+    }
+  });
+
+  it('has no chains pointing at a missing request', () => {
+    const requestIds = new Set(seed.exchangeRequests.map((r) => r.id));
+    const orphans = seed.chains.filter((c) => !requestIds.has(c.requestId));
+
+    expect(orphans).toEqual([]);
+  });
+
+  it('offers only existing items in requests', () => {
+    const itemIds = new Set(seed.items.map((i) => i.id));
+    const dangling = seed.exchangeRequests.filter((r) => !itemIds.has(r.offeredItemId));
+
+    expect(dangling).toEqual([]);
   });
 });

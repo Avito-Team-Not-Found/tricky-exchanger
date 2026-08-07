@@ -1,0 +1,107 @@
+.item-form {
+  display: flex;
+  flex-direction: column;
+}
+
+// стандартный отступ между полями 24px — как в формах авторизации (без дополнительного flex-gap)
+.item-form .ant-form-item {
+  margin-bottom: var(--spacing-lg);
+}
+
+.item-form .ant-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.item-form__skeleton {
+  padding: var(--spacing-md) 0;
+}
+
+// фото по макету §4.3: широкая карточка 343×213, пустая — кликабельная «Добавить фото»
+.item-form__photo-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  width: 100%;
+  aspect-ratio: 343 / 213;
+  min-height: 213px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-card);
+}
+
+.item-form__photo-preview--empty {
+  border: 1px dashed var(--color-border-default);
+}
+
+.item-form__photo-preview--filled {
+  border: none;
+}
+
+.item-form__photo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.item-form__photo-add-icon {
+  font-size: 24px;
+  color: var(--color-text-secondary);
+}
+
+.item-form__photo-add {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-secondary);
+}
+
+// antd Upload оборачивает триггер в inline-обёртки (.ant-upload / .ant-upload-select),
+// которые схлопывают карточку до высоты контента — форсируем блочную ширину на всех уровнях
+.item-form__photo,
+.item-form__photo-upload,
+.item-form__photo-upload .ant-upload,
+.item-form__photo-upload .ant-upload-select {
+  width: 100%;
+}
+
+.item-form__photo-upload,
+.item-form__photo-upload .ant-upload,
+.item-form__photo-upload .ant-upload-select {
+  display: block !important;
+}
+
+// «Удалить фото» — красный (danger) и по центру под карточкой.
+// flex (а не block) обязателен: при display: block иконка и текст перестают быть flex-элементами
+// и gap не работает — они слипаются
+.item-form__photo-remove {
+  display: flex;
+  width: fit-content;
+  margin: var(--spacing-sm) auto 0;
+  // увеличенный зазор между иконкой корзины и текстом (antd по умолчанию ставит 8px)
+  gap: var(--spacing-md) !important;
+}
+
+.item-form__submit {
+  margin-top: var(--spacing-sm);
+}
+
+// заметный отступ между «Сохранить» и «Удалить товар»
+.item-form__archive {
+  margin-top: var(--spacing-md);
+}
+
+// antd v6 вешает счётчик символов вплотную к нижней грани поля — отодвигаем его и резервируем место
+.item-form .ant-input-data-count {
+  bottom: -32px;
+}
+
+.item-form .ant-input-textarea-show-count {
+  margin-bottom: var(--spacing-sm);
+}
+
+// описание растягивается по вертикали, но не выше ~8 строк
+.item-form .ant-input-textarea-show-count textarea {
+  resize: vertical;
+  max-height: 200px;
+}
