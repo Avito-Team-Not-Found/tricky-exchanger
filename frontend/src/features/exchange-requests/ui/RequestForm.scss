@@ -134,6 +134,11 @@
   margin-top: var(--spacing-sm);
 }
 
+// заметный отступ между «Сохранить запрос» и «Удалить запрос» — как в форме товара
+.request-form__remove {
+  margin-top: var(--spacing-md);
+}
+
 .request-result {
   display: flex;
   flex-direction: column;

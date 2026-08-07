@@ -1,5 +1,4 @@
-import { ArrowRightOutlined, DeleteOutlined } from '@ant-design/icons';
-import { Button } from 'antd';
+import { ArrowRightOutlined } from '@ant-design/icons';
 
 import { REQUEST_STATUS_META, type ExchangeRequest } from '@entities/exchangeRequest';
 
@@ -10,10 +9,9 @@ import './RequestCard.scss';
 interface RequestCardProps {
   request: ExchangeRequest;
   onClick: () => void;
-  onRemove?: () => void;
 }
 
-export function RequestCard({ request, onClick, onRemove }: RequestCardProps) {
+export function RequestCard({ request, onClick }: RequestCardProps) {
   const statusMeta = REQUEST_STATUS_META[request.status];
 
   return (
@@ -24,8 +22,6 @@ export function RequestCard({ request, onClick, onRemove }: RequestCardProps) {
       aria-label={`Запрос: ${request.offeredItem?.title ?? 'товар'} → ${request.wantedDescription}`}
       onClick={onClick}
       onKeyDown={(event) => {
-        // клавиши Enter/Space внутри кнопки удаления не должны открывать карточку (перехват сам делает Button)
-        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onClick();
@@ -53,18 +49,6 @@ export function RequestCard({ request, onClick, onRemove }: RequestCardProps) {
         </div>
         <StatusTag tone={statusMeta.tone}>{statusMeta.label}</StatusTag>
       </div>
-      {onRemove ? (
-        <Button
-          className="request-card__remove"
-          type="text"
-          icon={<DeleteOutlined aria-hidden />}
-          aria-label={`Удалить запрос: ${request.wantedDescription}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemove();
-          }}
-        />
-      ) : null}
     </article>
   );
 }

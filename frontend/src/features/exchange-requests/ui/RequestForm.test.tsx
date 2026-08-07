@@ -3,7 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCategories } from '@entities/category';
-import { createRequest, useRequest, type ExchangeRequest } from '@entities/exchangeRequest';
+import {
+  createRequest,
+  removeRequest,
+  useRequest,
+  type ExchangeRequest,
+} from '@entities/exchangeRequest';
 import { useItems, type Item } from '@entities/item';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
@@ -20,6 +25,7 @@ vi.mock('@entities/exchangeRequest', async (importOriginal) => {
     ...actual,
     createRequest: vi.fn(),
     updateRequest: vi.fn(),
+    removeRequest: vi.fn(),
     useRequest: vi.fn(),
   };
 });
@@ -35,6 +41,7 @@ vi.mock('@entities/category', async (importOriginal) => {
 });
 
 const mockedCreateRequest = vi.mocked(createRequest);
+const mockedRemoveRequest = vi.mocked(removeRequest);
 const mockedUseRequest = vi.mocked(useRequest);
 const mockedUseItems = vi.mocked(useItems);
 const mockedUseCategories = vi.mocked(useCategories);
@@ -70,6 +77,8 @@ const lockedRequest = {
   wantedDescription: 'Ноутбук',
   wantedProfile: null,
 } as unknown as ExchangeRequest;
+
+const liveRequest = { ...lockedRequest, status: 'ACTIVE' } as ExchangeRequest;
 
 // фильтр поиска обязателен — без него кнопка сабмита остаётся заблокированной
 async function fillWanted(user: ReturnType<typeof userEvent.setup>) {
@@ -169,5 +178,24 @@ describe('RequestForm', () => {
       screen.getByText('Заявка заблокирована и защищена от редактирования'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Сохранить запрос/ })).toBeDisabled();
+  });
+
+  it('removes the request through the confirmation modal', async () => {
+    const user = userEvent.setup();
+    mockedUseRequest.mockReturnValue(queryOk(liveRequest));
+    mockedRemoveRequest.mockResolvedValue(undefined);
+    renderWithProviders(<RequestForm requestId="req-1" />);
+
+    await user.click(screen.getByRole('button', { name: /Удалить запрос/ }));
+    await user.click(await screen.findByRole('button', { name: /Да, удалить/ }));
+
+    expect(mockedRemoveRequest).toHaveBeenCalledWith('req-1');
+  });
+
+  it('hides removal for a request that is no longer editable', () => {
+    mockedUseRequest.mockReturnValue(queryOk(lockedRequest));
+    renderWithProviders(<RequestForm requestId="req-1" />);
+
+    expect(screen.queryByRole('button', { name: /Удалить запрос/ })).not.toBeInTheDocument();
   });
 });

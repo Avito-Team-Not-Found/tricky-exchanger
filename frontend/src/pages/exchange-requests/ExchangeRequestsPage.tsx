@@ -1,10 +1,10 @@
 import { PlusOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Skeleton } from 'antd';
+import { Button, Skeleton } from 'antd';
 import { useNavigate } from 'react-router';
 
-import { RequestCard, useRemoveRequest } from '@features/exchange-requests';
+import { RequestCard } from '@features/exchange-requests';
 
-import { isRequestEditable, useRequests, type ExchangeRequest } from '@entities/exchangeRequest';
+import { useRequests } from '@entities/exchangeRequest';
 
 import { EmptyState, ErrorState } from '@shared/ui';
 
@@ -13,19 +13,6 @@ import './ExchangeRequestsPage.scss';
 export function ExchangeRequestsPage() {
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useRequests();
-  const removeRequest = useRemoveRequest();
-  const { modal } = AntApp.useApp();
-
-  function confirmRemove(request: ExchangeRequest) {
-    modal.confirm({
-      title: 'Отменить запрос?',
-      content: `Запрос «${request.wantedDescription}» будет отменён.`,
-      okText: 'Да, отменить',
-      okButtonProps: { danger: true },
-      cancelText: 'Отмена',
-      onOk: () => removeRequest.mutate(request.id),
-    });
-  }
 
   const requests = data ?? [];
 
@@ -67,9 +54,6 @@ export function ExchangeRequestsPage() {
               key={request.id}
               request={request}
               onClick={() => navigate(`/exchange-requests/${request.id}/edit`)}
-              onRemove={
-                isRequestEditable(request.status) ? () => confirmRemove(request) : undefined
-              }
             />
           ))}
         </div>

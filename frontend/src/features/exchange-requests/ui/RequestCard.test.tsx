@@ -41,18 +41,4 @@ describe('RequestCard', () => {
     await user.click(screen.getByRole('button', { name: /Запрос/ }));
     expect(onClick).toHaveBeenCalled();
   });
-
-  it('does not open the card when activating the remove button with the keyboard', async () => {
-    const user = userEvent.setup();
-    const onClick = vi.fn();
-    const onRemove = vi.fn();
-    renderWithProviders(<RequestCard request={request} onClick={onClick} onRemove={onRemove} />);
-
-    const removeButton = screen.getByRole('button', { name: /Удалить запрос/ });
-    removeButton.focus();
-    await user.keyboard('{Enter}');
-
-    expect(onRemove).toHaveBeenCalled();
-    expect(onClick).not.toHaveBeenCalled();
-  });
 });

@@ -1,12 +1,13 @@
 import { useImperativeHandle, type Ref } from 'react';
 
 import { CheckCircleFilled, LockOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Checkbox, Form, Input, Radio, Select, Skeleton } from 'antd';
+import { App as AntApp, Button, Checkbox, Form, Input, Radio, Select, Skeleton } from 'antd';
 
 import { ITEM_CONDITIONS, ITEM_STATUS_META } from '@entities/item';
 
 import { ErrorState } from '@shared/ui';
 
+import { useRemoveRequest } from '../model/useRemoveRequest';
 import { useRequestForm } from '../model/useRequestForm';
 
 import './RequestForm.scss';
@@ -23,6 +24,7 @@ interface RequestFormProps {
 }
 
 export function RequestForm({ requestId, ref }: RequestFormProps) {
+  const { modal } = AntApp.useApp();
   const {
     form,
     request,
@@ -43,8 +45,20 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
     goToList,
     goCreateItem,
   } = useRequestForm(requestId);
+  const removeRequest = useRemoveRequest(goToList);
 
   useImperativeHandle(ref, () => ({ confirmLeave }), [confirmLeave]);
+
+  function confirmRemove() {
+    modal.confirm({
+      title: 'Удалить запрос?',
+      content: `Запрос «${request?.wantedDescription ?? ''}» будет отменён и исчезнет из списка.`,
+      okText: 'Да, удалить',
+      okButtonProps: { danger: true },
+      cancelText: 'Отмена',
+      onOk: () => removeRequest.mutate(requestId as string),
+    });
+  }
 
   if (isLoading) {
     return (
@@ -204,6 +218,18 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
       >
         {isEdit ? 'Сохранить запрос' : 'Создать запрос'}
       </Button>
+      {isEdit && !readOnly ? (
+        <Button
+          className="request-form__remove"
+          danger
+          block
+          loading={removeRequest.isPending}
+          disabled={submitting}
+          onClick={confirmRemove}
+        >
+          Удалить запрос
+        </Button>
+      ) : null}
     </Form>
   );
 }

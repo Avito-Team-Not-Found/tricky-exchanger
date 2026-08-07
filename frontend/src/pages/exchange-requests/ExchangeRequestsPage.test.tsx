@@ -2,8 +2,6 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useRemoveRequest } from '@features/exchange-requests';
-
 import { useRequests, type ExchangeRequest } from '@entities/exchangeRequest';
 import type { Item } from '@entities/item';
 
@@ -20,13 +18,7 @@ vi.mock('@entities/exchangeRequest', async (importOriginal) => {
   return { ...actual, useRequests: vi.fn() };
 });
 
-vi.mock('@features/exchange-requests', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@features/exchange-requests')>();
-  return { ...actual, useRemoveRequest: vi.fn() };
-});
-
 const mockedUseRequests = vi.mocked(useRequests);
-const mockedUseRemoveRequest = vi.mocked(useRemoveRequest);
 
 function makeRequest(id: string, status: ExchangeRequest['status']): ExchangeRequest {
   return {
@@ -65,7 +57,6 @@ const requests = [
 describe('ExchangeRequestsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedUseRemoveRequest.mockReturnValue({ mutate: vi.fn() } as never);
   });
 
   it('shows the empty state with a CTA', () => {
@@ -99,24 +90,14 @@ describe('ExchangeRequestsPage', () => {
     }
   });
 
-  it('offers removal only for live requests', () => {
-    mockedUseRequests.mockReturnValue(queryOk(requests));
-    renderWithProviders(<ExchangeRequestsPage />);
-
-    // активная и «в процессе» — живой запрос можно отменить; LOCKED/DONE/REMOVED — нет
-    expect(screen.getAllByRole('button', { name: /Удалить запрос/ })).toHaveLength(2);
-  });
-
-  it('removes a request through the confirmation modal', async () => {
+  it('opens the request for editing on card click', async () => {
     const user = userEvent.setup();
-    const remove = vi.fn();
-    mockedUseRemoveRequest.mockReturnValue({ mutate: remove } as never);
-    mockedUseRequests.mockReturnValue(queryOk(requests));
-    renderWithProviders(<ExchangeRequestsPage />);
+    mockedUseRequests.mockReturnValue(queryOk([requests[0]]));
+    renderWithProviders(<ExchangeRequestsPage />, {
+      routes: [{ path: '/exchange-requests/1/edit', element: <div>edit screen</div> }],
+    });
 
-    await user.click(screen.getByRole('button', { name: /Удалить запрос: Хочу 1/ }));
-    await user.click(await screen.findByRole('button', { name: /Да, отменить/ }));
-
-    expect(remove).toHaveBeenCalledWith('1');
+    await user.click(screen.getByRole('button', { name: /Запрос/ }));
+    expect(await screen.findByText('edit screen')).toBeInTheDocument();
   });
 });

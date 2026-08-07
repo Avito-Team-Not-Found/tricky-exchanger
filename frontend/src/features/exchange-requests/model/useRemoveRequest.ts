@@ -5,7 +5,7 @@ import { removeRequest } from '@entities/exchangeRequest';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
-export function useRemoveRequest() {
+export function useRemoveRequest(onSuccess?: () => void) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
 
@@ -14,6 +14,7 @@ export function useRemoveRequest() {
     onSuccess: () => {
       message.success('Запрос отменён');
       queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
+      onSuccess?.();
     },
     onError: (error) =>
       message.error(
