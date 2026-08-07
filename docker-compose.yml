@@ -46,10 +46,36 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_ENCRYPTION: ${SMTP_ENCRYPTION:-starttls}
+      TEI_URL: ${TEI_URL:-http://tei:80}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-stub}
+      VECTOR_DIM: ${VECTOR_DIM:-384}
+      EMBEDDING_TIMEOUT: ${EMBEDDING_TIMEOUT:-2s}
+      MAX_INPUT_LENGTH: ${MAX_INPUT_LENGTH:-1500}
     depends_on:
       migrate:
         condition: service_completed_successfully
+      tei:
+        condition: service_healthy
     restart: on-failure
+
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    container_name: tricky-exchanger-tei
+    command: ["--model-id", "intfloat/multilingual-e5-small", "--huggingface-hub-cache", "/data"]
+    volumes:
+      - teidata:/data
+    ports:
+      - "${TEI_EXTERNAL_PORT:-8090}:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+
 
 volumes:
   pgdata:
+  teidata:
