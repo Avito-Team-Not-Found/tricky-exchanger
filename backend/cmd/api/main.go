@@ -72,10 +72,21 @@ func main() {
 	userH := userHandler.NewHandler(userSvc)
 
 	exchangeOfferRepository := exchangeOfferRepo.NewRepository(pool)
+
+	// Выбор embed-провайдера конфигом: tei | stub.
+	var embedClient embedding.Client
+	switch cfg.EmbeddingProvider {
+	case "tei":
+		embedClient = embedding.NewTEIClient(cfg.TEIURL, cfg.EmbeddingTimeout, cfg.MaxInputLength)
+	case "stub", "":
+		embedClient = embedding.NewStubClient()
+	default:
+		logger.Fatalf("unknown embedding provider %q", cfg.EmbeddingProvider)
+	}
+
 	exchangeOfferSvc := exchangeOfferService.NewService(
 		exchangeOfferRepository,
-		// TODO: ЭТО БЫЛО ЗАМОКАНО!!!!!
-		embedding.NewStubClient(),
+		embedClient,
 		matching.NewNoopFacade(),
 	)
 	exchangeOfferH := exchangeOfferHandler.NewHandler(exchangeOfferSvc)
