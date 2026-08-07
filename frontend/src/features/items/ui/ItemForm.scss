@@ -71,9 +71,12 @@
   display: block !important;
 }
 
-// «Удалить фото» — красный (danger) и по центру под карточкой
+// «Удалить фото» — красный (danger) и по центру под карточкой.
+// flex (а не block) обязателен: при display: block иконка и текст перестают быть flex-элементами
+// и gap не работает — они слипаются
 .item-form__photo-remove {
-  display: block;
+  display: flex;
+  width: fit-content;
   margin: var(--spacing-sm) auto 0;
   // увеличенный зазор между иконкой корзины и текстом (antd по умолчанию ставит 8px)
   gap: var(--spacing-md) !important;
