@@ -22,4 +22,5 @@ var (
 	ErrEmbeddingNotConfigured       = errors.New("клиент embeddings не настроен")
 	ErrMatchingNotConfigured        = errors.New("фасад matching не настроен")
 	ErrEmptyEmbedding               = errors.New("сервис embeddings вернул пустой вектор")
+	ErrOfferEmbeddingMissing        = errors.New("для предлагаемого товара не сформирован embedding")
 )

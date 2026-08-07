@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	clusterrepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/cluster"
 	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
 
@@ -18,12 +19,13 @@ import (
 // Инвалидация кандидатных цепочек выполняется здесь же, поэтому новая версия
 // заявки не может быть сохранена при активной цепочке со старой версией.
 type Postgres struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	clusters *clusterrepo.Postgres
 }
 
 // NewRepository создаёт репозиторий заявок на обмен на базе пула PostgreSQL.
 func NewRepository(pool *pgxpool.Pool) *Postgres {
-	return &Postgres{pool: pool}
+	return &Postgres{pool: pool, clusters: clusterrepo.NewRepository(pool)}
 }
 
 // Create сохраняет новую активную заявку после проверки предлагаемого товара.
@@ -65,6 +67,10 @@ func (r *Postgres) Create(ctx context.Context, request entity.ExchangeOffer) (en
 	)
 	if err != nil {
 		return entity.ExchangeOffer{}, fmt.Errorf("insert exchange request: %w", err)
+	}
+
+	if err := r.clusters.Synchronize(ctx, tx, created.ID); err != nil {
+		return entity.ExchangeOffer{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -191,6 +197,9 @@ func (r *Postgres) Update(ctx context.Context, request entity.ExchangeOffer, exp
 	if err := invalidateCandidateChains(ctx, tx, updated.ID, "request_changed"); err != nil {
 		return entity.ExchangeOffer{}, err
 	}
+	if err := r.clusters.Synchronize(ctx, tx, updated.ID); err != nil {
+		return entity.ExchangeOffer{}, err
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return entity.ExchangeOffer{}, fmt.Errorf("commit update exchange request: %w", err)
@@ -229,6 +238,9 @@ func (r *Postgres) Archive(ctx context.Context, userID string, requestID, expect
 	}
 
 	if err := invalidateCandidateChains(ctx, tx, archived.ID, "request_archived"); err != nil {
+		return entity.ExchangeOffer{}, err
+	}
+	if err := r.clusters.Remove(ctx, tx, archived.ID); err != nil {
 		return entity.ExchangeOffer{}, err
 	}
 
