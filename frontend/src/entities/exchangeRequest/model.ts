@@ -1,4 +1,4 @@
-import type { Item, ItemCondition } from '@entities/item';
+import type { Item } from '@entities/item';
 
 import type { StatusTone } from '@shared/ui';
 
@@ -6,7 +6,6 @@ export type RequestStatus = 'ACTIVE' | 'IN_PROPOSAL' | 'LOCKED' | 'DONE' | 'REMO
 
 export interface WantedProfile {
   categoryId?: string | null;
-  acceptableCondition?: ItemCondition[] | null;
 }
 
 export interface ExchangeRequest {

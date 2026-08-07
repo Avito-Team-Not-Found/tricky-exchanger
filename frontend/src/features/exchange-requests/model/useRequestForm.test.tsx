@@ -43,9 +43,13 @@ const mockedUseRequest = vi.mocked(useRequest);
 const mockedUseItems = vi.mocked(useItems);
 const mockedUseCategories = vi.mocked(useCategories);
 
+// wrapper замыкает module-скоп queryClient — пересоздаём его в beforeEach, чтобы кеш и спайки
+// не текли между тестами (и можно было спаять инвалидацию на текущем инстансе)
+let queryClient = createTestQueryClient();
+
 function wrapper({ children }: { children: ReactNode }) {
   return (
-    <QueryClientProvider client={createTestQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <AntApp>
         <MemoryRouter>{children}</MemoryRouter>
       </AntApp>
@@ -58,7 +62,6 @@ const activeItem = {
   title: 'Комбайн',
   description: 'Мощный',
   categoryId: null,
-  condition: 'USED',
   color: null,
   material: null,
   attributes: null,
@@ -67,6 +70,15 @@ const activeItem = {
   createdAt: '',
   updatedAt: '',
 } as Item;
+
+const editableRequest = {
+  id: 'req-1',
+  status: 'IN_PROPOSAL',
+  offeredItemId: 'item-1',
+  offeredItem: { id: 'item-1', title: 'Комбайн' },
+  wantedDescription: 'Ноутбук',
+  wantedProfile: null,
+} as unknown as ExchangeRequest;
 
 const lockedRequest = {
   id: 'req-1',
@@ -80,6 +92,7 @@ const lockedRequest = {
 describe('useRequestForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient = createTestQueryClient();
     mockedUseItems.mockReturnValue(queryOk([activeItem]));
     mockedUseCategories.mockReturnValue(queryOk([{ id: 'electronics', name: 'Электроника' }]));
     mockedUseRequest.mockReturnValue(queryOk(undefined));
@@ -97,14 +110,13 @@ describe('useRequestForm', () => {
         offeredItemId: 'item-1',
         wantedDescription: 'Ноутбук',
         categoryId: 'electronics',
-        acceptableCondition: ['NEW'],
       });
     });
 
     expect(mockedCreateRequest).toHaveBeenCalledWith({
       offeredItemId: 'item-1',
       wantedDescription: 'Ноутбук',
-      wantedProfile: { categoryId: 'electronics', acceptableCondition: ['NEW'] },
+      wantedProfile: { categoryId: 'electronics' },
     });
     expect(result.current.result?.matching.createdCandidateChains).toBe(3);
   });
@@ -116,6 +128,26 @@ describe('useRequestForm', () => {
     expect(result.current.readOnly).toBe(true);
     expect(result.current.readOnlyReason).toBe('LOCKED');
     expect(result.current.canSubmit).toBe(false);
+  });
+
+  // правка заявки пересчитывает цепочки на сервере: кроме списка заявок нужно
+  // инвалидировать и кеш цепочек — иначе «Варианты обмена» ещё минуту держат старые
+  it('invalidates exchange requests and chains after an update', async () => {
+    mockedUseRequest.mockReturnValue(queryOk(editableRequest));
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useRequestForm('req-1'), { wrapper });
+
+    await act(async () => {
+      await result.current.handleSubmit({
+        offeredItemId: 'item-1',
+        wantedDescription: 'Фотоаппарат',
+        categoryId: 'electronics',
+      });
+    });
+
+    const keys = invalidate.mock.calls.map(([options]) => options?.queryKey);
+    expect(keys).toContainEqual(['exchange-requests']);
+    expect(keys).toContainEqual(['chains']);
   });
 
   // диалог ухода отправлял значения формы без валидации: незаполненная форма уезжала на сервер

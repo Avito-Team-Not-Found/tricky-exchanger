@@ -51,7 +51,6 @@ const items = [
     id: 'item-1',
     title: 'Кухонный комбайн',
     description: 'Мощный',
-    condition: 'USED',
     color: 'white',
     material: 'plastic',
     image: null,
@@ -61,7 +60,6 @@ const items = [
     id: 'item-2',
     title: 'Велосипед',
     description: 'Городской',
-    condition: 'USED',
     color: 'blue',
     material: 'steel',
     image: 'bike.png',
@@ -85,7 +83,6 @@ async function fillWanted(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
   await user.click(screen.getByRole('combobox'));
   await user.click(await screen.findByText('Электроника'));
-  await user.click(screen.getByRole('checkbox', { name: 'Новый' }));
 }
 
 describe('RequestForm', () => {
@@ -117,7 +114,7 @@ describe('RequestForm', () => {
       expect.objectContaining({
         offeredItemId: 'item-1',
         wantedDescription: 'Ноутбук',
-        wantedProfile: { categoryId: 'electronics', acceptableCondition: ['NEW'] },
+        wantedProfile: { categoryId: 'electronics' },
       }),
     );
   });
@@ -139,6 +136,24 @@ describe('RequestForm', () => {
     ).toBeInTheDocument();
   });
 
+  it('leads to the exchange options when chains are found', async () => {
+    const user = userEvent.setup();
+    mockedCreateRequest.mockResolvedValue({
+      request: { id: 'req-2', status: 'IN_PROPOSAL' } as unknown as ExchangeRequest,
+      matching: { createdCandidateChains: 2 },
+    });
+    renderWithProviders(<RequestForm />, {
+      routes: [{ path: '/exchange-requests/req-2', element: <div>chains screen</div> }],
+    });
+
+    await user.click(screen.getByText('Кухонный комбайн'));
+    await fillWanted(user);
+    await user.click(screen.getByRole('button', { name: /Создать запрос/ }));
+    await user.click(await screen.findByRole('button', { name: /Посмотреть цепочки/ }));
+
+    expect(await screen.findByText('chains screen')).toBeInTheDocument();
+  });
+
   it('keeps submit disabled until the search filter is filled', async () => {
     const user = userEvent.setup();
     renderWithProviders(<RequestForm />);
@@ -149,7 +164,6 @@ describe('RequestForm', () => {
 
     await user.click(screen.getByRole('combobox'));
     await user.click(await screen.findByText('Электроника'));
-    await user.click(screen.getByRole('checkbox', { name: 'Новый' }));
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeEnabled();
   });
 

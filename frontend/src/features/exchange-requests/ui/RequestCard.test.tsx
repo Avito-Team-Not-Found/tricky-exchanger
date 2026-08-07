@@ -17,7 +17,6 @@ const request = {
     title: 'Комбайн',
     description: '',
     categoryId: null,
-    condition: 'USED',
     color: null,
     material: null,
     attributes: null,

@@ -14,8 +14,8 @@ const TITLE_LIMIT = 100;
 const DESCRIPTION_LIMIT = 500;
 const RECOVERY_CODE_TTL_MS = 10 * 60 * 1000;
 
-// Контракт PROJECT.md §4.2–4.3: значения enum'ов согласованы и для товаров, и для заявок
-const ITEM_CONDITIONS = ['NEW', 'LIKE_NEW', 'USED', 'NEEDS_REPAIR'];
+// Время на ответ по кандидатной цепочке — мок даёт его с запасом, чтобы таймер в UI был живым
+const RESPONSE_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 // Справочник категорий не входит в согласованный контракт (PROJECT.md §2.3) — мок отдаёт
 // статичный каталог, чтобы форму заявки можно было заполнить целиком
@@ -74,7 +74,6 @@ function publicItem(item) {
     title: item.title,
     description: item.description,
     categoryId: item.categoryId ?? null,
-    condition: item.condition,
     color: item.color ?? null,
     material: item.material ?? null,
     attributes: item.attributes ?? null,
@@ -98,19 +97,82 @@ function publicRequest(request, offeredItem) {
   };
 }
 
-function publicChain(chain) {
+function toOfferRef(item) {
+  return { id: item.id, title: item.title, image: item.image ?? null };
+}
+
+// Публичный участник цепочки: userId/name нужны для аватаров, isCurrentUser — «это я?» (макет §4.8).
+// offeredItem — товар участника: ref { id, title, image } + описание/характеристики из каталога,
+// чтобы экран товара цепочки (макет 4.7) не ходил за ними отдельным запросом.
+function publicParticipant(participant, userId, db) {
+  const offered = participant.offeredItem;
+  const item = offered ? db.get('items').getById(offered.id).value() : null;
+  const image = offered?.image ?? item?.image ?? null;
   return {
-    id: chain.id,
-    requestId: chain.requestId,
-    length: chain.length,
-    successProbability: chain.successProbability,
-    selected: chain.selected,
-    participants: chain.participants,
+    position: participant.position,
+    requestId: participant.requestId ?? null,
+    isCurrentUser: participant.userId === userId,
+    user: { id: participant.userId, name: participant.name },
+    offeredItem: offered
+      ? {
+          id: offered.id,
+          title: offered.title,
+          image,
+          description: item?.description ?? null,
+          categoryId: item?.categoryId ?? null,
+          color: item?.color ?? null,
+          material: item?.material ?? null,
+          attributes: item?.attributes ?? null,
+        }
+      : null,
+    receivesFromPosition: participant.receivesFromPosition,
+    responseStatus: participant.responseStatus ?? null,
+    freezeVoteStatus: participant.freezeVoteStatus ?? null,
   };
 }
 
-function toOfferRef(item) {
-  return { id: item.id, title: item.title };
+function chainReadiness(chain) {
+  const total = chain.participants.length;
+  const accepted = chain.participants.filter((p) => p.responseStatus === 'ACCEPTED').length;
+  return { accepted, total, ready: total > 0 && accepted === total };
+}
+
+// Права зависят от зрителя и не дублируют бизнес-логику на фронте: флаги считает бэкенд (PROJECT.md §4.4).
+// Выбор цепочки делает владелец заявки; ответить может любой участник, ещё не ответивший и не просрочивший дедлайн.
+function chainPermissions(chain, db, userId) {
+  const request = chain.requestId
+    ? db.get('exchangeRequests').getById(chain.requestId).value()
+    : null;
+  const isOwner = Boolean(request && request.userId === userId);
+  const myParticipant = chain.participants.find((p) => p.userId === userId);
+  const deadlinePassed = Boolean(
+    chain.responseDeadlineAt && new Date(chain.responseDeadlineAt) <= new Date(),
+  );
+  return {
+    canRespond:
+      chain.status === 'CANDIDATE' &&
+      Boolean(myParticipant) &&
+      myParticipant.responseStatus == null &&
+      !deadlinePassed,
+    // выбор не эксклюзивен и не требует собранной цепочки: владелец отмечает любые варианты (макет 4.6)
+    canSelect: chain.status === 'CANDIDATE' && isOwner,
+    canDeselect: chain.status === 'PROPOSED' && isOwner,
+    canVote: false,
+    canRequestReplacement: false,
+  };
+}
+
+function publicChain(chain, db, userId) {
+  return {
+    id: chain.id,
+    requestId: chain.requestId,
+    status: chain.status,
+    score: chain.score,
+    responseDeadlineAt: chain.responseDeadlineAt ?? null,
+    freezeDeadlineAt: chain.freezeDeadlineAt ?? null,
+    participants: chain.participants.map((p) => publicParticipant(p, userId, db)),
+    viewerPermissions: chainPermissions(chain, db, userId),
+  };
 }
 
 // Закольцовываем цепочку: владелец хочет товар первого участника, последний участник хочет товар владельца.
@@ -128,18 +190,27 @@ function buildParticipants(request, offeredItem, others, usersById, offset, othe
 
   const participants = [
     {
+      position: 1,
+      requestId: request.id,
       userId: owner.id,
       name: owner.name,
-      offers: toOfferRef(offeredItem),
-      wants: toOfferRef(picks[0]),
+      offeredItem: toOfferRef(offeredItem),
+      receivesFromPosition: 2,
+      responseStatus: null,
+      freezeVoteStatus: null,
     },
   ];
   picks.forEach((pick, i) => {
     participants.push({
+      position: i + 2,
+      requestId: null,
       userId: pick.userId,
       name: usersById[pick.userId].name,
-      offers: toOfferRef(pick),
-      wants: toOfferRef(i === picks.length - 1 ? offeredItem : picks[i + 1]),
+      offeredItem: toOfferRef(pick),
+      receivesFromPosition: i === picks.length - 1 ? 1 : i + 3,
+      // остальные участники уже согласились: иначе в моке цепочку нельзя собрать (отвечать может только владелец заявки)
+      responseStatus: 'ACCEPTED',
+      freezeVoteStatus: null,
     });
   });
 
@@ -163,14 +234,16 @@ function generateChains(db, request) {
 
   const distinctUsers = new Set(others.map((i) => i.userId)).size;
   const probabilities = [90, 72, 55];
+  const now = Date.now();
   return probabilities
     .slice(0, Math.min(others.length, distinctUsers))
     .map((probability, chainIndex) => ({
       id: randomUUID(),
       requestId: request.id,
-      length: chainIndex + 2,
-      successProbability: probability,
-      selected: false,
+      status: 'CANDIDATE',
+      score: probability / 100,
+      responseDeadlineAt: new Date(now + RESPONSE_WINDOW_MS).toISOString(),
+      freezeDeadlineAt: null,
       participants: buildParticipants(
         request,
         offeredItem,
@@ -179,7 +252,7 @@ function generateChains(db, request) {
         matchIndex + chainIndex,
         chainIndex + 1,
       ),
-      createdAt: new Date().toISOString(),
+      createdAt: new Date(now).toISOString(),
     }));
 }
 
@@ -201,11 +274,6 @@ function parseItemFields(body, { partial = false } = {}) {
     }
     patch.description = description;
   }
-  if (has('condition')) {
-    const condition = String(body.condition);
-    if (!ITEM_CONDITIONS.includes(condition)) return { error: 'Неизвестное состояние товара' };
-    patch.condition = condition;
-  }
   if (has('color')) {
     // пустой/отсутствующий материал фронт шлёт как null — не превращать его в строку "null"
     const color = body.color == null ? '' : String(body.color).trim();
@@ -225,7 +293,6 @@ function parseItemFields(body, { partial = false } = {}) {
 
   if (!partial && !patch.title) return { error: 'Название обязательно' };
   if (!partial && !patch.description) return { error: 'Описание обязательно' };
-  if (!partial && !patch.condition) return { error: 'Состояние обязательно' };
   return { patch };
 }
 
@@ -240,12 +307,6 @@ function parseWantedProfile(profile) {
     const categoryId = String(profile.categoryId).trim();
     if (!categoryId) return undefined;
     result.categoryId = categoryId;
-  }
-  if (profile.acceptableCondition != null) {
-    if (!Array.isArray(profile.acceptableCondition)) return undefined;
-    if (profile.acceptableCondition.length === 0) return undefined;
-    if (!profile.acceptableCondition.every((c) => ITEM_CONDITIONS.includes(c))) return undefined;
-    result.acceptableCondition = profile.acceptableCondition;
   }
   if (Object.keys(result).length === 0) return null;
   return result;
@@ -602,33 +663,122 @@ export function createMockApp({
     res.json({ message: 'deleted' });
   });
 
+  // Цепочки пользователя (PROJECT.md §4.4): свои кандидаты и активные сделки; ?status — фильтр через запятую
+  server.get('/api/v1/chains', (req, res) => {
+    let chains = db
+      .get('chains')
+      .filter((c) => c.participants.some((p) => p.userId === req.userId))
+      .value();
+    if (req.query.status) {
+      const statuses = String(req.query.status).split(',');
+      chains = chains.filter((c) => statuses.includes(c.status));
+    }
+    res.json(chains.map((c) => publicChain(c, db, req.userId)));
+  });
+
+  // Полная карточка цепочки: participants + viewerPermissions — источник правды для действий (PROJECT.md §4.4)
+  server.get('/api/v1/chains/:chainId', (req, res) => {
+    const chain = db.get('chains').getById(req.params.chainId).value();
+    if (!chain) return fail(res, 404, 'Цепочка не найдена');
+    const request = chain.requestId
+      ? db.get('exchangeRequests').getById(chain.requestId).value()
+      : null;
+    const isParticipant = chain.participants.some((p) => p.userId === req.userId);
+    if (!isParticipant && (!request || request.userId !== req.userId)) {
+      return fail(res, 403, 'Вы не участник цепочки');
+    }
+    res.json(publicChain(chain, db, req.userId));
+  });
+
   server.get('/api/v1/exchange-requests/:id/chains', (req, res) => {
     const request = db.get('exchangeRequests').getById(req.params.id).value();
     if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
 
     const chains = db
       .get('chains')
-      .filter((c) => c.requestId === request.id)
+      .filter((c) => c.requestId === request.id && c.status !== 'CANCELLED')
       .value()
-      .sort((a, b) => b.successProbability - a.successProbability);
-    res.json(chains.map(publicChain));
+      .sort((a, b) => b.score - a.score);
+    res.json(chains.map((c) => publicChain(c, db, req.userId)));
   });
 
-  // Выбор цепочки блокирует заявку: дальше согласование участников без правок условий (PROJECT.md §4.4)
-  server.post('/api/v1/chains/:chainId/select', (req, res) => {
+  const respondToChain = (kind) => (req, res) => {
     const chain = db.get('chains').getById(req.params.chainId).value();
     if (!chain) return fail(res, 404, 'Цепочка не найдена');
-    const request = db.get('exchangeRequests').getById(chain.requestId).value();
-    if (!request || request.userId !== req.userId) return fail(res, 403, 'Вы не участник цепочки');
-    if (request.status !== 'ACTIVE' && request.status !== 'IN_PROPOSAL') {
-      return fail(res, 409, 'Заявка уже в финальном статусе');
+    const participant = chain.participants.find((p) => p.userId === req.userId);
+    if (!participant) return fail(res, 403, 'Вы не участник цепочки');
+    if (chain.status !== 'CANDIDATE') return fail(res, 409, 'Цепочка уже перешла в другой статус');
+    if (participant.responseStatus) return fail(res, 409, 'Вы уже ответили на отклик');
+    // дедлайн ответа уже прошёл — отклик не принимается (PROJECT.md §4.4, ошибка 410);
+    // фронт прячет кнопку по canRespond, но прямой вызов API должен получать тот же результат
+    if (chain.responseDeadlineAt && new Date(chain.responseDeadlineAt) <= new Date()) {
+      return fail(res, 410, 'Время на ответ истекло');
     }
 
-    db.get('chains').updateById(chain.id, { selected: true }).write();
-    db.get('exchangeRequests').updateById(chain.requestId, { status: 'LOCKED' }).write();
-    // выбор цепочки резервирует участие товара в ней на время согласования (PROJECT.md §1)
-    db.get('items').updateById(request.offeredItemId, { status: 'RESERVED' }).write();
-    res.json({ id: chain.id, selected: true });
+    const responseStatus = kind === 'accept' ? 'ACCEPTED' : 'DECLINED';
+    const participants = chain.participants.map((p) =>
+      p.userId === req.userId ? { ...p, responseStatus } : p,
+    );
+    db.get('chains').updateById(chain.id, { participants }).write();
+    const updated = db.get('chains').getById(chain.id).value();
+    const { ready } = chainReadiness(updated);
+    res.json({ chainId: updated.id, status: updated.status, isReadyForSelection: ready });
+  };
+
+  server.post('/api/v1/chains/:chainId/responses/accept', respondToChain('accept'));
+  server.post('/api/v1/chains/:chainId/responses/decline', respondToChain('decline'));
+
+  server.get('/api/v1/chains/:chainId/responses', (req, res) => {
+    const chain = db.get('chains').getById(req.params.chainId).value();
+    if (!chain) return fail(res, 404, 'Цепочка не найдена');
+    if (!chain.participants.some((p) => p.userId === req.userId)) {
+      return fail(res, 403, 'Вы не участник цепочки');
+    }
+    res.json(
+      chain.participants.map((p) => ({
+        requestId: p.requestId ?? null,
+        responseStatus: p.responseStatus ?? null,
+      })),
+    );
+  });
+
+  // Выбор цепочки владельцем заявки (PROJECT.md §4.5). Выбор не эксклюзивен: владелец может
+  // отметить любое количество вариантов, остальные цепочки и заявка при этом не блокируются.
+  // общая проверка доступа для выбора и его отмены; отвечает ошибкой и возвращает null, если доступа нет
+  const selectableChain = (req, res) => {
+    const chain = db.get('chains').getById(req.params.chainId).value();
+    if (!chain) {
+      fail(res, 404, 'Цепочка не найдена');
+      return null;
+    }
+    const request = db.get('exchangeRequests').getById(chain.requestId).value();
+    if (!request || request.userId !== req.userId) {
+      fail(res, 403, 'Вы не владелец заявки');
+      return null;
+    }
+    if (request.status !== 'ACTIVE' && request.status !== 'IN_PROPOSAL') {
+      fail(res, 409, 'Заявка уже в финальном статусе');
+      return null;
+    }
+    return chain;
+  };
+
+  server.post('/api/v1/chains/:chainId/select', (req, res) => {
+    const chain = selectableChain(req, res);
+    if (!chain) return;
+    if (chain.status !== 'CANDIDATE') return fail(res, 409, 'Цепочка уже выбрана');
+
+    db.get('chains').updateById(chain.id, { status: 'PROPOSED' }).write();
+    res.json({ id: chain.id, status: 'PROPOSED' });
+  });
+
+  server.delete('/api/v1/chains/:chainId/select', (req, res) => {
+    const chain = selectableChain(req, res);
+    if (!chain) return;
+    if (chain.status !== 'PROPOSED') return fail(res, 409, 'Цепочка не была выбрана');
+
+    db.get('chains').updateById(chain.id, { status: 'CANDIDATE' }).write();
+    res.json({ id: chain.id, status: 'CANDIDATE' });
   });
 
   server.use('/api/v1', (req, res) => fail(res, 404, 'Эндпоинт не найден'));

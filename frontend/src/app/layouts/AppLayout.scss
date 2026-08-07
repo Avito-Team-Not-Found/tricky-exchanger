@@ -6,6 +6,11 @@
   padding-bottom: calc(60px + env(safe-area-inset-bottom));
 }
 
+/* на полноэкранных экранах меню нет — освободившееся место отдаём контенту */
+.app-layout--full-screen {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 .app-header {
   position: sticky;
   top: 0;
@@ -37,6 +42,13 @@
 .app-content {
   flex: 1;
   min-width: 0;
+}
+
+/* колонка, чтобы экран цепочки мог растянуться на всю высоту и прижать кнопку к низу (макет 4.8);
+   другим экранам блочная разметка не мешает — flex оставляем только полноэкранным */
+.app-layout--full-screen .app-content {
+  display: flex;
+  flex-direction: column;
 }
 
 .app-side-menu {

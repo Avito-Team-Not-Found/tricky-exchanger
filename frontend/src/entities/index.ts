@@ -1,12 +1,10 @@
 export type { User } from './user';
 
 export {
-  ITEM_CONDITIONS,
   ITEM_STATUS_META,
   useItem,
   useItems,
   type Item,
-  type ItemCondition,
   type ItemPayload,
   type ItemStatus,
 } from './item';
@@ -25,3 +23,21 @@ export {
 } from './exchangeRequest';
 
 export { useCategories, type Category } from './category';
+
+export {
+  chainReadiness,
+  myParticipant,
+  participantAlias,
+  receivesItem,
+  RESPONSE_STATUS_META,
+  useChain,
+  useRequestChains,
+  type Chain,
+  type ChainParticipant,
+  type ParticipantAlias,
+  type ChainPermissions,
+  type ChainResponseResult,
+  type ChainStatus,
+  type FreezeVoteStatus,
+  type ResponseStatus,
+} from './chain';

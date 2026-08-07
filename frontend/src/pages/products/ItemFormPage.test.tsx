@@ -26,7 +26,6 @@ const item = {
   title: 'Комбайн',
   description: 'Мощный',
   categoryId: null,
-  condition: 'USED',
   color: 'white',
   material: 'plastic',
   attributes: null,
