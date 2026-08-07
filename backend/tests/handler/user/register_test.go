@@ -27,6 +27,10 @@ type fakeService struct {
 	meErr  error
 
 	changePasswordErr error
+
+	sendRecoveryCodeErr   error
+	verifyRecoveryCodeErr error
+	resetPasswordErr      error
 }
 
 func (f *fakeService) Register(_ context.Context, fullName, email, _ string) (*entity.User, string, error) {
@@ -57,6 +61,18 @@ func (f *fakeService) ChangePassword(_ context.Context, _ uuid.UUID, _, _ string
 	return f.changePasswordErr
 }
 
+func (f *fakeService) SendRecoveryCode(_ context.Context, _ string) error {
+	return f.sendRecoveryCodeErr
+}
+
+func (f *fakeService) VerifyRecoveryCode(_ context.Context, _, _ string) error {
+	return f.verifyRecoveryCodeErr
+}
+
+func (f *fakeService) ResetPassword(_ context.Context, _, _, _ string) error {
+	return f.resetPasswordErr
+}
+
 // fakeParser — заглушка middleware.TokenParser: не проверяет строку токена,
 // просто возвращает предопределённые userID/err.
 type fakeParser struct {
@@ -79,6 +95,11 @@ func newEngine(svc *fakeService) *gin.Engine {
 	protected.GET("/me", h.Me)
 	protected.POST("/change-password", h.ChangePassword)
 	protected.POST("/logout", h.Logout)
+
+	recovery := engine.Group("/api/v1/account/password-recovery")
+	recovery.POST("/send-code/", h.SendRecoveryCode)
+	recovery.POST("/verify-code/", h.VerifyRecoveryCode)
+	recovery.POST("/reset-password/", h.ResetPassword)
 
 	return engine
 }

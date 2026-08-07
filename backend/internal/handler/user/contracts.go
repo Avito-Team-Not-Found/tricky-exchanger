@@ -15,4 +15,8 @@ type Service interface {
 	Login(ctx context.Context, email, password string) (*entity.User, string, error)
 	Me(ctx context.Context, userID uuid.UUID) (*entity.User, error)
 	ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
+
+	SendRecoveryCode(ctx context.Context, email string) error
+	VerifyRecoveryCode(ctx context.Context, email, code string) error
+	ResetPassword(ctx context.Context, email, code, newPassword string) error
 }

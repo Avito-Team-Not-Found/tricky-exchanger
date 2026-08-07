@@ -34,6 +34,18 @@ func (stubUserService) ChangePassword(_ context.Context, _ uuid.UUID, _, _ strin
 	return nil
 }
 
+func (stubUserService) SendRecoveryCode(_ context.Context, _ string) error {
+	return nil
+}
+
+func (stubUserService) VerifyRecoveryCode(_ context.Context, _, _ string) error {
+	return nil
+}
+
+func (stubUserService) ResetPassword(_ context.Context, _, _, _ string) error {
+	return nil
+}
+
 // stubTokenParser — заглушка middleware.TokenParser для тестов роутера.
 type stubTokenParser struct{}
 
@@ -108,6 +120,27 @@ func TestMe_WithAuth(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d with Authorization header, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestPasswordRecovery_RoutesRegistered(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+
+	for _, path := range []string{
+		"/api/v1/account/password-recovery/send-code/",
+		"/api/v1/account/password-recovery/verify-code/",
+		"/api/v1/account/password-recovery/reset-password/",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		rec := httptest.NewRecorder()
+
+		engine.ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusNotFound {
+			t.Fatalf("expected %s to be registered, got 404", path)
+		}
 	}
 }
 
