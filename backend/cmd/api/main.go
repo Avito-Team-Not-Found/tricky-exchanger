@@ -23,6 +23,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/reservation"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/storage"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
 	exchangeOfferRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/exchange_offer"
 	itemRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/item"
@@ -95,8 +96,19 @@ func main() {
 	)
 	exchangeOfferH := exchangeOfferHandler.NewHandler(exchangeOfferSvc)
 
+	imageStorage, err := storage.New(ctx, storage.Config{
+		Endpoint:  cfg.MinIOEndpoint,
+		AccessKey: cfg.MinIOAccessKey,
+		SecretKey: cfg.MinIOSecretKey,
+		Bucket:    cfg.MinIOBucket,
+		UseSSL:    cfg.MinIOUseSSL,
+	})
+	if err != nil {
+		logger.Fatalf("minio storage init error: %v", err)
+	}
+
 	itemRepository := itemRepo.NewRepository(pool)
-	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker())
+	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker(), imageStorage)
 	itemH := itemHandler.NewHandler(itemSvc)
 
 	engine := router.New(tokenService, pingHandler, userH, exchangeOfferH, itemH)
