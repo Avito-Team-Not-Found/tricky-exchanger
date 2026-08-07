@@ -17,6 +17,8 @@ import (
 	appLogger "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/logger"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/codestore"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
 	userRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/user"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
@@ -50,7 +52,15 @@ func main() {
 
 	tokenService := token.NewService(cfg.JWTSecret, cfg.JWTTokenTTL)
 	userRepository := userRepo.NewRepository(pool)
-	userSvc := userService.NewService(userRepository, tokenService)
+	codeStore := codestore.New()
+	mailerSvc := mailer.NewService(mailer.Config{
+		Host:     cfg.SMTPHost,
+		Port:     cfg.SMTPPort,
+		Username: cfg.SMTPUsername,
+		Password: cfg.SMTPPassword,
+		From:     cfg.SMTPFrom,
+	})
+	userSvc := userService.NewService(userRepository, tokenService, codeStore, mailerSvc, cfg.RecoveryCodeTTL)
 	userH := userHandler.NewHandler(userSvc)
 
 	engine := router.New(tokenService, pingHandler, userH)

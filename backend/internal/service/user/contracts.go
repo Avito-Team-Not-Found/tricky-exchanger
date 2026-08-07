@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -21,4 +22,18 @@ type Repository interface {
 // Реализация лежит в internal/infrastructure/token.
 type TokenIssuer interface {
 	Generate(userID uuid.UUID) (string, error)
+}
+
+// CodeStore — то, что service/user ожидает от хранилища кодов восстановления пароля.
+// Реализация лежит в internal/infrastructure/codestore.
+type CodeStore interface {
+	Save(key, value string, ttl time.Duration)
+	Get(key string) (string, bool)
+	Delete(key string)
+}
+
+// Mailer — то, что service/user ожидает от инфраструктуры отправки почты.
+// Реализация лежит в internal/infrastructure/mailer.
+type Mailer interface {
+	SendRecoveryCode(to, code string) error
 }

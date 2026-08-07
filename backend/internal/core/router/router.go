@@ -44,6 +44,12 @@ func New(tokenParser middleware.TokenParser, pingH *PingHandler, userH *userHand
 			authProtected.POST("/change-password", userH.ChangePassword)
 		}
 
+		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен
+		recovery := api.Group("/account/password-recovery")
+		recovery.POST("/send-code/", userH.SendRecoveryCode)
+		recovery.POST("/verify-code/", userH.VerifyRecoveryCode)
+		recovery.POST("/reset-password/", userH.ResetPassword)
+
 		// сюда команда добавляет маршруты своих фич по мере готовности, например:
 		//
 		// products

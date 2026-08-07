@@ -9,6 +9,9 @@ import (
 // jwtTokenTTL — время жизни сессионного JWT (PROJECT.md §3.2: "время жизни токена — 24 часа").
 const jwtTokenTTL = 24 * time.Hour
 
+// recoveryCodeTTL — время жизни кода восстановления пароля (PROJECT.md §4.1: "живёт 10 минут").
+const recoveryCodeTTL = 10 * time.Minute
+
 // Config содержит конфигурацию приложения.
 type Config struct {
 	DatabaseURL string
@@ -16,6 +19,16 @@ type Config struct {
 	LogLevel    string
 	JWTSecret   string
 	JWTTokenTTL time.Duration
+
+	// SMTP* — настройки почтового сервера для отправки кода восстановления пароля.
+	// Намеренно не required: без них поднимется весь остальной бэкенд, а сломается
+	// только сама отправка письма (see mailer.ErrNotConfigured).
+	SMTPHost        string
+	SMTPPort        string
+	SMTPUsername    string
+	SMTPPassword    string
+	SMTPFrom        string
+	RecoveryCodeTTL time.Duration
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -36,6 +49,13 @@ func Load() (*Config, error) {
 		LogLevel:    envOrDefault("LOG_LEVEL", "info"),
 		JWTSecret:   jwtSecret,
 		JWTTokenTTL: jwtTokenTTL,
+
+		SMTPHost:        envOrDefault("SMTP_HOST", ""),
+		SMTPPort:        envOrDefault("SMTP_PORT", "587"),
+		SMTPUsername:    envOrDefault("SMTP_USERNAME", ""),
+		SMTPPassword:    envOrDefault("SMTP_PASSWORD", ""),
+		SMTPFrom:        envOrDefault("SMTP_FROM", ""),
+		RecoveryCodeTTL: recoveryCodeTTL,
 	}, nil
 }
 

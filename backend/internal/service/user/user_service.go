@@ -2,8 +2,13 @@ package user
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,12 +19,15 @@ import (
 )
 
 type Service struct {
-	repo   Repository
-	tokens TokenIssuer
+	repo            Repository
+	tokens          TokenIssuer
+	codes           CodeStore
+	mailer          Mailer
+	recoveryCodeTTL time.Duration
 }
 
-func NewService(repo Repository, tokens TokenIssuer) *Service {
-	return &Service{repo: repo, tokens: tokens}
+func NewService(repo Repository, tokens TokenIssuer, codes CodeStore, mailer Mailer, recoveryCodeTTL time.Duration) *Service {
+	return &Service{repo: repo, tokens: tokens, codes: codes, mailer: mailer, recoveryCodeTTL: recoveryCodeTTL}
 }
 
 // Register создаёт нового пользователя и сразу выпускает для него сессионный токен
@@ -116,4 +124,95 @@ func (s *Service) ChangePassword(ctx context.Context, userID uuid.UUID, currentP
 	}
 
 	return nil
+}
+
+// SendRecoveryCode генерирует 6-значный код восстановления пароля, сохраняет его
+// хэш во временном хранилище (см. CodeStore) и отправляет код на почту.
+// PROJECT.md §4.1: 404, если email не зарегистрирован.
+func (s *Service) SendRecoveryCode(ctx context.Context, email string) error {
+	if _, err := s.repo.GetByEmail(ctx, email); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return entity.ErrUserNotFound
+		}
+		return fmt.Errorf("get user by email: %w", err)
+	}
+
+	code, err := generateRecoveryCode()
+	if err != nil {
+		return fmt.Errorf("generate recovery code: %w", err)
+	}
+
+	s.codes.Save(recoveryCodeKey(email), hashRecoveryCode(code), s.recoveryCodeTTL)
+
+	if err := s.mailer.SendRecoveryCode(email, code); err != nil {
+		return fmt.Errorf("send recovery code: %w", err)
+	}
+
+	return nil
+}
+
+// VerifyRecoveryCode проверяет код, не расходуя его — реальная (повторная)
+// проверка и расход кода происходят в ResetPassword. Нужен только для того,
+// чтобы фронт мог сразу сказать пользователю "код неверный", не заставляя
+// сначала вводить новый пароль.
+func (s *Service) VerifyRecoveryCode(_ context.Context, email, code string) error {
+	stored, ok := s.codes.Get(recoveryCodeKey(email))
+	if !ok || stored != hashRecoveryCode(code) {
+		return entity.ErrInvalidRecoveryCode
+	}
+
+	return nil
+}
+
+// ResetPassword — финальный шаг восстановления: повторно проверяет код (не полагаясь
+// на то, что VerifyRecoveryCode вызывался раньше) и, если он верный, меняет пароль
+// и гасит код, чтобы его нельзя было использовать повторно.
+func (s *Service) ResetPassword(ctx context.Context, email, code, newPassword string) error {
+	key := recoveryCodeKey(email)
+
+	stored, ok := s.codes.Get(key)
+	if !ok || stored != hashRecoveryCode(code) {
+		return entity.ErrInvalidRecoveryCode
+	}
+
+	user, err := s.repo.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return entity.ErrUserNotFound
+		}
+		return fmt.Errorf("get user by email: %w", err)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	if err := s.repo.UpdatePassword(ctx, user.ID, string(hash)); err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+
+	s.codes.Delete(key)
+
+	return nil
+}
+
+func recoveryCodeKey(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// generateRecoveryCode возвращает криптографически случайный 6-значный код (с ведущими нулями).
+func generateRecoveryCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
+}
+
+// hashRecoveryCode хэширует код перед сохранением в CodeStore, чтобы значение,
+// пригодное для использования, не лежало где-либо в открытом виде.
+func hashRecoveryCode(code string) string {
+	sum := sha256.Sum256([]byte(code))
+	return hex.EncodeToString(sum[:])
 }
