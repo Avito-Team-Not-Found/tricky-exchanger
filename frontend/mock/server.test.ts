@@ -649,6 +649,42 @@ describe('chains', () => {
     expect(body.code).toBe(403);
   });
 
+  // удаление товара уносит его заявки каскадом — вместе с ними должны уходить и цепочки,
+  // иначе осиротевшая цепочка ссылается на несуществующую заявку и отвечает 403 вместо 404
+  it('removes the chains of the requests deleted together with the item', async () => {
+    const form = new FormData();
+    form.append('title', 'Товар с цепочками');
+    form.append('description', 'Удаляется вместе с заявкой');
+    form.append('condition', 'USED');
+    form.append('image', new Blob(['fake-bytes'], { type: 'image/png' }), 'x.png');
+    const { body: item } = await request('/items', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    });
+
+    const { body: created } = await postJson('/exchange-requests', {
+      offeredItemId: item.id,
+      wantedDescription: 'Электронная книга',
+    });
+    const { body: chains } = await request(`/exchange-requests/${created.request.id}/chains`, {
+      headers: authHeaders(),
+    });
+    expect(chains.length).toBeGreaterThan(0);
+
+    const archived = await request(`/items/${item.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(archived.status).toBe(200);
+
+    const { status } = await request(`/chains/${chains[0].id}/select`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    expect(status).toBe(404);
+  });
+
   it('removes candidate chains when the request is removed', async () => {
     // берём именно свободный товар: выбор цепочки выше мог забронировать тот, что в фикстуре
     const { body: items } = await request('/items', { headers: authHeaders() });

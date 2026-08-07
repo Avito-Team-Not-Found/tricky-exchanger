@@ -462,9 +462,19 @@ export function createMockApp({
       return fail(res, 409, 'Товар уже участвует в сделке');
     }
 
+    // заявки товара удаляются каскадом, а вместе с ними и их цепочки:
+    // осиротевшая цепочка ссылалась бы на несуществующую заявку (POST /chains/:id/select → 403 вместо 404)
+    const requestIds = db
+      .get('exchangeRequests')
+      .filter((r) => r.offeredItemId === item.id)
+      .map((r) => r.id)
+      .value();
     db.get('items').removeById(item.id).write();
     db.get('exchangeRequests')
       .removeWhere((r) => r.offeredItemId === item.id)
+      .write();
+    db.get('chains')
+      .removeWhere((c) => requestIds.includes(c.requestId))
       .write();
     res.json({ message: 'archived' });
   });
