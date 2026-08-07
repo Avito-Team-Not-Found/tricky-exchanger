@@ -16,6 +16,8 @@
 .status-tag {
   display: inline-flex;
   align-items: center;
+  // внутри flex-колонки пилюля растянулась бы на всю ширину контейнера
+  align-self: flex-start;
   padding: 2px var(--spacing-sm);
   border-radius: var(--radius-full);
   font-size: var(--font-size-caption);

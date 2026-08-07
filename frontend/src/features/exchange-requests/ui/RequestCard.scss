@@ -54,26 +54,39 @@
   flex: 1;
 }
 
-.request-card__swap {
+// статус — в одной строке с названием товара, чтобы не добавлять карточке третью строку
+.request-card__head {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   min-width: 0;
 }
 
+.request-card__swap {
+  display: flex;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+// стрелка «отдаю → хочу» центрируется по первой строке описания
+.request-card__arrow {
+  flex-shrink: 0;
+  height: calc(var(--font-size-body-sm) * var(--line-height-body));
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
 .request-card__offer {
+  flex: 1;
+  min-width: 0;
   font-size: var(--font-size-body-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.request-card__arrow {
-  flex-shrink: 0;
-  color: var(--color-text-secondary);
-  font-size: 12px;
 }
 
 .request-card__want {

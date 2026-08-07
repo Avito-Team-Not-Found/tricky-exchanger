@@ -41,4 +41,20 @@ describe('RequestCard', () => {
     await user.click(screen.getByRole('button', { name: /Запрос/ }));
     expect(onClick).toHaveBeenCalled();
   });
+
+  it('shows what is offered and what is wanted on separate lines', () => {
+    renderWithProviders(<RequestCard request={request} onClick={vi.fn()} />);
+
+    expect(screen.getByText('Комбайн')).toBeInTheDocument();
+    expect(screen.getByText('Ноутбук')).toBeInTheDocument();
+    // подписи заменены стрелкой, поэтому смысл строк остаётся только в aria-label карточки
+    expect(screen.getByRole('button')).toHaveAccessibleName('Запрос: отдаю Комбайн, хочу Ноутбук');
+  });
+
+  it('keeps the status tag on the same line as the offered item', () => {
+    const { container } = renderWithProviders(<RequestCard request={request} onClick={vi.fn()} />);
+
+    const head = container.querySelector('.request-card__head') as HTMLElement;
+    expect(head).toContainElement(screen.getByText('Активен'));
+  });
 });

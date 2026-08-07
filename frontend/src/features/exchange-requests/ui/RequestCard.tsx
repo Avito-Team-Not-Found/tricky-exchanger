@@ -19,7 +19,7 @@ export function RequestCard({ request, onClick }: RequestCardProps) {
       className="request-card"
       role="button"
       tabIndex={0}
-      aria-label={`Запрос: ${request.offeredItem?.title ?? 'товар'} → ${request.wantedDescription}`}
+      aria-label={`Запрос: отдаю ${request.offeredItem?.title ?? 'товар'}, хочу ${request.wantedDescription}`}
       onClick={onClick}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -40,14 +40,18 @@ export function RequestCard({ request, onClick }: RequestCardProps) {
         )}
       </div>
       <div className="request-card__col">
-        <div className="request-card__swap">
+        {/* отдаваемый товар и статус — в одной строке, желаемое — во второй со стрелкой вместо
+            подписей: на узких экранах всё вместе в одну строку не умещается (DESIGN.md §4.5) */}
+        <div className="request-card__head">
           <span className="request-card__offer">
             {request.offeredItem?.title ?? 'Товар удалён'}
           </span>
+          <StatusTag tone={statusMeta.tone}>{statusMeta.label}</StatusTag>
+        </div>
+        <p className="request-card__swap">
           <ArrowRightOutlined className="request-card__arrow" aria-hidden />
           <span className="request-card__want">{request.wantedDescription}</span>
-        </div>
-        <StatusTag tone={statusMeta.tone}>{statusMeta.label}</StatusTag>
+        </p>
       </div>
     </article>
   );
