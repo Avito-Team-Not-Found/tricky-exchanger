@@ -46,6 +46,13 @@ type Config struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
+
+	// Matching* — настройки векторного поиска кандидатов (задача SCRUM-24).
+	// pgvector даёт только Top-/пороговых семантических кандидатов; поиск циклов и
+	// кластеры строятся уже поверх них в Go. Оба параметра меняются через окружение.
+	MatchingTopK      int     // LIMIT для Top-K (default 20)
+	MatchingThreshold float64 // порог cosine similarity (default 0.5)
+	VectorMetric      string  // "cosine" (зафиксировано, соответствует индексу)
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -80,6 +87,11 @@ func Load() (*Config, error) {
 		VectorDim:         envIntOrDefault("VECTOR_DIM", 384),
 		EmbeddingTimeout:  envDurationOrDefault("EMBEDDING_TIMEOUT", 2*time.Second),
 		MaxInputLength:    envIntOrDefault("MAX_INPUT_LENGTH", 1500),
+
+		MatchingTopK:      envIntOrDefault("MATCHING_TOPK", 20),
+		MatchingThreshold: envFloatOrDefault("MATCHING_THRESHOLD", 0.5),
+		VectorMetric:      envOrDefault("VECTOR_METRIC", "cosine"),
+
 		MinIOEndpoint:  envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey: envOrDefault("MINIO_ACCESS_KEY", ""),
 		MinIOSecretKey: envOrDefault("MINIO_SECRET_KEY", ""),
@@ -108,6 +120,15 @@ func envDurationOrDefault(key string, fallback time.Duration) time.Duration {
 	if v := os.Getenv(key); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			return d
+		}
+	}
+	return fallback
+}
+
+func envFloatOrDefault(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
 		}
 	}
 	return fallback
