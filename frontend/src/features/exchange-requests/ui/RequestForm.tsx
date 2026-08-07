@@ -126,6 +126,15 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
                       disabled={item.status !== 'ACTIVE'}
                       className="request-form__item"
                     >
+                      <span className="request-form__item-thumb">
+                        {item.image ? (
+                          <img
+                            className="request-form__item-image"
+                            src={item.image}
+                            alt={item.title}
+                          />
+                        ) : null}
+                      </span>
                       <span className="request-form__item-name">{item.title}</span>
                       {item.status !== 'ACTIVE' ? (
                         <span className="request-form__item-note">
@@ -163,15 +172,22 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
         </Form.Item>
 
         <div className="request-form__profile">
-          <h3 className="request-form__subheading">Фильтр поиска (необязательно)</h3>
-          <Form.Item label="Категория" name="categoryId">
+          <h3 className="request-form__subheading">Фильтр поиска</h3>
+          <Form.Item
+            label="Категория"
+            name="categoryId"
+            rules={[{ required: true, message: 'Выберите категорию' }]}
+          >
             <Select
               placeholder="Выберите категорию"
-              allowClear
               options={categories.map((category) => ({ value: category.id, label: category.name }))}
             />
           </Form.Item>
-          <Form.Item label="Допустимые состояния" name="acceptableCondition">
+          <Form.Item
+            label="Допустимые состояния"
+            name="acceptableCondition"
+            rules={[{ required: true, message: 'Выберите хотя бы одно состояние' }]}
+          >
             <Checkbox.Group options={CONDITION_OPTIONS} />
           </Form.Item>
         </div>

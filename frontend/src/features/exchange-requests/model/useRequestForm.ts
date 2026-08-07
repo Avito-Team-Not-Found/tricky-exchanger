@@ -70,21 +70,22 @@ export function useRequestForm(requestId?: string) {
 
   const offeredItemId = Form.useWatch('offeredItemId', form);
   const wantedDescription = Form.useWatch('wantedDescription', form);
+  const categoryId = Form.useWatch('categoryId', form);
+  const acceptableCondition = Form.useWatch('acceptableCondition', form);
 
   const canSubmit =
     Boolean(wantedDescription?.trim()) &&
+    Boolean(categoryId) &&
+    Boolean(acceptableCondition?.length) &&
     (isEdit || Boolean(offeredItemId)) &&
     !submitting &&
     !readOnly;
 
-  function buildProfile(values: RequestFormValues): WantedProfile | null {
-    const { categoryId, acceptableCondition } = values;
-    const hasCategory = Boolean(categoryId);
-    const hasConditions = Boolean(acceptableCondition?.length);
-    if (!hasCategory && !hasConditions) return null;
+  // фильтр обязателен в форме, но confirmLeave отправляет значения без валидации — незаполненное уходит как null
+  function buildProfile(values: RequestFormValues): WantedProfile {
     return {
-      categoryId: hasCategory ? categoryId : null,
-      acceptableCondition: hasConditions ? acceptableCondition : null,
+      categoryId: values.categoryId ?? null,
+      acceptableCondition: values.acceptableCondition?.length ? values.acceptableCondition : null,
     };
   }
 

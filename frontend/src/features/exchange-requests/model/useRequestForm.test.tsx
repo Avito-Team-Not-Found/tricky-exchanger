@@ -109,27 +109,6 @@ describe('useRequestForm', () => {
     expect(result.current.result?.matching.createdCandidateChains).toBe(3);
   });
 
-  it('sends no profile when the filter is empty', async () => {
-    mockedCreateRequest.mockResolvedValue({
-      request: { id: 'req-2', status: 'ACTIVE' } as unknown as ExchangeRequest,
-      matching: { createdCandidateChains: 0 },
-    });
-    const { result } = renderHook(() => useRequestForm(), { wrapper });
-
-    await act(async () => {
-      await result.current.handleSubmit({
-        offeredItemId: 'item-1',
-        wantedDescription: 'Ноутбук',
-      });
-    });
-
-    expect(mockedCreateRequest).toHaveBeenCalledWith({
-      offeredItemId: 'item-1',
-      wantedDescription: 'Ноутбук',
-      wantedProfile: null,
-    });
-  });
-
   it('keeps the form read-only for a locked request', () => {
     mockedUseRequest.mockReturnValue(queryOk(lockedRequest));
     const { result } = renderHook(() => useRequestForm('req-1'), { wrapper });

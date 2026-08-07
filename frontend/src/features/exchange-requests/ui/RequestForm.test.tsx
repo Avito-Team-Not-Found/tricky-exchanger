@@ -57,7 +57,7 @@ const items = [
     condition: 'USED',
     color: 'blue',
     material: 'steel',
-    image: null,
+    image: 'bike.png',
     status: 'RESERVED',
   },
 ] as unknown as Item[];
@@ -70,6 +70,14 @@ const lockedRequest = {
   wantedDescription: 'Ноутбук',
   wantedProfile: null,
 } as unknown as ExchangeRequest;
+
+// фильтр поиска обязателен — без него кнопка сабмита остаётся заблокированной
+async function fillWanted(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+  await user.click(screen.getByRole('combobox'));
+  await user.click(await screen.findByText('Электроника'));
+  await user.click(screen.getByRole('checkbox', { name: 'Новый' }));
+}
 
 describe('RequestForm', () => {
   beforeEach(() => {
@@ -88,7 +96,7 @@ describe('RequestForm', () => {
     renderWithProviders(<RequestForm />);
 
     await user.click(screen.getByText('Кухонный комбайн'));
-    await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+    await fillWanted(user);
     await user.click(screen.getByRole('button', { name: /Создать запрос/ }));
 
     expect(
@@ -100,7 +108,7 @@ describe('RequestForm', () => {
       expect.objectContaining({
         offeredItemId: 'item-1',
         wantedDescription: 'Ноутбук',
-        wantedProfile: null,
+        wantedProfile: { categoryId: 'electronics', acceptableCondition: ['NEW'] },
       }),
     );
   });
@@ -114,7 +122,7 @@ describe('RequestForm', () => {
     renderWithProviders(<RequestForm />);
 
     await user.click(screen.getByText('Кухонный комбайн'));
-    await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+    await fillWanted(user);
     await user.click(screen.getByRole('button', { name: /Создать запрос/ }));
 
     expect(
@@ -122,26 +130,24 @@ describe('RequestForm', () => {
     ).toBeInTheDocument();
   });
 
-  it('sends the filter profile when filled', async () => {
+  it('keeps submit disabled until the search filter is filled', async () => {
     const user = userEvent.setup();
-    mockedCreateRequest.mockResolvedValue({
-      request: { id: 'req-2', status: 'ACTIVE' } as unknown as ExchangeRequest,
-      matching: { createdCandidateChains: 0 },
-    });
     renderWithProviders(<RequestForm />);
 
     await user.click(screen.getByText('Кухонный комбайн'));
     await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+    expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
+
     await user.click(screen.getByRole('combobox'));
     await user.click(await screen.findByText('Электроника'));
-    await user.click(screen.getByRole('button', { name: /Создать запрос/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Новый' }));
+    expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeEnabled();
+  });
 
-    expect(await screen.findByText(/заявка остаётся в поиске/)).toBeInTheDocument();
-    expect(mockedCreateRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        wantedProfile: { categoryId: 'electronics', acceptableCondition: null },
-      }),
-    );
+  it('shows a thumbnail for an item with a photo', () => {
+    renderWithProviders(<RequestForm />);
+
+    expect(screen.getByRole('img', { name: 'Велосипед' })).toHaveAttribute('src', 'bike.png');
   });
 
   it('leads to item creation when the user has no items', async () => {
