@@ -30,6 +30,21 @@ type mutationBody struct {
 	Version           int64  `json:"version"`
 }
 
+type exchangeOfferResponse struct {
+	ID                int64                `json:"id"`
+	OfferedItemID     int64                `json:"offeredItemId"`
+	WantedDescription string               `json:"wantedDescription"`
+	Status            entity.RequestStatus `json:"status"`
+	Version           int64                `json:"version"`
+	CreatedAt         string               `json:"createdAt"`
+	UpdatedAt         string               `json:"updatedAt"`
+}
+
+type exchangeOfferListResponse struct {
+	exchangeOfferResponse
+	OfferedItemTitle string `json:"offeredItemTitle"`
+}
+
 func (h *Handler) Create(c *gin.Context) {
 	userID, ok := currentUserID(c)
 	if !ok {
@@ -59,7 +74,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	api.SendOk(c, http.StatusCreated, newRequestResponse(created))
+	api.SendOk(c, http.StatusCreated, newExchangeOfferResponse(created))
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -86,7 +101,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	api.SendOk(c, http.StatusOK, newRequestResponse(request))
+	api.SendOk(c, http.StatusOK, newExchangeOfferResponse(request))
 }
 
 func (h *Handler) List(c *gin.Context) {
@@ -101,11 +116,11 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	response := make([]listResponse, 0, len(requests))
+	response := make([]exchangeOfferListResponse, 0, len(requests))
 	for _, request := range requests {
-		response = append(response, listResponse{
-			requestResponse:  newRequestResponse(request.ExchangeOffer),
-			OfferedItemTitle: request.OfferedItemTitle,
+		response = append(response, exchangeOfferListResponse{
+			exchangeOfferResponse: newExchangeOfferResponse(request.ExchangeOffer),
+			OfferedItemTitle:      request.OfferedItemTitle,
 		})
 	}
 
@@ -155,7 +170,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	api.SendOk(c, http.StatusOK, newRequestResponse(updated))
+	api.SendOk(c, http.StatusOK, newExchangeOfferResponse(updated))
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -195,31 +210,16 @@ func (h *Handler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-type requestResponse struct {
-	ID                int64                `json:"id"`
-	OfferedItemID     int64                `json:"offeredItemId"`
-	WantedDescription string               `json:"wantedDescription"`
-	Status            entity.RequestStatus `json:"status"`
-	Version           int64                `json:"version"`
-	CreatedAt         string               `json:"createdAt"`
-	UpdatedAt         string               `json:"updatedAt"`
-}
-
-func newRequestResponse(request entity.ExchangeOffer) requestResponse {
-	return requestResponse{
-		ID:                request.ID,
-		OfferedItemID:     request.OfferedItemID,
-		WantedDescription: request.WantedDescription,
-		Status:            request.Status,
-		Version:           request.Version,
-		CreatedAt:         request.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:         request.UpdatedAt.UTC().Format(time.RFC3339),
+func newExchangeOfferResponse(offer entity.ExchangeOffer) exchangeOfferResponse {
+	return exchangeOfferResponse{
+		ID:                offer.ID,
+		OfferedItemID:     offer.OfferedItemID,
+		WantedDescription: offer.WantedDescription,
+		Status:            offer.Status,
+		Version:           offer.Version,
+		CreatedAt:         offer.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:         offer.UpdatedAt.UTC().Format(time.RFC3339),
 	}
-}
-
-type listResponse struct {
-	requestResponse
-	OfferedItemTitle string `json:"offeredItemTitle"`
 }
 
 func currentUserID(c *gin.Context) (string, bool) {
