@@ -28,7 +28,9 @@ function authHeaders(extra?: Record<string, string>) {
 
 async function request(path: string, init?: RequestInit) {
   const response = await fetch(`${baseUrl}/api/v1${path}`, init);
-  const body = await response.json();
+  // тела ответов мока динамические — тесты читают произвольные поля, типизировать каждое незачем
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body = (await response.json()) as any;
   return { status: response.status, body };
 }
 
