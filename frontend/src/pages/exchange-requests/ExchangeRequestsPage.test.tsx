@@ -30,7 +30,6 @@ function makeRequest(id: string, status: ExchangeRequest['status']): ExchangeReq
       title: `Товар ${id}`,
       description: '',
       categoryId: null,
-      condition: 'USED',
       color: null,
       material: null,
       attributes: null,

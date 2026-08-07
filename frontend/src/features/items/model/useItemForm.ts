@@ -4,14 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { App as AntApp, Form, type UploadProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import {
-  createItem,
-  updateItem,
-  useItem,
-  type Item,
-  type ItemCondition,
-  type ItemPayload,
-} from '@entities/item';
+import { createItem, updateItem, useItem, type Item, type ItemPayload } from '@entities/item';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
@@ -20,7 +13,6 @@ type UploadedFile = Parameters<NonNullable<UploadProps['beforeUpload']>>[0];
 export interface ItemFormValues {
   title: string;
   description: string;
-  condition: ItemCondition;
   color?: string;
   material?: string;
 }
@@ -51,7 +43,6 @@ export function useItemForm(itemId?: string) {
     return {
       title: item.title,
       description: item.description,
-      condition: item.condition,
       color: item.color ?? undefined,
       material: item.material ?? undefined,
     };
@@ -84,9 +75,8 @@ export function useItemForm(itemId?: string) {
 
   const title = Form.useWatch('title', form);
   const description = Form.useWatch('description', form);
-  const condition = Form.useWatch('condition', form);
 
-  const fieldsValid = Boolean(title?.trim()) && Boolean(description?.trim()) && Boolean(condition);
+  const fieldsValid = Boolean(title?.trim()) && Boolean(description?.trim());
   const canSubmit = fieldsValid && hasPhoto && !submitting;
 
   function handleImageSelected(file: UploadedFile) {
@@ -156,7 +146,6 @@ export function useItemForm(itemId?: string) {
       const payload: ItemPayload = {
         title: values.title.trim(),
         description: values.description.trim(),
-        condition: values.condition,
         color: values.color?.trim() || null,
         material: values.material?.trim() || null,
       };

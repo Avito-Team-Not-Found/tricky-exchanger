@@ -58,7 +58,6 @@ const activeItem = {
   title: 'Комбайн',
   description: 'Мощный',
   categoryId: null,
-  condition: 'USED',
   color: null,
   material: null,
   attributes: null,
@@ -97,14 +96,13 @@ describe('useRequestForm', () => {
         offeredItemId: 'item-1',
         wantedDescription: 'Ноутбук',
         categoryId: 'electronics',
-        acceptableCondition: ['NEW'],
       });
     });
 
     expect(mockedCreateRequest).toHaveBeenCalledWith({
       offeredItemId: 'item-1',
       wantedDescription: 'Ноутбук',
-      wantedProfile: { categoryId: 'electronics', acceptableCondition: ['NEW'] },
+      wantedProfile: { categoryId: 'electronics' },
     });
     expect(result.current.result?.matching.createdCandidateChains).toBe(3);
   });

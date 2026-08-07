@@ -32,7 +32,6 @@ const existingItem = {
   id: 'item-1',
   title: 'Кухонный комбайн',
   description: 'Мощный',
-  condition: 'USED',
   color: 'white',
   material: 'plastic',
   image: 'data:image/png;base64,abc',
@@ -56,10 +55,6 @@ describe('ItemForm', () => {
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
     await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
-    expect(submit).toBeDisabled();
-
-    await user.click(screen.getByRole('combobox'));
-    await user.click(await screen.findByText('Как новый'));
     expect(submit).toBeEnabled();
   });
 
@@ -73,13 +68,11 @@ describe('ItemForm', () => {
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
     await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
-    await user.click(screen.getByRole('combobox'));
-    await user.click(await screen.findByText('Как новый'));
     await user.click(screen.getByRole('button', { name: /Сохранить/ }));
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedCreateItem).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Смарт-часы', condition: 'LIKE_NEW' }),
+      expect.objectContaining({ title: 'Смарт-часы', description: 'Работают как новые' }),
       expect.any(File),
     );
   });
@@ -91,7 +84,7 @@ describe('ItemForm', () => {
     expect(screen.getByText('Что-то пошло не так')).toBeInTheDocument();
   });
 
-  it('prefills an existing item and saves condition, color and material', async () => {
+  it('prefills an existing item and saves color and material', async () => {
     const user = userEvent.setup();
     mockedUseItem.mockReturnValue(queryOk(existingItem));
     mockedUpdateItem.mockResolvedValue(existingItem);
@@ -112,7 +105,6 @@ describe('ItemForm', () => {
       'item-1',
       expect.objectContaining({
         title: 'Кухонный комбайн',
-        condition: 'USED',
         color: 'black',
         material: 'plastic',
       }),

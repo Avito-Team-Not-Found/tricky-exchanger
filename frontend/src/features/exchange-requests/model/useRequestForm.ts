@@ -13,7 +13,7 @@ import {
   type CreateRequestResult,
   type WantedProfile,
 } from '@entities/exchangeRequest';
-import { useItems, type ItemCondition } from '@entities/item';
+import { useItems } from '@entities/item';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
@@ -21,7 +21,6 @@ export interface RequestFormValues {
   offeredItemId: string;
   wantedDescription: string;
   categoryId?: string;
-  acceptableCondition?: ItemCondition[];
 }
 
 export function useRequestForm(requestId?: string) {
@@ -57,7 +56,6 @@ export function useRequestForm(requestId?: string) {
           offeredItemId: request.offeredItemId,
           wantedDescription: request.wantedDescription,
           categoryId: request.wantedProfile?.categoryId ?? undefined,
-          acceptableCondition: request.wantedProfile?.acceptableCondition ?? [],
         }
       : undefined
     : {
@@ -71,22 +69,17 @@ export function useRequestForm(requestId?: string) {
   const offeredItemId = Form.useWatch('offeredItemId', form);
   const wantedDescription = Form.useWatch('wantedDescription', form);
   const categoryId = Form.useWatch('categoryId', form);
-  const acceptableCondition = Form.useWatch('acceptableCondition', form);
 
   const canSubmit =
     Boolean(wantedDescription?.trim()) &&
     Boolean(categoryId) &&
-    Boolean(acceptableCondition?.length) &&
     (isEdit || Boolean(offeredItemId)) &&
     !submitting &&
     !readOnly;
 
   // контракт допускает пустой профиль поиска, форма — нет: незаполненное уезжает как null
   function buildProfile(values: RequestFormValues): WantedProfile {
-    return {
-      categoryId: values.categoryId ?? null,
-      acceptableCondition: values.acceptableCondition?.length ? values.acceptableCondition : null,
-    };
+    return { categoryId: values.categoryId ?? null };
   }
 
   async function handleSubmit(values: RequestFormValues) {

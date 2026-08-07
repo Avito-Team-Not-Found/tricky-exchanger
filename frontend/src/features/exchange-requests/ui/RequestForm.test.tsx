@@ -51,7 +51,6 @@ const items = [
     id: 'item-1',
     title: 'Кухонный комбайн',
     description: 'Мощный',
-    condition: 'USED',
     color: 'white',
     material: 'plastic',
     image: null,
@@ -61,7 +60,6 @@ const items = [
     id: 'item-2',
     title: 'Велосипед',
     description: 'Городской',
-    condition: 'USED',
     color: 'blue',
     material: 'steel',
     image: 'bike.png',
@@ -85,7 +83,6 @@ async function fillWanted(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
   await user.click(screen.getByRole('combobox'));
   await user.click(await screen.findByText('Электроника'));
-  await user.click(screen.getByRole('checkbox', { name: 'Новый' }));
 }
 
 describe('RequestForm', () => {
@@ -117,7 +114,7 @@ describe('RequestForm', () => {
       expect.objectContaining({
         offeredItemId: 'item-1',
         wantedDescription: 'Ноутбук',
-        wantedProfile: { categoryId: 'electronics', acceptableCondition: ['NEW'] },
+        wantedProfile: { categoryId: 'electronics' },
       }),
     );
   });
@@ -149,7 +146,6 @@ describe('RequestForm', () => {
 
     await user.click(screen.getByRole('combobox'));
     await user.click(await screen.findByText('Электроника'));
-    await user.click(screen.getByRole('checkbox', { name: 'Новый' }));
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeEnabled();
   });
 

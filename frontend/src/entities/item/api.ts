@@ -44,7 +44,6 @@ function toItemFormData(payload: ItemPayload, image: File | null): FormData {
   const form = new FormData();
   form.append('title', payload.title);
   form.append('description', payload.description);
-  form.append('condition', payload.condition);
   // multipart не умеет null, поэтому очистка поля едет пустой строкой (сервер трактует её как null),
   // а «не трогать поле» — отсутствием ключа. Раньше здесь была проверка на truthy, из-за которой
   // очистка цвета/материала терялась, если пользователь заодно менял фото.
