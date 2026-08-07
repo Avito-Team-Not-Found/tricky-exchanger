@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -782,5 +782,41 @@ describe('item reservation lifecycle', () => {
       headers: authHeaders(),
     });
     expect(await itemStatus(item.id)).toBe('ACTIVE');
+  });
+});
+
+// Фикстура — часть контракта мока: код опирается на «RESERVED ⟺ есть заявка в LOCKED»
+// (releaseItemIfUnused, запрет архивации), а рассинхрон в сидах ломает демо-сценарии
+describe('seed fixture', () => {
+  interface SeedDb {
+    items: { id: string; status: string }[];
+    exchangeRequests: { id: string; status: string; offeredItemId: string }[];
+    chains: { id: string; requestId: string }[];
+  }
+
+  const seed: SeedDb = JSON.parse(readFileSync(join(mockDir, 'db.json'), 'utf8'));
+
+  it('reserves exactly the items held by a locked request', () => {
+    const lockedItemIds = new Set(
+      seed.exchangeRequests.filter((r) => r.status === 'LOCKED').map((r) => r.offeredItemId),
+    );
+
+    for (const item of seed.items) {
+      expect([item.id, item.status === 'RESERVED']).toEqual([item.id, lockedItemIds.has(item.id)]);
+    }
+  });
+
+  it('has no chains pointing at a missing request', () => {
+    const requestIds = new Set(seed.exchangeRequests.map((r) => r.id));
+    const orphans = seed.chains.filter((c) => !requestIds.has(c.requestId));
+
+    expect(orphans).toEqual([]);
+  });
+
+  it('offers only existing items in requests', () => {
+    const itemIds = new Set(seed.items.map((i) => i.id));
+    const dangling = seed.exchangeRequests.filter((r) => !itemIds.has(r.offeredItemId));
+
+    expect(dangling).toEqual([]);
   });
 });
