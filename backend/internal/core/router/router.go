@@ -10,13 +10,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	exchangeRequestHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_request"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 )
 
 // New создаёт gin.Engine и регистрирует маршруты приложения.
 // tokenParser проверяет JWT для защищённых маршрутов (см. middleware.Auth).
-func New(tokenParser middleware.TokenParser, pingH *PingHandler, userH *userHandler.Handler) *gin.Engine {
+func New(
+	tokenParser middleware.TokenParser,
+	pingH *PingHandler,
+	userH *userHandler.Handler,
+	exchangeRequestH *exchangeRequestHandler.Handler,
+) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Logger())
 	engine.Use(gin.Recovery())
@@ -42,6 +48,16 @@ func New(tokenParser middleware.TokenParser, pingH *PingHandler, userH *userHand
 			authProtected.POST("/logout", userH.Logout)
 			authProtected.GET("/me", userH.Me)
 			authProtected.POST("/change-password", userH.ChangePassword)
+		}
+
+		exchangeRequests := api.Group("/exchange-requests")
+		exchangeRequests.Use(middleware.Auth(tokenParser))
+		{
+			exchangeRequests.POST("", exchangeRequestH.Create)
+			exchangeRequests.GET("", exchangeRequestH.List)
+			exchangeRequests.GET("/:id", exchangeRequestH.Get)
+			exchangeRequests.PUT("/:id", exchangeRequestH.Update)
+			exchangeRequests.DELETE("/:id", exchangeRequestH.Delete)
 		}
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен
