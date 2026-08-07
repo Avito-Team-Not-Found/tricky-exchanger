@@ -12,8 +12,10 @@ import (
 	router "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
+	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
 	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
+	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 )
 
 // stubUserService — заглушка Service для тестов роутера: важна только маршрутизация,
@@ -61,6 +63,7 @@ func newTestEngine() *gin.Engine {
 		router.NewPingHandler(),
 		userHandler.NewHandler(stubUserService{}),
 		exchangeOfferHandler.NewHandler(stubExchangeOfferService{}),
+		itemHandler.NewHandler(stubItemService{}),
 	)
 }
 
@@ -83,6 +86,28 @@ func (stubExchangeOfferService) Update(_ context.Context, _ string, _ int64, _ e
 }
 
 func (stubExchangeOfferService) Delete(_ context.Context, _ string, _ int64, _ int64) error {
+	return nil
+}
+
+type stubItemService struct{}
+
+func (stubItemService) Create(_ context.Context, ownerID uuid.UUID, _ itemService.CreateInput) (*entity.Item, error) {
+	return &entity.Item{OwnerUserID: ownerID}, nil
+}
+
+func (stubItemService) Get(_ context.Context, _ uuid.UUID, _ int64) (*entity.Item, error) {
+	return &entity.Item{}, nil
+}
+
+func (stubItemService) List(_ context.Context, _ uuid.UUID, _, _ int) ([]*entity.Item, int, error) {
+	return nil, 0, nil
+}
+
+func (stubItemService) Update(_ context.Context, _ uuid.UUID, _ int64, _ itemService.UpdateInput) (*entity.Item, error) {
+	return &entity.Item{}, nil
+}
+
+func (stubItemService) Archive(_ context.Context, _ uuid.UUID, _ int64) error {
 	return nil
 }
 
@@ -133,6 +158,21 @@ func TestExchangeOffers_RequiresAuth(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status %d for /api/v1/exchange-offers without Authorization header, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestItems_RequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/items", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d for /api/v1/items without Authorization header, got %d", http.StatusUnauthorized, rec.Code)
 	}
 }
 

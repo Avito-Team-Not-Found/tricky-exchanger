@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
+	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 )
@@ -22,6 +23,7 @@ func New(
 	pingH *PingHandler,
 	userH *userHandler.Handler,
 	exchangeOfferH *exchangeOfferHandler.Handler,
+	itemH *itemHandler.Handler,
 ) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Logger())
@@ -60,17 +62,21 @@ func New(
 			exchangeOffers.DELETE("/:id", exchangeOfferH.Delete)
 		}
 
+		items := api.Group("/items")
+		items.Use(middleware.Auth(tokenParser))
+		{
+			items.POST("", itemH.Create)
+			items.GET("", itemH.List)
+			items.GET("/:id", itemH.Get)
+			items.PATCH("/:id", itemH.Update)
+			items.DELETE("/:id", itemH.Archive)
+		}
+
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен
 		recovery := api.Group("/account/password-recovery")
 		recovery.POST("/send-code/", userH.SendRecoveryCode)
 		recovery.POST("/verify-code/", userH.VerifyRecoveryCode)
 		recovery.POST("/reset-password/", userH.ResetPassword)
-
-		// сюда команда добавляет маршруты своих фич по мере готовности, например:
-		//
-		// products
-		// api.GET("/products", itemH.List)
-		// api.POST("/products", itemH.Create)
 	}
 
 	return engine

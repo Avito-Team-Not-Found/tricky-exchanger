@@ -17,14 +17,18 @@ import (
 	appLogger "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/logger"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
+	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/codestore"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/reservation"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
 	exchangeOfferRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/exchange_offer"
+	itemRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/item"
 	userRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/user"
 	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
+	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
 )
@@ -91,7 +95,11 @@ func main() {
 	)
 	exchangeOfferH := exchangeOfferHandler.NewHandler(exchangeOfferSvc)
 
-	engine := router.New(tokenService, pingHandler, userH, exchangeOfferH)
+	itemRepository := itemRepo.NewRepository(pool)
+	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker())
+	itemH := itemHandler.NewHandler(itemSvc)
+
+	engine := router.New(tokenService, pingHandler, userH, exchangeOfferH, itemH)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.ServerPort,
