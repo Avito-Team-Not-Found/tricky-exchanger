@@ -39,7 +39,7 @@ func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
 }
 
 func TestUpdatePropagatesVersionAndRebuildsMatching(t *testing.T) {
-	store := &fakeStore{updated: entity.ExchangeRequest{ID: 7, Version: 3}}
+	store := &fakeStore{updated: entity.ExchangeOffer{ID: 7, Version: 3}}
 	matcher := &fakeMatcher{}
 	service := requestservice.NewService(store, &fakeEmbedding{vector: []float32{0.3}}, matcher)
 
@@ -60,7 +60,7 @@ func TestUpdatePropagatesVersionAndRebuildsMatching(t *testing.T) {
 }
 
 func TestDeleteArchivesThenRemovesFromMatching(t *testing.T) {
-	store := &fakeStore{archived: entity.ExchangeRequest{ID: 9, Status: entity.RequestStatusRemoved, Version: 2}}
+	store := &fakeStore{archived: entity.ExchangeOffer{ID: 9, Status: entity.RequestStatusRemoved, Version: 2}}
 	matcher := &fakeMatcher{}
 	service := requestservice.NewService(store, &fakeEmbedding{}, matcher)
 
@@ -90,13 +90,13 @@ func TestUpdateRejectsEmptyDescriptionBeforeEmbedding(t *testing.T) {
 }
 
 type fakeStore struct {
-	created         entity.ExchangeRequest
-	updated         entity.ExchangeRequest
-	archived        entity.ExchangeRequest
+	created         entity.ExchangeOffer
+	updated         entity.ExchangeOffer
+	archived        entity.ExchangeOffer
 	expectedVersion int64
 }
 
-func (s *fakeStore) Create(_ context.Context, request entity.ExchangeRequest) (entity.ExchangeRequest, error) {
+func (s *fakeStore) Create(_ context.Context, request entity.ExchangeOffer) (entity.ExchangeOffer, error) {
 	request.ID = 5
 	request.CreatedAt = time.Now()
 	request.UpdatedAt = request.CreatedAt
@@ -104,15 +104,15 @@ func (s *fakeStore) Create(_ context.Context, request entity.ExchangeRequest) (e
 	return request, nil
 }
 
-func (s *fakeStore) Get(_ context.Context, _ string, _ int64) (entity.ExchangeRequest, error) {
-	return entity.ExchangeRequest{}, entity.ErrExchangeRequestNotFound
+func (s *fakeStore) Get(_ context.Context, _ string, _ int64) (entity.ExchangeOffer, error) {
+	return entity.ExchangeOffer{}, entity.ErrExchangeRequestNotFound
 }
 
-func (s *fakeStore) List(_ context.Context, _ string) ([]requestservice.ListItem, error) {
+func (s *fakeStore) List(_ context.Context, _ string) ([]entity.ExchangeOfferListItem, error) {
 	return nil, nil
 }
 
-func (s *fakeStore) Update(_ context.Context, request entity.ExchangeRequest, expectedVersion int64) (entity.ExchangeRequest, error) {
+func (s *fakeStore) Update(_ context.Context, request entity.ExchangeOffer, expectedVersion int64) (entity.ExchangeOffer, error) {
 	s.expectedVersion = expectedVersion
 	if s.updated.ID == 0 {
 		s.updated = request
@@ -121,10 +121,10 @@ func (s *fakeStore) Update(_ context.Context, request entity.ExchangeRequest, ex
 	return s.updated, nil
 }
 
-func (s *fakeStore) Archive(_ context.Context, _ string, _ int64, expectedVersion int64) (entity.ExchangeRequest, error) {
+func (s *fakeStore) Archive(_ context.Context, _ string, _ int64, expectedVersion int64) (entity.ExchangeOffer, error) {
 	s.expectedVersion = expectedVersion
 	if s.archived.ID == 0 {
-		return entity.ExchangeRequest{}, entity.ErrExchangeRequestNotFound
+		return entity.ExchangeOffer{}, entity.ErrExchangeRequestNotFound
 	}
 	return s.archived, nil
 }

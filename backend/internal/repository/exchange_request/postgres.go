@@ -27,15 +27,15 @@ func NewRepository(pool *pgxpool.Pool) *Postgres {
 }
 
 // Create сохраняет новую активную заявку после проверки предлагаемого товара.
-func (r *Postgres) Create(ctx context.Context, request entity.ExchangeRequest) (entity.ExchangeRequest, error) {
+func (r *Postgres) Create(ctx context.Context, request entity.ExchangeOffer) (entity.ExchangeOffer, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return entity.ExchangeRequest{}, fmt.Errorf("begin create exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("begin create exchange request: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := ensureActiveOwnedItem(ctx, tx, request.UserID, request.OfferedItemID); err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	const query = `
@@ -64,18 +64,18 @@ func (r *Postgres) Create(ctx context.Context, request entity.ExchangeRequest) (
 		&created.UpdatedAt,
 	)
 	if err != nil {
-		return entity.ExchangeRequest{}, fmt.Errorf("insert exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("insert exchange request: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return entity.ExchangeRequest{}, fmt.Errorf("commit create exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("commit create exchange request: %w", err)
 	}
 
 	return created, nil
 }
 
 // Get возвращает неархивную заявку пользователя по идентификатору.
-func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (entity.ExchangeRequest, error) {
+func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (entity.ExchangeOffer, error) {
 	const query = `
 		SELECT id, user_id, offered_item_id, wanted_description,
 		       status, version, created_at, updated_at
@@ -83,19 +83,19 @@ func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (ent
 		WHERE id = $1 AND user_id = $2 AND status <> 'REMOVED'
 	`
 
-	request, err := scanExchangeRequest(r.pool.QueryRow(ctx, query, requestID, userID))
+	request, err := scanExchangeOffer(r.pool.QueryRow(ctx, query, requestID, userID))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ExchangeRequest{}, entity.ErrExchangeRequestNotFound
+		return entity.ExchangeOffer{}, entity.ErrExchangeRequestNotFound
 	}
 	if err != nil {
-		return entity.ExchangeRequest{}, fmt.Errorf("get exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("get exchange request: %w", err)
 	}
 
 	return request, nil
 }
 
 // List возвращает неархивные заявки пользователя вместе с названиями товаров.
-func (r *Postgres) List(ctx context.Context, userID string) ([]requestservice.ListItem, error) {
+func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOfferListItem, error) {
 	// The join fetches card data in this single query, avoiding N+1 lookups of
 	// offered item titles in the HTTP list endpoint.
 	const query = `
@@ -114,9 +114,9 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]requestservice.Li
 	}
 	defer rows.Close()
 
-	requests := make([]requestservice.ListItem, 0)
+	requests := make([]entity.ExchangeOfferListItem, 0)
 	for rows.Next() {
-		var item requestservice.ListItem
+		var item entity.ExchangeOfferListItem
 		if err := rows.Scan(
 			&item.ID,
 			&item.UserID,
@@ -141,19 +141,19 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]requestservice.Li
 }
 
 // Update изменяет заявку, проверяет версию и инвалидирует затронутые цепочки.
-func (r *Postgres) Update(ctx context.Context, request entity.ExchangeRequest, expectedVersion int64) (entity.ExchangeRequest, error) {
+func (r *Postgres) Update(ctx context.Context, request entity.ExchangeOffer, expectedVersion int64) (entity.ExchangeOffer, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return entity.ExchangeRequest{}, fmt.Errorf("begin update exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("begin update exchange request: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := ensureMutableRequest(ctx, tx, request.ID, request.UserID, expectedVersion); err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	if err := ensureActiveOwnedItem(ctx, tx, request.UserID, request.OfferedItemID); err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	const query = `
@@ -171,7 +171,7 @@ func (r *Postgres) Update(ctx context.Context, request entity.ExchangeRequest, e
 		          status, version, created_at, updated_at
 	`
 
-	updated, err := scanExchangeRequest(tx.QueryRow(
+	updated, err := scanExchangeOffer(tx.QueryRow(
 		ctx,
 		query,
 		request.ID,
@@ -183,27 +183,27 @@ func (r *Postgres) Update(ctx context.Context, request entity.ExchangeRequest, e
 	))
 	if err != nil {
 		if mapped := mutationError(ctx, tx, request.ID, request.UserID, expectedVersion, err); mapped != nil {
-			return entity.ExchangeRequest{}, mapped
+			return entity.ExchangeOffer{}, mapped
 		}
-		return entity.ExchangeRequest{}, fmt.Errorf("update exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("update exchange request: %w", err)
 	}
 
 	if err := invalidateCandidateChains(ctx, tx, updated.ID, "request_changed"); err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return entity.ExchangeRequest{}, fmt.Errorf("commit update exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("commit update exchange request: %w", err)
 	}
 
 	return updated, nil
 }
 
 // Archive архивирует заявку, проверяет версию и инвалидирует затронутые цепочки.
-func (r *Postgres) Archive(ctx context.Context, userID string, requestID, expectedVersion int64) (entity.ExchangeRequest, error) {
+func (r *Postgres) Archive(ctx context.Context, userID string, requestID, expectedVersion int64) (entity.ExchangeOffer, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return entity.ExchangeRequest{}, fmt.Errorf("begin archive exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("begin archive exchange request: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -220,20 +220,20 @@ func (r *Postgres) Archive(ctx context.Context, userID string, requestID, expect
 		          status, version, created_at, updated_at
 	`
 
-	archived, err := scanExchangeRequest(tx.QueryRow(ctx, query, requestID, userID, expectedVersion))
+	archived, err := scanExchangeOffer(tx.QueryRow(ctx, query, requestID, userID, expectedVersion))
 	if err != nil {
 		if mapped := mutationError(ctx, tx, requestID, userID, expectedVersion, err); mapped != nil {
-			return entity.ExchangeRequest{}, mapped
+			return entity.ExchangeOffer{}, mapped
 		}
-		return entity.ExchangeRequest{}, fmt.Errorf("archive exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("archive exchange request: %w", err)
 	}
 
 	if err := invalidateCandidateChains(ctx, tx, archived.ID, "request_archived"); err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return entity.ExchangeRequest{}, fmt.Errorf("commit archive exchange request: %w", err)
+		return entity.ExchangeOffer{}, fmt.Errorf("commit archive exchange request: %w", err)
 	}
 
 	return archived, nil
@@ -243,8 +243,8 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanExchangeRequest(row rowScanner) (entity.ExchangeRequest, error) {
-	var request entity.ExchangeRequest
+func scanExchangeOffer(row rowScanner) (entity.ExchangeOffer, error) {
+	var request entity.ExchangeOffer
 	err := row.Scan(
 		&request.ID,
 		&request.UserID,

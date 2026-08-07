@@ -41,17 +41,17 @@ func NewService(repository ExchangeRequestRepository, embeddingClient embedding.
 }
 
 // Create создаёт активную заявку, получает embedding желания и запускает matching.
-func (s *Service) Create(ctx context.Context, userID string, input CreateInput) (entity.ExchangeRequest, error) {
+func (s *Service) Create(ctx context.Context, userID string, input CreateInput) (entity.ExchangeOffer, error) {
 	if err := validateCreate(input); err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	embeddingValue, err := s.embedWanted(ctx, input.WantedDescription)
 	if err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
-	created, err := s.repository.Create(ctx, entity.ExchangeRequest{
+	created, err := s.repository.Create(ctx, entity.ExchangeOffer{
 		UserID:            userID,
 		OfferedItemID:     input.OfferedItemID,
 		WantedDescription: strings.TrimSpace(input.WantedDescription),
@@ -60,7 +60,7 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 		Version:           1,
 	})
 	if err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	if s.matching == nil {
@@ -75,27 +75,27 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 }
 
 // Get возвращает доступную пользователю заявку по её идентификатору.
-func (s *Service) Get(ctx context.Context, userID string, requestID int64) (entity.ExchangeRequest, error) {
+func (s *Service) Get(ctx context.Context, userID string, requestID int64) (entity.ExchangeOffer, error) {
 	return s.repository.Get(ctx, userID, requestID)
 }
 
 // List возвращает все неархивные заявки пользователя.
-func (s *Service) List(ctx context.Context, userID string) ([]ListItem, error) {
+func (s *Service) List(ctx context.Context, userID string) ([]entity.ExchangeOfferListItem, error) {
 	return s.repository.List(ctx, userID)
 }
 
 // Update изменяет заявку, повышает её версию в репозитории и запускает matching.
-func (s *Service) Update(ctx context.Context, userID string, requestID int64, input UpdateInput) (entity.ExchangeRequest, error) {
+func (s *Service) Update(ctx context.Context, userID string, requestID int64, input UpdateInput) (entity.ExchangeOffer, error) {
 	if err := validateUpdate(input); err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	embeddingValue, err := s.embedWanted(ctx, input.WantedDescription)
 	if err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
-	updated, err := s.repository.Update(ctx, entity.ExchangeRequest{
+	updated, err := s.repository.Update(ctx, entity.ExchangeOffer{
 		ID:                requestID,
 		UserID:            userID,
 		OfferedItemID:     input.OfferedItemID,
@@ -103,7 +103,7 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 		WantEmbedding:     embeddingValue,
 	}, input.Version)
 	if err != nil {
-		return entity.ExchangeRequest{}, err
+		return entity.ExchangeOffer{}, err
 	}
 
 	if s.matching == nil {

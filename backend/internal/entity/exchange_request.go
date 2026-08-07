@@ -2,8 +2,8 @@ package entity
 
 import "time"
 
-// ExchangeRequest — заявка пользователя: какой товар он отдаёт и что хочет получить.
-type ExchangeRequest struct {
+// ExchangeOffer — предложение пользователя: какой товар он отдаёт и что хочет получить.
+type ExchangeOffer struct {
 	ID                int64
 	UserID            string
 	OfferedItemID     int64
@@ -13,4 +13,11 @@ type ExchangeRequest struct {
 	Version           int64
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+}
+
+// ExchangeOfferListItem содержит предложение и название отдаваемого товара,
+// полученные одним запросом без N+1.
+type ExchangeOfferListItem struct {
+	ExchangeOffer
+	OfferedItemTitle string
 }

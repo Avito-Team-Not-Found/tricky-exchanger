@@ -18,8 +18,8 @@ import (
 func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	service := &handlerFakeService{
-		list: []requestservice.ListItem{{
-			ExchangeRequest: entity.ExchangeRequest{
+		list: []entity.ExchangeOfferListItem{{
+			ExchangeOffer: entity.ExchangeOffer{
 				ID:                12,
 				OfferedItemID:     5,
 				WantedDescription: "кофемашина",
@@ -74,25 +74,25 @@ func TestListRequiresAuthenticatedUser(t *testing.T) {
 }
 
 type handlerFakeService struct {
-	list       []requestservice.ListItem
+	list       []entity.ExchangeOfferListItem
 	listUserID string
 }
 
-func (s *handlerFakeService) Create(context.Context, string, requestservice.CreateInput) (entity.ExchangeRequest, error) {
-	return entity.ExchangeRequest{}, nil
+func (s *handlerFakeService) Create(context.Context, string, requestservice.CreateInput) (entity.ExchangeOffer, error) {
+	return entity.ExchangeOffer{}, nil
 }
 
-func (s *handlerFakeService) Get(context.Context, string, int64) (entity.ExchangeRequest, error) {
-	return entity.ExchangeRequest{}, nil
+func (s *handlerFakeService) Get(context.Context, string, int64) (entity.ExchangeOffer, error) {
+	return entity.ExchangeOffer{}, nil
 }
 
-func (s *handlerFakeService) List(_ context.Context, userID string) ([]requestservice.ListItem, error) {
+func (s *handlerFakeService) List(_ context.Context, userID string) ([]entity.ExchangeOfferListItem, error) {
 	s.listUserID = userID
 	return s.list, nil
 }
 
-func (s *handlerFakeService) Update(context.Context, string, int64, requestservice.UpdateInput) (entity.ExchangeRequest, error) {
-	return entity.ExchangeRequest{}, nil
+func (s *handlerFakeService) Update(context.Context, string, int64, requestservice.UpdateInput) (entity.ExchangeOffer, error) {
+	return entity.ExchangeOffer{}, nil
 }
 
 func (s *handlerFakeService) Delete(context.Context, string, int64, int64) error {

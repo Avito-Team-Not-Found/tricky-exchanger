@@ -66,20 +66,20 @@ func newTestEngine() *gin.Engine {
 
 type stubExchangeRequestService struct{}
 
-func (stubExchangeRequestService) Create(_ context.Context, _ string, _ exchangeRequestService.CreateInput) (entity.ExchangeRequest, error) {
-	return entity.ExchangeRequest{}, nil
+func (stubExchangeRequestService) Create(_ context.Context, _ string, _ exchangeRequestService.CreateInput) (entity.ExchangeOffer, error) {
+	return entity.ExchangeOffer{}, nil
 }
 
-func (stubExchangeRequestService) Get(_ context.Context, _ string, _ int64) (entity.ExchangeRequest, error) {
-	return entity.ExchangeRequest{}, nil
+func (stubExchangeRequestService) Get(_ context.Context, _ string, _ int64) (entity.ExchangeOffer, error) {
+	return entity.ExchangeOffer{}, nil
 }
 
-func (stubExchangeRequestService) List(_ context.Context, _ string) ([]exchangeRequestService.ListItem, error) {
+func (stubExchangeRequestService) List(_ context.Context, _ string) ([]entity.ExchangeOfferListItem, error) {
 	return nil, nil
 }
 
-func (stubExchangeRequestService) Update(_ context.Context, _ string, _ int64, _ exchangeRequestService.UpdateInput) (entity.ExchangeRequest, error) {
-	return entity.ExchangeRequest{}, nil
+func (stubExchangeRequestService) Update(_ context.Context, _ string, _ int64, _ exchangeRequestService.UpdateInput) (entity.ExchangeOffer, error) {
+	return entity.ExchangeOffer{}, nil
 }
 
 func (stubExchangeRequestService) Delete(_ context.Context, _ string, _ int64, _ int64) error {

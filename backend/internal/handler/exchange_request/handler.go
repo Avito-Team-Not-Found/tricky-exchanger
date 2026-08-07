@@ -101,10 +101,10 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	response := make([]ExchangeRequestListItem, 0, len(requests))
+	response := make([]listResponse, 0, len(requests))
 	for _, request := range requests {
-		response = append(response, ExchangeRequestListItem{
-			requestResponse:  newRequestResponse(request.ExchangeRequest),
+		response = append(response, listResponse{
+			requestResponse:  newRequestResponse(request.ExchangeOffer),
 			OfferedItemTitle: request.OfferedItemTitle,
 		})
 	}
@@ -205,7 +205,7 @@ type requestResponse struct {
 	UpdatedAt         string               `json:"updatedAt"`
 }
 
-func newRequestResponse(request entity.ExchangeRequest) requestResponse {
+func newRequestResponse(request entity.ExchangeOffer) requestResponse {
 	return requestResponse{
 		ID:                request.ID,
 		OfferedItemID:     request.OfferedItemID,
@@ -217,8 +217,7 @@ func newRequestResponse(request entity.ExchangeRequest) requestResponse {
 	}
 }
 
-// ExchangeRequestListItem — HTTP-представление элемента списка заявок.
-type ExchangeRequestListItem struct {
+type listResponse struct {
 	requestResponse
 	OfferedItemTitle string `json:"offeredItemTitle"`
 }
