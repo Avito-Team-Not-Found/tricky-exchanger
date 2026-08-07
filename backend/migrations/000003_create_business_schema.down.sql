@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS votes;
+DROP TABLE IF EXISTS chain_participants;
+DROP TABLE IF EXISTS chains;
+DROP TABLE IF EXISTS cluster_members;
+DROP TABLE IF EXISTS clusters;
+DROP TABLE IF EXISTS exchange_requests;
+DROP TABLE IF EXISTS items;
+DROP TABLE IF EXISTS categories;

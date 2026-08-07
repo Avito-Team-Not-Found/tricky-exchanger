@@ -3,58 +3,89 @@
 ## Требования
 
 - Docker / Docker Compose
-- Go 1.26+
+- Go 1.26+ (нужен только для локальной разработки без Docker)
 - Make
 
 ## Версии компонентов
 
-| Компонент      | Версия                   |
-|----------------|--------------------------|
-| PostgreSQL     | 18                       |
-| pgvector       | 0.8.6                    |
+| Компонент       | Версия              |
+|-----------------|---------------------|
+| PostgreSQL      | v18                 |
+| pgvector        | v0.8.6              |
+| golang-migrate  | v4.19.1             |
 
-## Шаги запуска
+## Запуск одной командой
 
-### 1. Создать окружение
-
-```bash
-cp .env.example .env
-```
-
-Отредактируйте `.env` при необходимости. Файл `.env` в `.gitignore`, секреты не коммитятся.
-
-### 2. Поднять PostgreSQL с pgvector
+Весь проект (БД + миграции + бэкенд) поднимается одной командой через
+docker-compose:
 
 ```bash
-make db-up
+cp .env.example .env   # при необходимости отредактируйте переменные
+make up
 ```
 
-### 3. Накатить миграции
+`make up` эквивалентен `docker compose up -d --build` и поднимает три сервиса
+по цепочке зависимостей:
+
+1. `db` — PostgreSQL с pgvector, поднимается и ждёт `healthcheck` (`pg_isready`).
+2. `migrate` — официальный образ `migrate/migrate`, применяет все `.sql`-миграции
+   из `backend/migrations` к базе после того, как `db` стал healthy, и завершается.
+3. `app` — сам бэкенд, стартует только после того, как `migrate` успешно завершился
+   (`depends_on: condition: service_completed_successfully`), то есть всегда
+   подключается к уже готовой схеме.
+
+Остановить и полностью удалить контейнеры и volume с данными БД:
 
 ```bash
-make migrate-up   # применить все миграции (включая создание расширения pgvector)
-make migrate-down # откатить последнюю миграцию
+make down
 ```
 
-### 4. Запустить сервер
+Полезные команды:
 
 ```bash
-make run
+make logs      # логи бэкенда
+make db-logs   # логи БД
+make test      # go test ./... внутри backend
 ```
+
+## Локальный запуск без Docker (опционально)
+
+Если нужно запускать сам бэкенд напрямую на хосте (например, для отладки),
+поднимите только БД и миграции через Docker, а бэкенд — через `go run`:
+
+```bash
+docker compose up -d db migrate
+cd backend && make run   # или: cd backend && go run ./cmd/api
+```
+
+В этом случае в `.env` должен быть `DATABASE_URL` с хостом `localhost`
+(см. `.env.example`), а не `db`, как внутри docker-compose сети.
 
 ## Проверка
 
 - Если БД недоступна, приложение завершается с понятной ошибкой:
   `database is unreachable: ...`
-- Если расширение pgvector не установлено, вы получите:
-  `pgvector extension is NOT installed. Run make migrate-up first`
 
-## Полезные команды
+## Миграции
+
+Миграции лежат в `backend/migrations` в формате `<номер>_<имя>.up.sql` /
+`.down.sql` (формат `golang-migrate`). Накатываются они не самим приложением,
+а отдельным сервисом `migrate` в docker-compose (официальный образ
+`migrate/migrate`) — это гарантирует, что схема применяется ровно один раз,
+до старта приложения, без гонок и без прав на миграции у самого сервиса `app`.
+
+Чтобы накатить/откатить миграции вручную (например, при локальной разработке):
 
 ```bash
-make db-down   # остановить БД
-make db-logs   # логи БД
+# применить все миграции
+docker compose run --rm migrate -path=/migrations -database="postgres://tricky:tricky@db:5432/tricky_exchanger?sslmode=disable" up
+
+# откатить последнюю миграцию
+docker compose run --rm migrate -path=/migrations -database="postgres://tricky:tricky@db:5432/tricky_exchanger?sslmode=disable" down 1
 ```
+
+Новая миграция добавляется парой файлов с следующим порядковым номером,
+например `000005_add_something.up.sql` / `000005_add_something.down.sql`.
 
 ## Архитектура
 
