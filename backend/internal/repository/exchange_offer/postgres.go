@@ -286,8 +286,9 @@ func invalidateCandidateChains(ctx context.Context, tx database.Tx, requestID in
 		  AND EXISTS (
 			SELECT 1
 			FROM chain_participants AS cp
+			JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
 			WHERE cp.chain_id = c.id
-			  AND cp.request_id = $1
+			  AND member.request_id = $1
 		)
 	`
 	if _, err := tx.Exec(ctx, query, requestID, reason); err != nil {

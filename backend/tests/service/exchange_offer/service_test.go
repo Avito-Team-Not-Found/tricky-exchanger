@@ -162,9 +162,9 @@ type fakeMatcher struct {
 	removedID int64
 }
 
-func (m *fakeMatcher) RebuildForRequest(_ context.Context, _ database.Tx, requestID int64) error {
+func (m *fakeMatcher) RebuildForRequest(_ context.Context, _ database.Tx, requestID int64) ([]entity.ChainDraft, error) {
 	m.rebuiltID = requestID
-	return nil
+	return []entity.ChainDraft{}, nil
 }
 
 func (m *fakeMatcher) RemoveRequest(_ context.Context, _ database.Tx, requestID int64) error {
