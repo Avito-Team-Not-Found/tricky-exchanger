@@ -14,6 +14,16 @@ export default defineConfig({
       '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
     },
   },
+  // фронт ходит на бэкенд same-origin через прокси (VITE_API_BASE_URL пустой) —
+  // тогда бэкенду не нужен CORS (SCRUM-50: задача чисто фронтовая)
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
