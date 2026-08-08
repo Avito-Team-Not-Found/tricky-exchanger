@@ -9,16 +9,12 @@ import multer from 'multer';
 const here = dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_PORT = 4000;
-const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const TITLE_LIMIT = 100;
 const DESCRIPTION_LIMIT = 500;
 const RECOVERY_CODE_TTL_MS = 10 * 60 * 1000;
 
-// Время на ответ по кандидатной цепочке — мок даёт его с запасом, чтобы таймер в UI был живым
-const RESPONSE_WINDOW_MS = 48 * 60 * 60 * 1000;
-
 // Справочник категорий не входит в согласованный контракт (PROJECT.md §2.3) — мок отдаёт
-// статичный каталог, чтобы форму заявки можно было заполнить целиком
+// статичный каталог, который фронт показывает на экране цепочки (ChainDetailPage)
 const CATEGORIES = [
   { id: 'personal', name: 'Личные вещи' },
   { id: 'home', name: 'Для дома и дачи' },
@@ -41,18 +37,6 @@ function writePasswords(passwordsPath, passwords) {
   writeFileSync(passwordsPath, JSON.stringify(passwords, null, 2) + '\n');
 }
 
-function toBase64Url(value) {
-  return Buffer.from(value).toString('base64url');
-}
-
-function issueToken(userId) {
-  const header = toBase64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const payload = toBase64Url(
-    JSON.stringify({ sub: userId, iat: Date.now(), exp: Date.now() + TOKEN_TTL_MS }),
-  );
-  return `${header}.${payload}.mock-signature`;
-}
-
 function decodeToken(token) {
   try {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
@@ -64,19 +48,12 @@ function decodeToken(token) {
   }
 }
 
-function publicUser(user) {
-  return { id: user.id, name: user.name, email: user.email };
-}
-
 function publicItem(item) {
   return {
     id: item.id,
     title: item.title,
     description: item.description,
     categoryId: item.categoryId ?? null,
-    color: item.color ?? null,
-    material: item.material ?? null,
-    attributes: item.attributes ?? null,
     image: item.image ?? null,
     status: item.status,
     createdAt: item.createdAt,
@@ -84,25 +61,8 @@ function publicItem(item) {
   };
 }
 
-function publicRequest(request, offeredItem) {
-  return {
-    id: request.id,
-    offeredItemId: request.offeredItemId,
-    offeredItem: offeredItem ? publicItem(offeredItem) : null,
-    wantedDescription: request.wantedDescription,
-    wantedProfile: request.wantedProfile ?? null,
-    status: request.status,
-    createdAt: request.createdAt,
-    updatedAt: request.updatedAt,
-  };
-}
-
-function toOfferRef(item) {
-  return { id: item.id, title: item.title, image: item.image ?? null };
-}
-
 // Публичный участник цепочки: userId/name нужны для аватаров, isCurrentUser — «это я?» (макет §4.8).
-// offeredItem — товар участника: ref { id, title, image } + описание/характеристики из каталога,
+// offeredItem — товар участника: ref { id, title, image } + описание/категория из каталога,
 // чтобы экран товара цепочки (макет 4.7) не ходил за ними отдельным запросом.
 function publicParticipant(participant, userId, db) {
   const offered = participant.offeredItem;
@@ -120,9 +80,6 @@ function publicParticipant(participant, userId, db) {
           image,
           description: item?.description ?? null,
           categoryId: item?.categoryId ?? null,
-          color: item?.color ?? null,
-          material: item?.material ?? null,
-          attributes: item?.attributes ?? null,
         }
       : null,
     receivesFromPosition: participant.receivesFromPosition,
@@ -175,87 +132,6 @@ function publicChain(chain, db, userId) {
   };
 }
 
-// Закольцовываем цепочку: владелец хочет товар первого участника, последний участник хочет товар владельца.
-function buildParticipants(request, offeredItem, others, usersById, offset, otherCount) {
-  const owner = usersById[request.userId];
-  const picks = [];
-  let cursor = offset;
-  while (picks.length < otherCount) {
-    const candidate = others[cursor % others.length];
-    cursor += 1;
-    if (candidate.userId !== request.userId && !picks.some((p) => p.userId === candidate.userId)) {
-      picks.push(candidate);
-    }
-  }
-
-  const participants = [
-    {
-      position: 1,
-      requestId: request.id,
-      userId: owner.id,
-      name: owner.name,
-      offeredItem: toOfferRef(offeredItem),
-      receivesFromPosition: 2,
-      responseStatus: null,
-      freezeVoteStatus: null,
-    },
-  ];
-  picks.forEach((pick, i) => {
-    participants.push({
-      position: i + 2,
-      requestId: null,
-      userId: pick.userId,
-      name: usersById[pick.userId].name,
-      offeredItem: toOfferRef(pick),
-      receivesFromPosition: i === picks.length - 1 ? 1 : i + 3,
-      // остальные участники уже согласились: иначе в моке цепочку нельзя собрать (отвечать может только владелец заявки)
-      responseStatus: 'ACCEPTED',
-      freezeVoteStatus: null,
-    });
-  });
-
-  return participants;
-}
-
-// Мок-matching: кандидаты — активные товары других пользователей, стартовый берём по первому слову запроса.
-function generateChains(db, request) {
-  const items = db.get('items').value();
-  const users = db.get('users').value();
-  const usersById = Object.fromEntries(users.map((u) => [u.id, u]));
-  const offeredItem = items.find((i) => i.id === request.offeredItemId);
-  if (!offeredItem) return [];
-
-  const others = items.filter((i) => i.userId !== request.userId && i.status === 'ACTIVE');
-  if (others.length === 0) return [];
-
-  const wantedWord = request.wantedDescription.toLowerCase().split(/\s+/)[0];
-  let matchIndex = others.findIndex((i) => i.title.toLowerCase().includes(wantedWord));
-  if (matchIndex === -1) matchIndex = 0;
-
-  const distinctUsers = new Set(others.map((i) => i.userId)).size;
-  const probabilities = [90, 72, 55];
-  const now = Date.now();
-  return probabilities
-    .slice(0, Math.min(others.length, distinctUsers))
-    .map((probability, chainIndex) => ({
-      id: randomUUID(),
-      requestId: request.id,
-      status: 'CANDIDATE',
-      score: probability / 100,
-      responseDeadlineAt: new Date(now + RESPONSE_WINDOW_MS).toISOString(),
-      freezeDeadlineAt: null,
-      participants: buildParticipants(
-        request,
-        offeredItem,
-        others,
-        usersById,
-        matchIndex + chainIndex,
-        chainIndex + 1,
-      ),
-      createdAt: new Date(now).toISOString(),
-    }));
-}
-
 // Поля товара приходят и из multipart (строки), и из JSON — приводим к одному виду и валидируем.
 function parseItemFields(body, { partial = false } = {}) {
   const patch = {};
@@ -274,42 +150,14 @@ function parseItemFields(body, { partial = false } = {}) {
     }
     patch.description = description;
   }
-  if (has('color')) {
-    // пустой/отсутствующий материал фронт шлёт как null — не превращать его в строку "null"
-    const color = body.color == null ? '' : String(body.color).trim();
-    patch.color = color ? color : null;
-  }
-  if (has('material')) {
-    const material = body.material == null ? '' : String(body.material).trim();
-    patch.material = material ? material : null;
-  }
   if (has('categoryId')) {
     const categoryId = body.categoryId == null ? '' : String(body.categoryId).trim();
     patch.categoryId = categoryId ? categoryId : null;
-  }
-  if (has('attributes') && body.attributes && typeof body.attributes === 'object') {
-    patch.attributes = body.attributes;
   }
 
   if (!partial && !patch.title) return { error: 'Название обязательно' };
   if (!partial && !patch.description) return { error: 'Описание обязательно' };
   return { patch };
-}
-
-// wantedProfile — необязательный структурированный фильтр мэтчинга (PROJECT.md §4.3).
-// null — фильтр не задан, undefined — ошибка валидации.
-function parseWantedProfile(profile) {
-  if (profile == null) return null;
-  if (typeof profile !== 'object' || Array.isArray(profile)) return undefined;
-
-  const result = {};
-  if (profile.categoryId != null) {
-    const categoryId = String(profile.categoryId).trim();
-    if (!categoryId) return undefined;
-    result.categoryId = categoryId;
-  }
-  if (Object.keys(result).length === 0) return null;
-  return result;
 }
 
 export function createMockApp({
@@ -326,52 +174,11 @@ export function createMockApp({
 
   const fail = (res, code, message) => res.status(code).json({ error: message, code });
   const findItem = (itemId) => db.get('items').getById(itemId).value();
-
-  // Бронь снимается, когда товар больше не держит ни одна заблокированная заявка.
-  // Обменянный товар (EXCHANGED) в оборот не возвращаем — сделка уже состоялась.
-  const releaseItemIfUnused = (itemId) => {
-    const item = findItem(itemId);
-    if (!item || item.status !== 'RESERVED') return;
-
-    const stillHeld = db
-      .get('exchangeRequests')
-      .some((r) => r.offeredItemId === itemId && r.status === 'LOCKED')
-      .value();
-    if (!stillHeld) db.get('items').updateById(itemId, { status: 'ACTIVE' }).write();
-  };
   const findUserByEmail = (email) =>
     db
       .get('users')
       .find((u) => u.email === email)
       .value();
-
-  server.post('/api/v1/account/registration/', (req, res) => {
-    const { email, password, name } = req.body ?? {};
-    if (!email || !password || !name) return fail(res, 400, 'email, password и name обязательны');
-    if (!/^\S+@\S+\.\S+$/.test(email)) return fail(res, 400, 'Некорректный email');
-    if (password.length < 8) return fail(res, 400, 'Пароль должен быть не короче 8 символов');
-    if (findUserByEmail(email))
-      return fail(res, 409, 'Пользователь с таким email уже зарегистрирован');
-
-    const user = { id: randomUUID(), name, email, createdAt: new Date().toISOString() };
-    db.get('users').insert(user).write();
-    const passwords = readPasswords(passwordsPath);
-    passwords[user.id] = password;
-    writePasswords(passwordsPath, passwords);
-
-    res.status(201).json({ token: issueToken(user.id), user: publicUser(user) });
-  });
-
-  server.post('/api/v1/account/login/', (req, res) => {
-    const { email, password } = req.body ?? {};
-    const user = email ? findUserByEmail(email) : undefined;
-    // Несуществующий email отличаем от неверного пароля, чтобы фронт показал конкретную ошибку
-    if (!user) return fail(res, 404, 'Пользователь с таким email не найден');
-    if (readPasswords(passwordsPath)[user.id] !== password) {
-      return fail(res, 401, 'Неверный пароль');
-    }
-    res.json({ token: issueToken(user.id), user: publicUser(user) });
-  });
 
   const issueRecoveryCode = (email) => {
     const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -425,30 +232,6 @@ export function createMockApp({
     if (!userId) return fail(res, 401, 'Требуется авторизация');
     req.userId = userId;
     next();
-  });
-
-  server.get('/api/v1/users/:id', (req, res) => {
-    const user = db.get('users').getById(req.params.id).value();
-    if (!user) return fail(res, 404, 'Пользователь не найден');
-    res.json(publicUser(user));
-  });
-
-  server.post('/api/v1/account/password-change/', (req, res) => {
-    const { currentPassword, newPassword } = req.body ?? {};
-    const user = db.get('users').getById(req.userId).value();
-    if (!user) return fail(res, 404, 'Пользователь не найден');
-
-    const passwords = readPasswords(passwordsPath);
-    if (passwords[user.id] !== currentPassword) {
-      return fail(res, 400, 'Неверный текущий пароль');
-    }
-    if (typeof newPassword !== 'string' || newPassword.length < 8) {
-      return fail(res, 400, 'Пароль должен быть не короче 8 символов');
-    }
-
-    passwords[user.id] = newPassword;
-    writePasswords(passwordsPath, passwords);
-    res.json({ message: 'password_changed' });
   });
 
   server.get('/api/v1/categories', (req, res) => {
@@ -540,139 +323,16 @@ export function createMockApp({
     res.json({ message: 'archived' });
   });
 
-  server.get('/api/v1/exchange-requests', (req, res) => {
-    const requests = db
-      .get('exchangeRequests')
-      .filter((r) => r.userId === req.userId)
-      .value();
-    res.json(requests.map((request) => publicRequest(request, findItem(request.offeredItemId))));
-  });
-
-  server.get('/api/v1/exchange-requests/:id', (req, res) => {
-    const request = db.get('exchangeRequests').getById(req.params.id).value();
-    if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
-    res.json(publicRequest(request, findItem(request.offeredItemId)));
-  });
-
-  const applyRequestPatch = (request, patch) => {
-    db.get('chains')
-      .removeWhere((c) => c.requestId === request.id)
-      .write();
-    db.get('exchangeRequests')
-      .updateById(request.id, { ...patch, updatedAt: new Date().toISOString() })
-      .write();
-
-    // matching пересчитывается синхронно: нашлись цепочки → IN_PROPOSAL, нет → остаётся в поиске (ACTIVE)
-    const chains = generateChains(db, { ...request, ...patch });
-    if (chains.length > 0) {
-      db.get('chains')
-        .push(...chains)
-        .write();
-      db.get('exchangeRequests').updateById(request.id, { status: 'IN_PROPOSAL' }).write();
-    } else {
-      db.get('exchangeRequests').updateById(request.id, { status: 'ACTIVE' }).write();
-    }
-  };
-
-  server.post('/api/v1/exchange-requests', (req, res) => {
-    const { offeredItemId, wantedDescription, wantedProfile } = req.body ?? {};
-    if (!offeredItemId) return fail(res, 400, 'Нужно выбрать отдаваемый товар');
-    const item = findItem(offeredItemId);
-    if (!item || item.userId !== req.userId) {
-      return fail(res, 400, 'Отдаваемый товар не найден');
-    }
-    // 409, а не 400: «товар уже в резерве» — отдельный конфликт по PROJECT.md §4.9,
-    // фронт показывает на него собственный текст (useRequestForm)
-    if (item.status !== 'ACTIVE') return fail(res, 409, 'Товар уже в резерве');
-    if (!wantedDescription?.trim()) return fail(res, 400, 'Укажите, что вы хотите получить');
-    if (String(wantedDescription).trim().length > DESCRIPTION_LIMIT) {
-      return fail(res, 400, `Описание не длиннее ${DESCRIPTION_LIMIT} символов`);
-    }
-    const profile = parseWantedProfile(wantedProfile);
-    if (profile === undefined) return fail(res, 400, 'Некорректный wantedProfile');
-
-    const now = new Date().toISOString();
-    const request = {
-      id: randomUUID(),
-      userId: req.userId,
-      offeredItemId,
-      wantedDescription: String(wantedDescription).trim(),
-      wantedProfile: profile,
-      status: 'ACTIVE',
-      createdAt: now,
-      updatedAt: now,
-    };
-    db.get('exchangeRequests').insert(request).write();
-
-    const chains = generateChains(db, request);
-    if (chains.length > 0) {
-      db.get('chains')
-        .push(...chains)
-        .write();
-      db.get('exchangeRequests').updateById(request.id, { status: 'IN_PROPOSAL' }).write();
-      request.status = 'IN_PROPOSAL';
-    }
-
-    res.status(201).json({
-      request: publicRequest(request, item),
-      matching: { createdCandidateChains: chains.length },
-    });
-  });
-
-  server.patch('/api/v1/exchange-requests/:id', (req, res) => {
-    const request = db.get('exchangeRequests').getById(req.params.id).value();
-    if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
-    // живая заявка (в поиске или с предложенными цепочками) редактируется, LOCKED/DONE/REMOVED — нет
-    if (request.status !== 'ACTIVE' && request.status !== 'IN_PROPOSAL') {
-      return fail(res, 400, 'Можно редактировать только активный запрос');
-    }
-
-    const patch = {};
-    if (req.body?.wantedDescription !== undefined) {
-      const description = String(req.body.wantedDescription).trim();
-      if (!description) return fail(res, 400, 'Укажите, что вы хотите получить');
-      if (description.length > DESCRIPTION_LIMIT) {
-        return fail(res, 400, `Описание не длиннее ${DESCRIPTION_LIMIT} символов`);
-      }
-      patch.wantedDescription = description;
-    }
-    if (req.body?.wantedProfile !== undefined) {
-      const profile = parseWantedProfile(req.body.wantedProfile);
-      if (profile === undefined) return fail(res, 400, 'Некорректный wantedProfile');
-      patch.wantedProfile = profile;
-    }
-
-    applyRequestPatch(request, patch);
-    const updated = db.get('exchangeRequests').getById(request.id).value();
-    res.json(publicRequest(updated, findItem(updated.offeredItemId)));
-  });
-
-  // Деактивация заявки — мягкая: статус REMOVED, заявка остаётся в списке (PROJECT.md §2.5 «Отменён»)
-  server.delete('/api/v1/exchange-requests/:id', (req, res) => {
+  // Цепочки по заявке (PROJECT.md §4.4): кандидаты и активные сделки владельца заявки
+  server.get('/api/v1/exchange-requests/:id/chains', (req, res) => {
     const request = db.get('exchangeRequests').getById(req.params.id).value();
     if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
 
-    db.get('exchangeRequests')
-      .updateById(request.id, { status: 'REMOVED', updatedAt: new Date().toISOString() })
-      .write();
-    // у отменённой заявки нет больше кандидатных цепочек
-    db.get('chains')
-      .removeWhere((c) => c.requestId === request.id)
-      .write();
-    releaseItemIfUnused(request.offeredItemId);
-    res.json({ message: 'deleted' });
-  });
-
-  // Цепочки пользователя (PROJECT.md §4.4): свои кандидаты и активные сделки; ?status — фильтр через запятую
-  server.get('/api/v1/chains', (req, res) => {
-    let chains = db
+    const chains = db
       .get('chains')
-      .filter((c) => c.participants.some((p) => p.userId === req.userId))
-      .value();
-    if (req.query.status) {
-      const statuses = String(req.query.status).split(',');
-      chains = chains.filter((c) => statuses.includes(c.status));
-    }
+      .filter((c) => c.requestId === request.id && c.status !== 'CANCELLED')
+      .value()
+      .sort((a, b) => b.score - a.score);
     res.json(chains.map((c) => publicChain(c, db, req.userId)));
   });
 
@@ -688,18 +348,6 @@ export function createMockApp({
       return fail(res, 403, 'Вы не участник цепочки');
     }
     res.json(publicChain(chain, db, req.userId));
-  });
-
-  server.get('/api/v1/exchange-requests/:id/chains', (req, res) => {
-    const request = db.get('exchangeRequests').getById(req.params.id).value();
-    if (!request || request.userId !== req.userId) return fail(res, 404, 'Запрос не найден');
-
-    const chains = db
-      .get('chains')
-      .filter((c) => c.requestId === request.id && c.status !== 'CANCELLED')
-      .value()
-      .sort((a, b) => b.score - a.score);
-    res.json(chains.map((c) => publicChain(c, db, req.userId)));
   });
 
   const respondToChain = (kind) => (req, res) => {
@@ -727,20 +375,6 @@ export function createMockApp({
 
   server.post('/api/v1/chains/:chainId/responses/accept', respondToChain('accept'));
   server.post('/api/v1/chains/:chainId/responses/decline', respondToChain('decline'));
-
-  server.get('/api/v1/chains/:chainId/responses', (req, res) => {
-    const chain = db.get('chains').getById(req.params.chainId).value();
-    if (!chain) return fail(res, 404, 'Цепочка не найдена');
-    if (!chain.participants.some((p) => p.userId === req.userId)) {
-      return fail(res, 403, 'Вы не участник цепочки');
-    }
-    res.json(
-      chain.participants.map((p) => ({
-        requestId: p.requestId ?? null,
-        responseStatus: p.responseStatus ?? null,
-      })),
-    );
-  });
 
   // Выбор цепочки владельцем заявки (PROJECT.md §4.5). Выбор не эксклюзивен: владелец может
   // отметить любое количество вариантов, остальные цепочки и заявка при этом не блокируются.
