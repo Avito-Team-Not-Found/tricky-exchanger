@@ -76,7 +76,8 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 		if createErr != nil {
 			return createErr
 		}
-		return s.matching.RebuildForRequest(ctx, tx, created.ID)
+		_, matchingErr := s.matching.RebuildForRequest(ctx, tx, created.ID)
+		return matchingErr
 	})
 	if err != nil {
 		return entity.ExchangeOffer{}, err
@@ -123,7 +124,8 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 		if updateErr != nil {
 			return updateErr
 		}
-		return s.matching.RebuildForRequest(ctx, tx, updated.ID)
+		_, matchingErr := s.matching.RebuildForRequest(ctx, tx, updated.ID)
+		return matchingErr
 	})
 	if err != nil {
 		return entity.ExchangeOffer{}, err

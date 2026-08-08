@@ -88,7 +88,13 @@ func main() {
 		cfg.MatchingTopK,
 		cfg.MatchingThreshold,
 	)
-	matchingFacade := matching.NewFacade(clusterSvc)
+	cycleFinder := matching.NewCycleFinder(
+		candidateSearch,
+		cfg.CycleOutgoingK,
+		cfg.CycleMaxDrafts,
+		cfg.MatchingThreshold,
+	)
+	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder)
 	transactionManager := database.NewTransactionManager(pool)
 
 	// Выбор embed-провайдера конфигом: tei | stub.
