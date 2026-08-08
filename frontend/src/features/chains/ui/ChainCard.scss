@@ -89,6 +89,7 @@
 
 // фото получаемого товара — крупный блок в верхней части карточки (макет 4.6)
 .chain-card__photo {
+  position: relative;
   width: 100%;
   aspect-ratio: 311 / 171;
   border-radius: var(--radius-md);
@@ -96,7 +97,11 @@
   background: var(--color-bg-page);
 }
 
+// position: absolute уводит картинку из потока — иначе портретная фотография растягивает
+// контейнер и ломает aspect-ratio 311:171 (та же проблема, что и в ProductCard)
 .chain-card__photo-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
