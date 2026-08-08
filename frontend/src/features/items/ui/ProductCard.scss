@@ -55,11 +55,28 @@
   max-width: calc(100% - var(--spacing-md) * 2);
 }
 
-.product-card__title {
+// название и категория — один текстовый блок под фото: общий отступ на нём,
+// иначе между строками набегает padding обеих
+.product-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
   padding: var(--spacing-sm);
+}
+
+.product-card__title {
   font-size: var(--font-size-body);
   line-height: var(--line-height-body);
   color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.product-card__category {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
