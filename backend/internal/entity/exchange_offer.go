@@ -8,11 +8,13 @@ type ExchangeOffer struct {
 	UserID            string
 	OfferedItemID     int64
 	WantedDescription string
-	WantEmbedding     []float32
-	Status            RequestStatus
-	Version           int64
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// WantedCategory — текстовое имя категории желаемого товара (например, "Телефоны").
+	WantedCategory string
+	WantEmbedding  []float32
+	Status         RequestStatus
+	Version        int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // ExchangeOfferListItem содержит предложение и название отдаваемого товара,

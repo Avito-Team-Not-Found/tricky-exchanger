@@ -52,7 +52,7 @@ func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
 	if service.listUserID != userID {
 		t.Fatalf("list user ID = %q, want %s", service.listUserID, userID)
 	}
-	if got, want := recorder.Body.String(), `[{"id":12,"offeredItemId":5,"wantedDescription":"кофемашина","status":"ACTIVE","version":1,"createdAt":"2026-08-07T09:00:00Z","updatedAt":"2026-08-07T09:00:00Z","offeredItemTitle":"Велосипед"}]`; got != want {
+	if got, want := recorder.Body.String(), `[{"id":12,"offeredItemId":5,"wantedDescription":"кофемашина","wantedCategory":"","status":"ACTIVE","version":1,"createdAt":"2026-08-07T09:00:00Z","updatedAt":"2026-08-07T09:00:00Z","offeredItemTitle":"Велосипед"}]`; got != want {
 		t.Fatalf("body = %s, want %s", got, want)
 	}
 }

@@ -27,6 +27,7 @@ func NewHandler(service exchangeOfferService) *Handler {
 type mutationBody struct {
 	OfferedItemID     int64  `json:"offeredItemId" binding:"required"`
 	WantedDescription string `json:"wantedDescription" binding:"required"`
+	WantedCategory    string `json:"wantedCategory"`
 	Version           int64  `json:"version"`
 }
 
@@ -34,6 +35,7 @@ type exchangeOfferResponse struct {
 	ID                int64                `json:"id"`
 	OfferedItemID     int64                `json:"offeredItemId"`
 	WantedDescription string               `json:"wantedDescription"`
+	WantedCategory    string               `json:"wantedCategory"`
 	Status            entity.RequestStatus `json:"status"`
 	Version           int64                `json:"version"`
 	CreatedAt         string               `json:"createdAt"`
@@ -60,6 +62,7 @@ func (h *Handler) Create(c *gin.Context) {
 	created, err := h.service.Create(c.Request.Context(), userID, offerservice.CreateInput{
 		OfferedItemID:     body.OfferedItemID,
 		WantedDescription: body.WantedDescription,
+		WantedCategory:    body.WantedCategory,
 	})
 	if err != nil {
 		switch {
@@ -147,6 +150,7 @@ func (h *Handler) Update(c *gin.Context) {
 	updated, err := h.service.Update(c.Request.Context(), userID, requestID, offerservice.UpdateInput{
 		OfferedItemID:     body.OfferedItemID,
 		WantedDescription: body.WantedDescription,
+		WantedCategory:    body.WantedCategory,
 		Version:           body.Version,
 	})
 	if err != nil {
@@ -215,6 +219,7 @@ func newExchangeOfferResponse(offer entity.ExchangeOffer) exchangeOfferResponse 
 		ID:                offer.ID,
 		OfferedItemID:     offer.OfferedItemID,
 		WantedDescription: offer.WantedDescription,
+		WantedCategory:    offer.WantedCategory,
 		Status:            offer.Status,
 		Version:           offer.Version,
 		CreatedAt:         offer.CreatedAt.UTC().Format(time.RFC3339),
