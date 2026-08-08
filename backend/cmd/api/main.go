@@ -97,10 +97,10 @@ func main() {
 		cfg.CycleMaxDrafts,
 		cfg.MatchingThreshold,
 	)
-	chainRepository := chainRepo.NewRepository(pool)
-	chainSvc := chainservice.NewService(chainRepository)
-	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc)
 	transactionManager := database.NewTransactionManager(pool)
+	chainRepository := chainRepo.NewRepository(pool)
+	chainSvc := chainservice.NewService(chainRepository, transactionManager)
+	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc)
 
 	// Выбор embed-провайдера конфигом: tei | stub.
 	var embedClient embedding.Client

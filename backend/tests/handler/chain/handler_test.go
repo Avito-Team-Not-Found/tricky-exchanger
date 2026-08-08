@@ -13,6 +13,7 @@ import (
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	chainhandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/chain"
+	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
 )
 
 func TestGetReturnsOrderedExchangePositions(t *testing.T) {
@@ -84,6 +85,7 @@ func TestGetReturnsNotFoundForUnavailableChain(t *testing.T) {
 func TestExchangeOptionsReturnsOnlyNextClusterMembers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	pending := entity.VotePending
 	service := &fakeService{chains: []entity.Chain{{
 		ID:               7,
 		Status:           entity.ChainStatusCandidate,
@@ -94,7 +96,7 @@ func TestExchangeOptionsReturnsOnlyNextClusterMembers(t *testing.T) {
 		Participants: []entity.ChainParticipant{
 			{ClusterID: 1, RequestID: 1, Position: 0, OfferedItemID: 101, OfferedItemTitle: "Ручка"},
 			{ClusterID: 2, RequestID: 2, Position: 1, OwnerUserID: userID.String(), OfferedItemID: 102, OfferedItemTitle: "Маркер"},
-			{ClusterID: 3, RequestID: 3, Position: 2, OfferedItemID: 103, OfferedItemTitle: "Кружка 1"},
+			{ClusterID: 3, RequestID: 3, Position: 2, OfferedItemID: 103, OfferedItemTitle: "Кружка 1", Vote: &pending},
 			{ClusterID: 3, RequestID: 4, Position: 2, OfferedItemID: 104, OfferedItemTitle: "Кружка 2"},
 			{ClusterID: 4, RequestID: 5, Position: 3, OfferedItemID: 105, OfferedItemTitle: "Машинка"},
 		},
@@ -120,6 +122,7 @@ func TestExchangeOptionsReturnsOnlyNextClusterMembers(t *testing.T) {
 		`"receivesFromPosition":2`,
 		`"requestId":3`,
 		`"requestId":4`,
+		`"vote":"pending"`,
 	} {
 		if !strings.Contains(body, fragment) {
 			t.Fatalf("body = %s, want fragment %s", body, fragment)
@@ -131,9 +134,12 @@ func TestExchangeOptionsReturnsOnlyNextClusterMembers(t *testing.T) {
 }
 
 type fakeService struct {
-	chain  entity.Chain
-	chains []entity.Chain
-	err    error
+	chain         entity.Chain
+	chains        []entity.Chain
+	vote          entity.ChainVote
+	voteInput     chainservice.VoteInput
+	withdrawInput chainservice.VoteInput
+	err           error
 }
 
 func (s *fakeService) List(_ context.Context, _ string) ([]entity.Chain, error) {
@@ -146,4 +152,79 @@ func (s *fakeService) ListForOffer(_ context.Context, _ string, _ int64) ([]enti
 
 func (s *fakeService) Get(_ context.Context, _ string, _ int64) (entity.Chain, error) {
 	return s.chain, s.err
+}
+
+func (s *fakeService) Vote(_ context.Context, _ string, _ int64, input chainservice.VoteInput) (entity.ChainVote, error) {
+	s.voteInput = input
+	return s.vote, s.err
+}
+
+func (s *fakeService) WithdrawVote(_ context.Context, _ string, _ int64, input chainservice.VoteInput) error {
+	s.withdrawInput = input
+	return s.err
+}
+
+func TestVoteAcceptsConcreteExchangeOption(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	service := &fakeService{vote: entity.ChainVote{
+		ChainID: 7, RequestID: 10, TargetRequestID: 20,
+		Vote:        entity.VotePending,
+		VotedAt:     time.Date(2026, 8, 8, 12, 0, 0, 0, time.UTC),
+		ChainStatus: entity.ChainStatusCandidate,
+	}}
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c.Set("userID", userID)
+		c.Next()
+	})
+	engine.PUT("/chains/:id/votes", chainhandler.NewHandler(service).Vote)
+
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/chains/7/votes",
+		strings.NewReader(`{"requestId":10,"targetRequestId":20}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if service.voteInput.RequestID != 10 || service.voteInput.TargetRequestID != 20 {
+		t.Fatalf("input = %+v", service.voteInput)
+	}
+	for _, fragment := range []string{`"vote":"pending"`, `"chainStatus":"CANDIDATE"`} {
+		if !strings.Contains(recorder.Body.String(), fragment) {
+			t.Fatalf("body = %s, want %s", recorder.Body.String(), fragment)
+		}
+	}
+}
+
+func TestWithdrawVoteUsesSourceAndTargetQuery(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	service := &fakeService{}
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c.Set("userID", userID)
+		c.Next()
+	})
+	engine.DELETE("/chains/:id/votes", chainhandler.NewHandler(service).WithdrawVote)
+
+	request := httptest.NewRequest(
+		http.MethodDelete,
+		"/chains/7/votes?requestId=10&targetRequestId=20",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if service.withdrawInput.RequestID != 10 || service.withdrawInput.TargetRequestID != 20 {
+		t.Fatalf("input = %+v", service.withdrawInput)
+	}
 }
