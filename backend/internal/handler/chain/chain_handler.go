@@ -50,6 +50,7 @@ type chainParticipantResponse struct {
 	OfferedItemTitle       string            `json:"offeredItemTitle"`
 	OfferedItemDescription string            `json:"offeredItemDescription"`
 	WantedDescription      string            `json:"wantedDescription"`
+	ImageURL               *string           `json:"imageUrl,omitempty"`
 	Vote                   *entity.VoteValue `json:"vote,omitempty"`
 }
 
@@ -57,6 +58,7 @@ type exchangeOptionsResponse struct {
 	ChainID              int64                    `json:"chainId"`
 	Status               entity.ChainStatus       `json:"status"`
 	Score                float64                  `json:"score"`
+	Length               int                      `json:"length"`
 	CurrentRequestID     int64                    `json:"currentRequestId"`
 	CurrentPosition      int                      `json:"currentPosition"`
 	GivesToPosition      int                      `json:"givesToPosition"`
@@ -72,6 +74,7 @@ type exchangeOptionResponse struct {
 	Title             string            `json:"title"`
 	Description       string            `json:"description"`
 	WantedDescription string            `json:"wantedDescription"`
+	ImageURL          *string           `json:"imageUrl,omitempty"`
 	Vote              *entity.VoteValue `json:"vote,omitempty"`
 }
 
@@ -290,6 +293,7 @@ func newChainResponse(chain entity.Chain, userID string) chainResponse {
 			OfferedItemTitle:       participant.OfferedItemTitle,
 			OfferedItemDescription: participant.OfferedItemDescription,
 			WantedDescription:      participant.WantedDescription,
+			ImageURL:               participant.ImageURL,
 		}
 		if participant.Position == response.ReceivesFromPosition {
 			participantResponse.Vote = participant.Vote
@@ -305,6 +309,7 @@ func newExchangeOptionsResponse(chain entity.Chain) exchangeOptionsResponse {
 		ChainID:              chain.ID,
 		Status:               chain.Status,
 		Score:                chain.Score,
+		Length:               chain.Length,
 		CurrentRequestID:     chain.CurrentRequestID,
 		CurrentPosition:      chain.CurrentPosition,
 		GivesToPosition:      cyclicPosition(chain.CurrentPosition-1, chain.Length),
@@ -320,6 +325,7 @@ func newExchangeOptionsResponse(chain entity.Chain) exchangeOptionsResponse {
 			Title:             participant.OfferedItemTitle,
 			Description:       participant.OfferedItemDescription,
 			WantedDescription: participant.WantedDescription,
+			ImageURL:          participant.ImageURL,
 		}
 		if participant.RequestID == chain.CurrentRequestID {
 			response.CurrentOffer = option
