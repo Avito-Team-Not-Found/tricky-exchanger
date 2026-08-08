@@ -457,7 +457,8 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 	rows, err := r.pool.Query(ctx, `
 		SELECT cp.id, cp.chain_id, COALESCE(cp.cluster_id, 0), member.request_id, cp.position,
 		       eo.user_id, eo.offered_item_id, i.title, COALESCE(i.description, ''),
-		       COALESCE(eo.wanted_description, ''), cp.created_at
+		       COALESCE(eo.wanted_description, ''), cp.created_at,
+		       i.image_url
 		FROM chain_participants AS cp
 		JOIN chains AS c ON c.id = cp.chain_id
 		JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
@@ -486,6 +487,7 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 			&participant.OfferedItemDescription,
 			&participant.WantedDescription,
 			&participant.CreatedAt,
+			&participant.ImageURL,
 		); err != nil {
 			return fmt.Errorf("scan chain participant: %w", err)
 		}
