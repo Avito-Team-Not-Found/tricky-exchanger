@@ -19,6 +19,30 @@ type Postgres struct {
 	pool *pgxpool.Pool
 }
 
+const refreshClusterQuery = `
+	WITH centroid AS (
+		SELECT avg(i.embedding) AS value
+		FROM cluster_members AS cm
+		JOIN exchange_offers AS eo ON eo.id = cm.request_id
+		JOIN items AS i ON i.id = eo.offered_item_id
+		WHERE cm.cluster_id = $1
+	), stats AS (
+		SELECT COALESCE(max(i.embedding <=> centroid.value), 0) AS epsilon
+		FROM cluster_members AS cm
+		JOIN exchange_offers AS eo ON eo.id = cm.request_id
+		JOIN items AS i ON i.id = eo.offered_item_id
+		CROSS JOIN centroid
+		WHERE cm.cluster_id = $1
+	)
+	UPDATE clusters AS c
+	SET centroid_embedding = centroid.value,
+	    epsilon = stats.epsilon,
+	    updated_at = now()
+	FROM centroid, stats
+	WHERE c.id = $1
+	  AND centroid.value IS NOT NULL
+`
+
 // NewRepository создаёт репозиторий кластеров с ограниченным Top-K поиском.
 func NewRepository(pool *pgxpool.Pool) *Postgres {
 	return &Postgres{pool: pool}
@@ -178,30 +202,7 @@ func (r *Postgres) Refresh(ctx context.Context, tx database.Tx, clusterID int64)
 		return fmt.Errorf("delete empty cluster: %w", err)
 	}
 
-	const refreshQuery = `
-		WITH centroid AS (
-			SELECT avg(i.embedding) AS value
-			FROM cluster_members AS cm
-			JOIN exchange_offers AS eo ON eo.id = cm.request_id
-			JOIN items AS i ON i.id = eo.offered_item_id
-			WHERE cm.cluster_id = $1
-		), stats AS (
-			SELECT COALESCE(max(i.embedding <=> centroid.value), 0) AS epsilon
-			FROM cluster_members AS cm
-			JOIN exchange_offers AS eo ON eo.id = cm.request_id
-			JOIN items AS i ON i.id = eo.offered_item_id
-			CROSS JOIN centroid
-			WHERE cm.cluster_id = $1
-		)
-		UPDATE clusters AS c
-		SET centroid_embedding = centroid.value,
-		    epsilon = stats.epsilon,
-		    updated_at = now()
-		FROM centroid, stats
-		WHERE c.id = $1
-		  AND centroid.value IS NOT NULL
-	`
-	if _, err := tx.Exec(ctx, refreshQuery, clusterID); err != nil {
+	if _, err := tx.Exec(ctx, refreshClusterQuery, clusterID); err != nil {
 		return fmt.Errorf("refresh cluster centroid: %w", err)
 	}
 	return nil
