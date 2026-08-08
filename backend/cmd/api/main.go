@@ -84,8 +84,8 @@ func main() {
 	clusterSvc := clusterservice.NewService(
 		clusterRepository,
 		candidateSearch,
-		cfg.ClusterTopK,
-		cfg.ClusterThreshold,
+		cfg.MatchingTopK,
+		cfg.MatchingThreshold,
 	)
 	matchingFacade := matching.NewFacade(clusterSvc)
 	transactionManager := database.NewTransactionManager(pool)

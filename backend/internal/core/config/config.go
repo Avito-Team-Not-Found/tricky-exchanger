@@ -53,8 +53,6 @@ type Config struct {
 	MatchingTopK      int     // LIMIT для Top-K (default 20)
 	MatchingThreshold float64 // порог cosine similarity (default 0.5)
 	VectorMetric      string  // "cosine" (зафиксировано, соответствует индексу)
-	ClusterTopK       int     // размер ближайшего окружения для поиска кластера
-	ClusterThreshold  float64 // порог similarity отдельно для обоих векторов кластера
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -93,8 +91,6 @@ func Load() (*Config, error) {
 		MatchingTopK:      envIntOrDefault("MATCHING_TOPK", 20),
 		MatchingThreshold: envFloatOrDefault("MATCHING_THRESHOLD", 0.5),
 		VectorMetric:      envOrDefault("VECTOR_METRIC", "cosine"),
-		ClusterTopK:       envIntOrDefault("CLUSTER_TOPK", 50),
-		ClusterThreshold:  envFloatOrDefault("CLUSTER_SIMILARITY_THRESHOLD", 0.8),
 
 		MinIOEndpoint:  envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey: envOrDefault("MINIO_ACCESS_KEY", ""),
