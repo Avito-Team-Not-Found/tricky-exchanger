@@ -17,6 +17,7 @@ import (
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
 	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
+	categoryHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/category"
 )
 
 // stubUserService — заглушка Service для тестов роутера: важна только маршрутизация,
@@ -65,6 +66,7 @@ func newTestEngine() *gin.Engine {
 		userHandler.NewHandler(stubUserService{}),
 		exchangeOfferHandler.NewHandler(stubExchangeOfferService{}),
 		itemHandler.NewHandler(stubItemService{}),
+		categoryHandler.NewHandler(stubCategoryService{}),
 	)
 }
 
@@ -114,6 +116,12 @@ func (stubItemService) Archive(_ context.Context, _ uuid.UUID, _ int64) error {
 
 func (stubItemService) UploadImage(_ context.Context, _ uuid.UUID, _ int64, _ io.Reader, _ int64, _ string) (*entity.Item, error) {
 	return &entity.Item{}, nil
+}
+
+type stubCategoryService struct{}
+
+func (stubCategoryService) List(_ context.Context) ([]entity.Category, error) {
+	return nil, nil
 }
 
 func TestPingHandler(t *testing.T) {
@@ -245,5 +253,36 @@ func TestHealthz(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+func TestCategories_RequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/categories", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d for /api/v1/categories without Authorization header, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestCategories_WithAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/categories", nil)
+	req.Header.Set("Authorization", "Bearer any-token")
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d with Authorization header, got %d", http.StatusOK, rec.Code)
 	}
 }

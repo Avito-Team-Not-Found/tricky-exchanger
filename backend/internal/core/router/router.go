@@ -13,6 +13,7 @@ import (
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	categoryHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/category"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 )
 
@@ -24,6 +25,7 @@ func New(
 	userH *userHandler.Handler,
 	exchangeOfferH *exchangeOfferHandler.Handler,
 	itemH *itemHandler.Handler,
+	categoryH *categoryHandler.Handler,
 ) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Logger())
@@ -71,6 +73,12 @@ func New(
 			items.PATCH("/:id", itemH.Update)
 			items.DELETE("/:id", itemH.Archive)
 			items.POST("/:id/image", itemH.UploadImage)
+		}
+
+		categories := api.Group("/categories")
+		categories.Use(middleware.Auth(tokenParser))
+		{
+			categories.GET("", categoryH.List)
 		}
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен

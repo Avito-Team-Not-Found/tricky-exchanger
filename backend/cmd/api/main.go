@@ -35,6 +35,9 @@ import (
 	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
+	categoryHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/category"
+	categoryRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/category"
+	categoryService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/category"
 )
 
 func main() {
@@ -125,7 +128,11 @@ func main() {
 	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker(), embedClient, imageStorage)
 	itemH := itemHandler.NewHandler(itemSvc)
 
-	engine := router.New(tokenService, pingHandler, userH, exchangeOfferH, itemH)
+	categoryRepository := categoryRepo.NewRepository(pool)
+	categorySvc := categoryService.NewService(categoryRepository)
+	categoryH := categoryHandler.NewHandler(categorySvc)
+
+	engine := router.New(tokenService, pingHandler, userH, exchangeOfferH, itemH, categoryH)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.ServerPort,
