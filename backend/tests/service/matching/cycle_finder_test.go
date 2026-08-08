@@ -26,9 +26,9 @@ func TestCycleFinderReturnsCyclesOfLengthTwoToFive(t *testing.T) {
 				t.Fatalf("participant count = %d, want %d", len(drafts[0].Participants), length)
 			}
 			for position, participant := range drafts[0].Participants {
-				wantRequestID := int64(position + 1)
-				if participant.RequestID != wantRequestID {
-					t.Fatalf("position %d request = %d, want %d", position, participant.RequestID, wantRequestID)
+				wantClusterID := int64(position + 101)
+				if participant.ClusterID != wantClusterID {
+					t.Fatalf("position %d cluster = %d, want %d", position, participant.ClusterID, wantClusterID)
 				}
 			}
 		})
@@ -56,7 +56,7 @@ func TestCycleFinderExcludesRepeatedRequest(t *testing.T) {
 	assertUniqueParticipants(t, drafts[0])
 }
 
-func TestCycleFinderExcludesRepeatedCluster(t *testing.T) {
+func TestCycleFinderDoesNotAppendSameClusterTwice(t *testing.T) {
 	loader := &fakeFrontierLoader{
 		outgoing: map[int64][]entity.CandidateEdge{
 			1: {edge(1, 101, 2, 102, 0.9)},
@@ -70,8 +70,14 @@ func TestCycleFinderExcludesRepeatedCluster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
-	if len(drafts) != 0 {
-		t.Fatalf("drafts = %#v, want empty result", drafts)
+	if len(drafts) != 1 {
+		t.Fatalf("draft count = %d, want one cluster cycle", len(drafts))
+	}
+	if len(drafts[0].Participants) != 2 {
+		t.Fatalf("cluster count = %d, want 2", len(drafts[0].Participants))
+	}
+	if drafts[0].Participants[0].ClusterID != 101 || drafts[0].Participants[1].ClusterID != 102 {
+		t.Fatalf("clusters = %#v, want [101, 102]", drafts[0].Participants)
 	}
 }
 
@@ -111,8 +117,35 @@ func TestCycleFinderKeepsOnlyBestDrafts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
-	if len(drafts) != 1 || drafts[0].Participants[1].RequestID != 3 {
-		t.Fatalf("drafts = %#v, want best cycle through request 3", drafts)
+	if len(drafts) != 1 || drafts[0].Participants[1].ClusterID != 103 {
+		t.Fatalf("drafts = %#v, want best cycle through cluster 103", drafts)
+	}
+}
+
+func TestCycleFinderTreatsRequestsOfOneClusterAsOneVertex(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {
+				edge(1, 101, 3, 103, 0.92),
+				edge(1, 101, 4, 103, 0.90),
+			},
+		},
+		closers: []entity.CandidateEdge{
+			edge(3, 103, 1, 101, 0.93),
+			edge(4, 103, 1, 101, 0.91),
+		},
+	}
+	finder := matching.NewCycleFinder(loader, 20, 10, 0.5)
+
+	drafts, err := finder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(drafts) != 1 {
+		t.Fatalf("draft count = %d, want one cluster cycle", len(drafts))
+	}
+	if got := drafts[0].Participants[1].ClusterID; got != 103 {
+		t.Fatalf("second vertex cluster = %d, want 103", got)
 	}
 }
 
@@ -174,16 +207,11 @@ func edge(fromRequestID, fromClusterID, toRequestID, toClusterID int64, score fl
 
 func assertUniqueParticipants(t *testing.T, draft entity.ChainDraft) {
 	t.Helper()
-	requests := make(map[int64]bool)
 	clusters := make(map[int64]bool)
 	for _, participant := range draft.Participants {
-		if requests[participant.RequestID] {
-			t.Fatalf("request %d appears more than once", participant.RequestID)
-		}
 		if clusters[participant.ClusterID] {
 			t.Fatalf("cluster %d appears more than once", participant.ClusterID)
 		}
-		requests[participant.RequestID] = true
 		clusters[participant.ClusterID] = true
 	}
 }

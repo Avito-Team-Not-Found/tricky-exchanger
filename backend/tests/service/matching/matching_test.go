@@ -13,7 +13,8 @@ import (
 func TestFacadeSynchronizesAndRemovesClusterMembership(t *testing.T) {
 	clusters := &fakeClusters{}
 	cycles := &fakeCycles{clusters: clusters}
-	facade := matching.NewFacade(clusters, cycles)
+	chains := &fakeChains{cycles: cycles}
+	facade := matching.NewFacade(clusters, cycles, chains)
 
 	drafts, err := facade.RebuildForRequest(context.Background(), nil, 11)
 	if err != nil {
@@ -21,6 +22,9 @@ func TestFacadeSynchronizesAndRemovesClusterMembership(t *testing.T) {
 	}
 	if len(drafts) != 1 || drafts[0].Score != 0.9 {
 		t.Fatalf("RebuildForRequest() drafts = %#v", drafts)
+	}
+	if len(chains.saved) != 1 || chains.saved[0].Score != 0.9 {
+		t.Fatalf("saved drafts = %#v", chains.saved)
 	}
 	if err := facade.RemoveRequest(context.Background(), nil, 11); err != nil {
 		t.Fatalf("RemoveRequest() error = %v", err)
@@ -33,7 +37,7 @@ func TestFacadeSynchronizesAndRemovesClusterMembership(t *testing.T) {
 func TestFacadePropagatesClusterError(t *testing.T) {
 	wantErr := errors.New("cluster failed")
 	cycles := &fakeCycles{}
-	facade := matching.NewFacade(&fakeClusters{err: wantErr}, cycles)
+	facade := matching.NewFacade(&fakeClusters{err: wantErr}, cycles, &fakeChains{})
 
 	_, err := facade.RebuildForRequest(context.Background(), nil, 11)
 	if !errors.Is(err, wantErr) {
@@ -68,6 +72,19 @@ type fakeClusters struct {
 type fakeCycles struct {
 	clusters   *fakeClusters
 	searchedID int64
+}
+
+type fakeChains struct {
+	cycles *fakeCycles
+	saved  []entity.ChainDraft
+}
+
+func (c *fakeChains) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
+	if c.cycles != nil && c.cycles.searchedID == 0 {
+		return errors.New("chain saving started before cycle search")
+	}
+	c.saved = append(c.saved, drafts...)
+	return nil
 }
 
 func (c *fakeCycles) Find(_ context.Context, _ database.Tx, requestID int64) ([]entity.ChainDraft, error) {

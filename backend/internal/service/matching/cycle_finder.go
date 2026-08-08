@@ -43,6 +43,11 @@ type CycleFinder struct {
 	threshold float64
 }
 
+type cycleVertex struct {
+	clusterID               int64
+	representativeRequestID int64
+}
+
 // NewCycleFinder создаёт поиск циклов с безопасными значениями по умолчанию.
 func NewCycleFinder(loader FrontierLoader, outgoingK, maxDrafts int, threshold float64) *CycleFinder {
 	if outgoingK <= 0 {
@@ -89,25 +94,30 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 	if err != nil {
 		return nil, err
 	}
-	if len(adjacency[startRequestID]) == 0 {
+	if len(adjacency[startClusterID]) == 0 {
 		return []entity.ChainDraft{}, nil
 	}
 
-	path := []entity.ChainDraftParticipant{{
-		ClusterID: startClusterID,
-		RequestID: startRequestID,
+	path := []cycleVertex{{
+		clusterID:               startClusterID,
+		representativeRequestID: startRequestID,
 	}}
-	visitedRequests := map[int64]bool{startRequestID: true}
 	visitedClusters := map[int64]bool{startClusterID: true}
 	drafts := make([]entity.ChainDraft, 0, f.maxDrafts)
 
-	var dfs func(currentRequestID int64, edgeScoreSum float64)
-	dfs = func(currentRequestID int64, edgeScoreSum float64) {
+	var dfs func(currentClusterID int64, edgeScoreSum float64)
+	dfs = func(currentClusterID int64, edgeScoreSum float64) {
 		if len(path) >= minCycleLength {
-			currentClusterID := path[len(path)-1].ClusterID
-			if closing, ok := closers[currentRequestID]; ok && closing.FromClusterID == currentClusterID {
+			if closing, ok := closers[currentClusterID]; ok {
+				participants := make([]entity.ChainDraftParticipant, len(path))
+				for position, vertex := range path {
+					participants[position] = entity.ChainDraftParticipant{
+						ClusterID: vertex.clusterID,
+						RequestID: vertex.representativeRequestID,
+					}
+				}
 				draft := entity.ChainDraft{
-					Participants: append([]entity.ChainDraftParticipant(nil), path...),
+					Participants: participants,
 					Score:        (edgeScoreSum + closing.Score) / float64(len(path)),
 				}
 				drafts = keepBestDrafts(drafts, draft, f.maxDrafts)
@@ -118,32 +128,27 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 			return
 		}
 
-		for _, edge := range adjacency[currentRequestID] {
-			currentClusterID := path[len(path)-1].ClusterID
-			if edge.FromRequestID != currentRequestID ||
-				edge.FromClusterID != currentClusterID ||
+		for _, edge := range adjacency[currentClusterID] {
+			if edge.FromClusterID != currentClusterID ||
 				edge.ToRequestID == startRequestID ||
-				visitedRequests[edge.ToRequestID] ||
 				visitedClusters[edge.ToClusterID] {
 				continue
 			}
 
-			visitedRequests[edge.ToRequestID] = true
 			visitedClusters[edge.ToClusterID] = true
-			path = append(path, entity.ChainDraftParticipant{
-				ClusterID: edge.ToClusterID,
-				RequestID: edge.ToRequestID,
+			path = append(path, cycleVertex{
+				clusterID:               edge.ToClusterID,
+				representativeRequestID: edge.ToRequestID,
 			})
 
-			dfs(edge.ToRequestID, edgeScoreSum+edge.Score)
+			dfs(edge.ToClusterID, edgeScoreSum+edge.Score)
 
 			path = path[:len(path)-1]
-			delete(visitedRequests, edge.ToRequestID)
 			delete(visitedClusters, edge.ToClusterID)
 		}
 	}
 
-	dfs(startRequestID, 0)
+	dfs(startClusterID, 0)
 	sortDrafts(drafts)
 	return drafts, nil
 }
@@ -170,8 +175,8 @@ func (f *CycleFinder) indexClosers(
 		if edge.ToClusterID != startClusterID {
 			continue
 		}
-		if previous, exists := closers[edge.FromRequestID]; !exists || edge.Score > previous.Score {
-			closers[edge.FromRequestID] = edge
+		if previous, exists := closers[edge.FromClusterID]; !exists || edge.Score > previous.Score {
+			closers[edge.FromClusterID] = edge
 		}
 	}
 	return closers, startClusterID
@@ -184,14 +189,14 @@ func (f *CycleFinder) loadLocalGraph(
 ) (map[int64][]entity.CandidateEdge, error) {
 	adjacency := make(map[int64][]entity.CandidateEdge)
 	frontier := []int64{startRequestID}
-	expanded := make(map[int64]bool)
+	expandedClusters := make(map[int64]bool)
 
-	// Четырёх раскрытий frontier достаточно для путей из пяти заявок.
+	// Четырёх раскрытий frontier достаточно для путей из пяти кластеров.
 	for level := 0; level < maxCycleLength-1 && len(frontier) > 0; level++ {
 		sources := make([]int64, 0, len(frontier))
 		sourceSet := make(map[int64]bool, len(frontier))
 		for _, requestID := range frontier {
-			if expanded[requestID] || sourceSet[requestID] {
+			if sourceSet[requestID] {
 				continue
 			}
 			sources = append(sources, requestID)
@@ -206,9 +211,7 @@ func (f *CycleFinder) loadLocalGraph(
 			return nil, err
 		}
 
-		nextFrontier := make([]int64, 0, len(edges))
-		nextSeen := make(map[int64]bool, len(edges))
-		edgeSeen := make(map[[2]int64]bool, len(edges))
+		bestEdges := make(map[[2]int64]entity.CandidateEdge, len(edges))
 		for _, edge := range edges {
 			if !sourceSet[edge.FromRequestID] ||
 				edge.FromRequestID == edge.ToRequestID ||
@@ -219,27 +222,41 @@ func (f *CycleFinder) loadLocalGraph(
 				continue
 			}
 
-			key := [2]int64{edge.FromRequestID, edge.ToRequestID}
-			if edgeSeen[key] {
-				continue
-			}
-			edgeSeen[key] = true
-			adjacency[edge.FromRequestID] = append(adjacency[edge.FromRequestID], edge)
-
-			if edge.ToRequestID != startRequestID && !expanded[edge.ToRequestID] && !nextSeen[edge.ToRequestID] {
-				nextSeen[edge.ToRequestID] = true
-				nextFrontier = append(nextFrontier, edge.ToRequestID)
+			key := [2]int64{edge.FromClusterID, edge.ToClusterID}
+			if previous, exists := bestEdges[key]; !exists || edge.Score > previous.Score {
+				bestEdges[key] = edge
 			}
 		}
 
-		for _, requestID := range sources {
-			expanded[requestID] = true
-			sort.SliceStable(adjacency[requestID], func(i, j int) bool {
-				if adjacency[requestID][i].Score != adjacency[requestID][j].Score {
-					return adjacency[requestID][i].Score > adjacency[requestID][j].Score
+		nextByCluster := make(map[int64]entity.CandidateEdge, len(bestEdges))
+		for _, edge := range bestEdges {
+			if expandedClusters[edge.FromClusterID] {
+				continue
+			}
+			adjacency[edge.FromClusterID] = append(adjacency[edge.FromClusterID], edge)
+			if edge.ToRequestID != startRequestID && !expandedClusters[edge.ToClusterID] {
+				if previous, exists := nextByCluster[edge.ToClusterID]; !exists || edge.Score > previous.Score {
+					nextByCluster[edge.ToClusterID] = edge
 				}
-				return adjacency[requestID][i].ToRequestID < adjacency[requestID][j].ToRequestID
+			}
+		}
+
+		for fromClusterID := range adjacency {
+			sort.SliceStable(adjacency[fromClusterID], func(i, j int) bool {
+				if adjacency[fromClusterID][i].Score != adjacency[fromClusterID][j].Score {
+					return adjacency[fromClusterID][i].Score > adjacency[fromClusterID][j].Score
+				}
+				return adjacency[fromClusterID][i].ToClusterID < adjacency[fromClusterID][j].ToClusterID
 			})
+		}
+
+		nextFrontier := make([]int64, 0, len(nextByCluster))
+		for _, edge := range nextByCluster {
+			nextFrontier = append(nextFrontier, edge.ToRequestID)
+		}
+		sort.Slice(nextFrontier, func(i, j int) bool { return nextFrontier[i] < nextFrontier[j] })
+		for _, edge := range bestEdges {
+			expandedClusters[edge.FromClusterID] = true
 		}
 		frontier = nextFrontier
 	}
@@ -248,12 +265,33 @@ func (f *CycleFinder) loadLocalGraph(
 }
 
 func keepBestDrafts(drafts []entity.ChainDraft, candidate entity.ChainDraft, limit int) []entity.ChainDraft {
+	for i := range drafts {
+		if sameClusterPath(drafts[i], candidate) {
+			if candidate.Score > drafts[i].Score {
+				drafts[i] = candidate
+			}
+			sortDrafts(drafts)
+			return drafts
+		}
+	}
 	drafts = append(drafts, candidate)
 	sortDrafts(drafts)
 	if len(drafts) > limit {
 		drafts = drafts[:limit]
 	}
 	return drafts
+}
+
+func sameClusterPath(left, right entity.ChainDraft) bool {
+	if len(left.Participants) != len(right.Participants) {
+		return false
+	}
+	for position := range left.Participants {
+		if left.Participants[position].ClusterID != right.Participants[position].ClusterID {
+			return false
+		}
+	}
+	return true
 }
 
 func sortDrafts(drafts []entity.ChainDraft) {
@@ -265,8 +303,8 @@ func sortDrafts(drafts []entity.ChainDraft) {
 			return len(drafts[i].Participants) < len(drafts[j].Participants)
 		}
 		for position := range drafts[i].Participants {
-			left := drafts[i].Participants[position].RequestID
-			right := drafts[j].Participants[position].RequestID
+			left := drafts[i].Participants[position].ClusterID
+			right := drafts[j].Participants[position].ClusterID
 			if left != right {
 				return left < right
 			}
