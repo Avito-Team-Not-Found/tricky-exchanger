@@ -38,8 +38,8 @@ func TestSendRecoveryCode_InvalidBody(t *testing.T) {
 		"email": "not-an-email",
 	}, false)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected status %d, got %d", http.StatusUnprocessableEntity, rec.Code)
 	}
 }
 
@@ -77,8 +77,8 @@ func TestVerifyRecoveryCode_InvalidBody(t *testing.T) {
 		"code":  "12", // не 6 символов
 	}, false)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected status %d, got %d", http.StatusUnprocessableEntity, rec.Code)
 	}
 }
 
@@ -133,7 +133,7 @@ func TestResetPassword_ShortPassword(t *testing.T) {
 		"password": "short",
 	}, false)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected status %d, got %d", http.StatusUnprocessableEntity, rec.Code)
 	}
 }

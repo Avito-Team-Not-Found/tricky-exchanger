@@ -49,3 +49,7 @@ func (v *CandidateValidator) Validate(_ context.Context, candidates []entity.Can
 	}
 	return result
 }
+
+//TODO: это бизнес логика, не надо для нее отдельно валидатор создавать,
+//пиши прям в service.go внутри функции это.
+// Можно сносить

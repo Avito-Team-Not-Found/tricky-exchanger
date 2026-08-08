@@ -12,10 +12,17 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/validator"
 )
 
 // maxImageSize — максимальный размер загружаемого фото товара (5 МиБ).
 const maxImageSize = 5 << 20
+
+const (
+	defaultPage     = 1
+	defaultPageSize = 20
+	maxPageSize     = 100
+)
 
 // imageExtensionByContentType — разрешённые типы фото и их расширения в ключе объекта.
 var imageExtensionByContentType = map[string]string{
@@ -26,18 +33,33 @@ var imageExtensionByContentType = map[string]string{
 
 // CreateInput содержит данные для создания товара.
 type CreateInput struct {
-	Title       string
-	Description string
-	Category    string
+	Title       string `json:"title" validate:"not_empty,max=200"`
+	Description string `json:"description" validate:"omitempty,max=2000"`
+	Category    string `json:"category" validate:"omitempty,max=100"`
 }
 
 // UpdateInput содержит новые данные для частичного изменения товара.
 // nil означает "не менять это поле".
 type UpdateInput struct {
-	Title       *string
-	Description *string
-	Category    *string
-	Status      *entity.ItemStatus
+	Title       *string            `json:"title" validate:"omitempty,not_empty,max=200"`
+	Description *string            `json:"description" validate:"omitempty,max=2000"`
+	Category    *string            `json:"category" validate:"omitempty,max=100"`
+	Status      *entity.ItemStatus `json:"status" validate:"omitempty,item_status"`
+}
+
+// NormalizePagination подставляет значения по умолчанию и ограничивает pageSize,
+// чтобы список товаров нельзя было запросить целиком одним запросом.
+func NormalizePagination(page, pageSize int) (int, int) {
+	if page < 1 {
+		page = defaultPage
+	}
+	if pageSize < 1 {
+		pageSize = defaultPageSize
+	}
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
+	return page, pageSize
 }
 
 type Service struct {
@@ -52,15 +74,12 @@ func NewService(repo ItemRepository, embeddingClient embedding.Client, storage S
 
 // Create создаёт активный товар от имени владельца.
 func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, input CreateInput) (*entity.Item, error) {
+	if err := validator.Validate(&input); err != nil {
+		return nil, err
+	}
+
 	title := strings.TrimSpace(input.Title)
 	description := strings.TrimSpace(input.Description)
-
-	if err := validateTitle(title); err != nil {
-		return nil, err
-	}
-	if err := validateDescription(description); err != nil {
-		return nil, err
-	}
 
 	embeddingValue, err := s.embedItem(ctx, title, description)
 	if err != nil {
@@ -99,6 +118,10 @@ func (s *Service) List(ctx context.Context, ownerID uuid.UUID, page, pageSize in
 // Update частично изменяет товар. Запрещено для архивных товаров и товаров
 // с активной hard-резервацией.
 func (s *Service) Update(ctx context.Context, requesterID uuid.UUID, itemID int64, input UpdateInput) (*entity.Item, error) {
+	if err := validator.Validate(&input); err != nil {
+		return nil, err
+	}
+
 	item, err := s.getOwned(ctx, requesterID, itemID)
 	if err != nil {
 		return nil, err
@@ -113,19 +136,11 @@ func (s *Service) Update(ctx context.Context, requesterID uuid.UUID, itemID int6
 	}
 
 	if input.Title != nil {
-		title := strings.TrimSpace(*input.Title)
-		if err := validateTitle(title); err != nil {
-			return nil, err
-		}
-		item.Title = title
+		item.Title = strings.TrimSpace(*input.Title)
 	}
 
 	if input.Description != nil {
-		description := strings.TrimSpace(*input.Description)
-		if err := validateDescription(description); err != nil {
-			return nil, err
-		}
-		item.Description = description
+		item.Description = strings.TrimSpace(*input.Description)
 	}
 
 	if input.Category != nil {
@@ -133,9 +148,6 @@ func (s *Service) Update(ctx context.Context, requesterID uuid.UUID, itemID int6
 	}
 
 	if input.Status != nil {
-		if *input.Status != entity.ItemStatusActive && *input.Status != entity.ItemStatusUnavailable {
-			return nil, entity.ErrInvalidItemStatus
-		}
 		item.Status = *input.Status
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/validator"
 )
 
 func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
@@ -82,8 +83,9 @@ func TestUpdateRejectsEmptyDescriptionBeforeEmbedding(t *testing.T) {
 		WantedDescription: " ",
 		Version:           1,
 	})
-	if !errors.Is(err, entity.ErrWantedDescriptionRequired) {
-		t.Fatalf("Update() error = %v, want ErrWantedDescription", err)
+	var ve validator.Error
+	if !errors.As(err, &ve) {
+		t.Fatalf("Update() error = %v, want validator.Error", err)
 	}
 	if embeddings.calls != 0 {
 		t.Fatalf("embedding calls = %d, want 0", embeddings.calls)
