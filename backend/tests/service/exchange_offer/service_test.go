@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
@@ -14,7 +15,7 @@ func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
 	store := &fakeStore{}
 	embeddings := &fakeEmbedding{vector: []float32{0.1, 0.2}}
 	matcher := &fakeMatcher{}
-	service := offerservice.NewService(store, embeddings, matcher)
+	service := newService(store, embeddings, matcher)
 
 	created, err := service.Create(context.Background(), "user-1", offerservice.CreateInput{
 		OfferedItemID:     42,
@@ -30,7 +31,7 @@ func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
 	if store.created.WantedDescription != "кофемашина" {
 		t.Fatalf("description was not trimmed: %q", store.created.WantedDescription)
 	}
-	if got, want := embeddings.prompt, "кофемашина"; got != want {
+	if got, want := embeddings.prompt, "query: кофемашина"; got != want {
 		t.Fatalf("embedding prompt = %q, want %q", got, want)
 	}
 	if matcher.rebuiltID != created.ID {
@@ -41,7 +42,7 @@ func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
 func TestUpdatePropagatesVersionAndRebuildsMatching(t *testing.T) {
 	store := &fakeStore{updated: entity.ExchangeOffer{ID: 7, Version: 3}}
 	matcher := &fakeMatcher{}
-	service := offerservice.NewService(store, &fakeEmbedding{vector: []float32{0.3}}, matcher)
+	service := newService(store, &fakeEmbedding{vector: []float32{0.3}}, matcher)
 
 	updated, err := service.Update(context.Background(), "user-1", 7, offerservice.UpdateInput{
 		OfferedItemID:     44,
@@ -62,7 +63,7 @@ func TestUpdatePropagatesVersionAndRebuildsMatching(t *testing.T) {
 func TestDeleteArchivesThenRemovesFromMatching(t *testing.T) {
 	store := &fakeStore{archived: entity.ExchangeOffer{ID: 9, Status: entity.RequestStatusRemoved, Version: 2}}
 	matcher := &fakeMatcher{}
-	service := offerservice.NewService(store, &fakeEmbedding{}, matcher)
+	service := newService(store, &fakeEmbedding{}, matcher)
 
 	if err := service.Delete(context.Background(), "user-1", 9, 1); err != nil {
 		t.Fatalf("Delete() error = %v", err)
@@ -74,7 +75,7 @@ func TestDeleteArchivesThenRemovesFromMatching(t *testing.T) {
 
 func TestUpdateRejectsEmptyDescriptionBeforeEmbedding(t *testing.T) {
 	embeddings := &fakeEmbedding{vector: []float32{0.1}}
-	service := offerservice.NewService(&fakeStore{}, embeddings, &fakeMatcher{})
+	service := newService(&fakeStore{}, embeddings, &fakeMatcher{})
 
 	_, err := service.Update(context.Background(), "user-1", 1, offerservice.UpdateInput{
 		OfferedItemID:     2,
@@ -96,7 +97,7 @@ type fakeStore struct {
 	expectedVersion int64
 }
 
-func (s *fakeStore) Create(_ context.Context, request entity.ExchangeOffer) (entity.ExchangeOffer, error) {
+func (s *fakeStore) Create(_ context.Context, _ database.Tx, request entity.ExchangeOffer) (entity.ExchangeOffer, error) {
 	request.ID = 5
 	request.CreatedAt = time.Now()
 	request.UpdatedAt = request.CreatedAt
@@ -112,7 +113,7 @@ func (s *fakeStore) List(_ context.Context, _ string) ([]entity.ExchangeOfferLis
 	return nil, nil
 }
 
-func (s *fakeStore) Update(_ context.Context, request entity.ExchangeOffer, expectedVersion int64) (entity.ExchangeOffer, error) {
+func (s *fakeStore) Update(_ context.Context, _ database.Tx, request entity.ExchangeOffer, expectedVersion int64) (entity.ExchangeOffer, error) {
 	s.expectedVersion = expectedVersion
 	if s.updated.ID == 0 {
 		s.updated = request
@@ -121,7 +122,7 @@ func (s *fakeStore) Update(_ context.Context, request entity.ExchangeOffer, expe
 	return s.updated, nil
 }
 
-func (s *fakeStore) Archive(_ context.Context, _ string, _ int64, expectedVersion int64) (entity.ExchangeOffer, error) {
+func (s *fakeStore) Archive(_ context.Context, _ database.Tx, _ string, _ int64, expectedVersion int64) (entity.ExchangeOffer, error) {
 	s.expectedVersion = expectedVersion
 	if s.archived.ID == 0 {
 		return entity.ExchangeOffer{}, entity.ErrExchangeOfferNotFound
@@ -135,6 +136,21 @@ type fakeEmbedding struct {
 	calls  int
 }
 
+func newService(store *fakeStore, embeddings *fakeEmbedding, matcher *fakeMatcher) *offerservice.Service {
+	return offerservice.NewService(
+		store,
+		embeddings,
+		matcher,
+		&fakeTransactionManager{},
+	)
+}
+
+type fakeTransactionManager struct{}
+
+func (m *fakeTransactionManager) WithinTransaction(_ context.Context, fn func(database.Tx) error) error {
+	return fn(nil)
+}
+
 func (e *fakeEmbedding) Embed(_ context.Context, prompt string) ([]float32, error) {
 	e.calls++
 	e.prompt = prompt
@@ -146,12 +162,12 @@ type fakeMatcher struct {
 	removedID int64
 }
 
-func (m *fakeMatcher) RebuildForRequest(_ context.Context, requestID int64) error {
+func (m *fakeMatcher) RebuildForRequest(_ context.Context, _ database.Tx, requestID int64) error {
 	m.rebuiltID = requestID
 	return nil
 }
 
-func (m *fakeMatcher) RemoveRequest(_ context.Context, requestID int64) error {
+func (m *fakeMatcher) RemoveRequest(_ context.Context, _ database.Tx, requestID int64) error {
 	m.removedID = requestID
 	return nil
 }

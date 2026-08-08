@@ -22,6 +22,7 @@ type Item struct {
 	Title       string
 	Description string
 	CategoryID  *int64
+	Embedding   []float32
 	// ImageURL — публичный URL фото в объектном хранилище (MinIO), nil пока фото не загружено.
 	ImageURL  *string
 	Status    ItemStatus
