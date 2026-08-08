@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ChainItemView } from '@features/chains';
 
-import { useCategories } from '@entities/category';
 import { myParticipant, receivesItem, useChain } from '@entities/chain';
 
 import { ErrorState } from '@shared/ui';
@@ -18,13 +17,9 @@ export function ChainDetailPage() {
   const { chainId } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
   const { data: chain, isLoading, isError, refetch } = useChain(chainId);
-  const categoriesQuery = useCategories();
-  const categories = categoriesQuery.data ?? [];
 
   const me = chain ? myParticipant(chain) : null;
   const received = chain && me ? receivesItem(me, chain) : null;
-  const categoryName =
-    categories.find((category) => category.id === received?.categoryId)?.name ?? null;
 
   const goBack = () => {
     if (chain?.requestId) navigate(`/exchange-requests/${chain.requestId}`);
@@ -43,7 +38,6 @@ export function ChainDetailPage() {
         ) : (
           <ChainItemView
             chain={chain}
-            categoryName={categoryName}
             onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
           />
         )}

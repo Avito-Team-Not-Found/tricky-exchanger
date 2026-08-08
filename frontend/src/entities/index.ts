@@ -21,8 +21,6 @@ export {
   type UpdateRequestPayload,
 } from './exchangeRequest';
 
-export { useCategories, type Category } from './category';
-
 export {
   chainReadiness,
   myParticipant,

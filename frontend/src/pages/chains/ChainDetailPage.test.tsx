@@ -2,7 +2,6 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useCategories } from '@entities/category';
 import { useChain, type Chain } from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
@@ -25,13 +24,7 @@ vi.mock('@entities/chain', async (importOriginal) => {
   return { ...actual, useChain: vi.fn() };
 });
 
-vi.mock('@entities/category', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@entities/category')>();
-  return { ...actual, useCategories: vi.fn() };
-});
-
 const mockedUseChain = vi.mocked(useChain);
-const mockedUseCategories = vi.mocked(useCategories);
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
   return {
@@ -83,10 +76,9 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedUseCategories.mockReturnValue(queryOk([{ id: 3, name: 'Электроника' }]));
   });
 
-  it('shows the received item with its description and specs', () => {
+  it('shows the received item with its description', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain()));
 
     renderWithProviders(<ChainDetailPage />);
@@ -98,8 +90,6 @@ describe('ChainDetailPage', () => {
     expect(
       screen.getByText('Полный комплект: камера, объектив, флешка и чехол'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Характеристики')).toBeInTheDocument();
-    expect(screen.getByText('Электроника')).toBeInTheDocument();
   });
 
   it('opens the participants screen on button click', async () => {

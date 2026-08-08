@@ -8,20 +8,16 @@ import './ChainItemView.scss';
 
 interface ChainItemViewProps {
   chain: Chain;
-  categoryName: string | null;
   onOpenParticipants: () => void;
 }
 
 // Экран цепочки (макет 4.7): товар, который пользователь получит в обмене, его описание
-// и характеристики + переход к схеме участников (макет 4.8). Действия — на схеме и в карточке.
-export function ChainItemView({ chain, categoryName, onOpenParticipants }: ChainItemViewProps) {
+// и переход к схеме участников (макет 4.8). Действия — на схеме и в карточке.
+export function ChainItemView({ chain, onOpenParticipants }: ChainItemViewProps) {
   const me = myParticipant(chain);
   const received = me ? receivesItem(me, chain) : null;
   const { agreed, total } = chainReadiness(chain);
   const isReady = agreed === total && total > 0;
-
-  const specs: { label: string; value: string }[] = [];
-  if (categoryName) specs.push({ label: 'Категория', value: categoryName });
 
   return (
     <div className="chain-item">
@@ -51,20 +47,6 @@ export function ChainItemView({ chain, categoryName, onOpenParticipants }: Chain
         <section className="chain-item__section">
           <h3 className="chain-item__section-title">Описание</h3>
           <p className="chain-item__description">{received.description}</p>
-        </section>
-      ) : null}
-
-      {specs.length > 0 ? (
-        <section className="chain-item__section">
-          <h3 className="chain-item__section-title">Характеристики</h3>
-          <dl className="chain-item__specs">
-            {specs.map((spec) => (
-              <div className="chain-item__spec" key={spec.label}>
-                <dt className="chain-item__spec-label">{spec.label}</dt>
-                <dd className="chain-item__spec-value">{spec.value}</dd>
-              </div>
-            ))}
-          </dl>
         </section>
       ) : null}
 

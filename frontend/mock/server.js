@@ -13,15 +13,6 @@ const TITLE_LIMIT = 100;
 const DESCRIPTION_LIMIT = 500;
 const RECOVERY_CODE_TTL_MS = 10 * 60 * 1000;
 
-// Справочник категорий не входит в согласованный контракт (PROJECT.md §2.3) — мок отдаёт
-// статичный каталог, который фронт показывает на экране цепочки (ChainDetailPage)
-const CATEGORIES = [
-  { id: 'personal', name: 'Личные вещи' },
-  { id: 'home', name: 'Для дома и дачи' },
-  { id: 'parts', name: 'Запчасти и аксессуары' },
-  { id: 'electronics', name: 'Электроника' },
-];
-
 // Коды сброса пароля живут только в памяти: эмейл-доставки в моке нет, поэтому код выводится в консоль и в ответ
 const recoveryCodes = new Map();
 
@@ -62,7 +53,7 @@ function publicItem(item) {
 }
 
 // Публичный участник цепочки: userId/name нужны для аватаров, isCurrentUser — «это я?» (макет §4.8).
-// offeredItem — товар участника: ref { id, title, image } + описание/категория из каталога,
+// offeredItem — товар участника: ref { id, title, image } + описание/категория (inline-поля товара),
 // чтобы экран товара цепочки (макет 4.7) не ходил за ними отдельным запросом.
 function publicParticipant(participant, userId, db) {
   const offered = participant.offeredItem;
@@ -232,10 +223,6 @@ export function createMockApp({
     if (!userId) return fail(res, 401, 'Требуется авторизация');
     req.userId = userId;
     next();
-  });
-
-  server.get('/api/v1/categories', (req, res) => {
-    res.json(CATEGORIES);
   });
 
   server.get('/api/v1/items', (req, res) => {

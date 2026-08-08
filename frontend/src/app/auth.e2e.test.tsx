@@ -11,7 +11,6 @@ import { logout } from '@app/store/slices/userSlice';
 
 import { loginRequest, registerRequest } from '@features/auth/api/authApi';
 
-import { fetchCategories } from '@entities/category/api';
 import { fetchItems } from '@entities/item/api';
 import type { Item } from '@entities/item/model';
 
@@ -27,14 +26,9 @@ vi.mock('@entities/item/api', () => ({
   fetchItems: vi.fn(),
 }));
 
-vi.mock('@entities/category/api', () => ({
-  fetchCategories: vi.fn(),
-}));
-
 const mockedLoginRequest = vi.mocked(loginRequest);
 const mockedRegisterRequest = vi.mocked(registerRequest);
 const mockedFetchItems = vi.mocked(fetchItems);
-const mockedFetchCategories = vi.mocked(fetchCategories);
 
 const demoItem: Item = {
   id: 1,
@@ -74,7 +68,6 @@ describe('auth e2e', () => {
     store.dispatch(logout());
     vi.clearAllMocks();
     mockedFetchItems.mockResolvedValue({ items: [], total: 0 });
-    mockedFetchCategories.mockResolvedValue([]);
   });
 
   it('logs in, redirects and renders the products page with the owned items', async () => {
