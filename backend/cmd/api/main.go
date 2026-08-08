@@ -25,9 +25,12 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/reservation"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/storage"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
+	clusterRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/cluster"
 	exchangeOfferRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/exchange_offer"
 	itemRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/item"
+	searchRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/search"
 	userRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/user"
+	clusterservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/cluster"
 	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
@@ -36,7 +39,7 @@ import (
 
 func main() {
 	// Загружаем .env (не ошибка, если файла нет — переменные могут быть в окружении)
-	_ = godotenv.Load()
+	_ = godotenv.Load("../.env")
 
 	cfg, err := config.Load()
 
@@ -77,6 +80,16 @@ func main() {
 	userH := userHandler.NewHandler(userSvc)
 
 	exchangeOfferRepository := exchangeOfferRepo.NewRepository(pool)
+	clusterRepository := clusterRepo.NewRepository(pool)
+	candidateSearch := searchRepo.New(pool)
+	clusterSvc := clusterservice.NewService(
+		clusterRepository,
+		candidateSearch,
+		cfg.MatchingTopK,
+		cfg.MatchingThreshold,
+	)
+	matchingFacade := matching.NewFacade(clusterSvc)
+	transactionManager := database.NewTransactionManager(pool)
 
 	// Выбор embed-провайдера конфигом: tei | stub.
 	var embedClient embedding.Client
@@ -92,7 +105,8 @@ func main() {
 	exchangeOfferSvc := exchangeOfferService.NewService(
 		exchangeOfferRepository,
 		embedClient,
-		matching.NewNoopFacade(),
+		matchingFacade,
+		transactionManager,
 	)
 	exchangeOfferH := exchangeOfferHandler.NewHandler(exchangeOfferSvc)
 
@@ -108,7 +122,7 @@ func main() {
 	}
 
 	itemRepository := itemRepo.NewRepository(pool)
-	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker(), imageStorage)
+	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker(), embedClient, imageStorage)
 	itemH := itemHandler.NewHandler(itemSvc)
 
 	engine := router.New(tokenService, pingHandler, userH, exchangeOfferH, itemH)
