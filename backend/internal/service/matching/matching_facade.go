@@ -19,15 +19,21 @@ type CycleSearcher interface {
 	Find(ctx context.Context, tx database.Tx, startRequestID int64) ([]entity.ChainDraft, error)
 }
 
+// CandidateChainSaver сохраняет найденные варианты цепочек в текущей транзакции.
+type CandidateChainSaver interface {
+	SaveCandidates(ctx context.Context, tx database.Tx, drafts []entity.ChainDraft) error
+}
+
 // MatchingFacade связывает CRUD заявок с кластеризацией и поиском вариантов цепочек.
 type MatchingFacade struct {
 	clusters ClusterSynchronizer
 	cycles   CycleSearcher
+	chains   CandidateChainSaver
 }
 
 // NewFacade создаёт рабочий matching-фасад.
-func NewFacade(clusters ClusterSynchronizer, cycles CycleSearcher) *MatchingFacade {
-	return &MatchingFacade{clusters: clusters, cycles: cycles}
+func NewFacade(clusters ClusterSynchronizer, cycles CycleSearcher, chains CandidateChainSaver) *MatchingFacade {
+	return &MatchingFacade{clusters: clusters, cycles: cycles, chains: chains}
 }
 
 // RebuildForRequest синхронно актуализирует производные данные заявки.
@@ -45,7 +51,19 @@ func (f *MatchingFacade) RebuildForRequest(
 	if f.cycles == nil {
 		return []entity.ChainDraft{}, nil
 	}
-	return f.cycles.Find(ctx, tx, requestID)
+	drafts, err := f.cycles.Find(ctx, tx, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if len(drafts) > 0 {
+		if f.chains == nil {
+			return nil, entity.ErrChainRepositoryNotConfigured
+		}
+		if err := f.chains.SaveCandidates(ctx, tx, drafts); err != nil {
+			return nil, err
+		}
+	}
+	return drafts, nil
 }
 
 // RemoveRequest удаляет заявку из производных данных matching.
