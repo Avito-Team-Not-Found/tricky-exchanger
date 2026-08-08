@@ -2,6 +2,7 @@ package router_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -109,6 +110,10 @@ func (stubItemService) Update(_ context.Context, _ uuid.UUID, _ int64, _ itemSer
 
 func (stubItemService) Archive(_ context.Context, _ uuid.UUID, _ int64) error {
 	return nil
+}
+
+func (stubItemService) UploadImage(_ context.Context, _ uuid.UUID, _ int64, _ io.Reader, _ int64, _ string) (*entity.Item, error) {
+	return &entity.Item{}, nil
 }
 
 func TestPingHandler(t *testing.T) {

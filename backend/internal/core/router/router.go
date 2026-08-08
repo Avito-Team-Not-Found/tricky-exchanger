@@ -70,6 +70,7 @@ func New(
 			items.GET("/:id", itemH.Get)
 			items.PATCH("/:id", itemH.Update)
 			items.DELETE("/:id", itemH.Archive)
+			items.POST("/:id/image", itemH.UploadImage)
 		}
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен

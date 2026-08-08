@@ -34,4 +34,6 @@ var (
 	ErrTitleTooLong           = errors.New("title exceeds maximum length")
 	ErrDescriptionTooLong     = errors.New("description exceeds maximum length")
 	ErrInvalidItemStatus      = errors.New("invalid item status")
+	ErrInvalidImageType       = errors.New("unsupported image content type")
+	ErrImageTooLarge          = errors.New("image exceeds maximum size")
 )
