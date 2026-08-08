@@ -96,7 +96,7 @@ func main() {
 		cfg.CycleOutgoingK,
 		cfg.CycleMaxDrafts,
 		cfg.MatchingThreshold,
-	)
+	).WithQualityRules(cfg.CycleMinAverageScore, cfg.CycleMaxScoreGap)
 	transactionManager := database.NewTransactionManager(pool)
 	chainRepository := chainRepo.NewRepository(pool)
 	chainSvc := chainservice.NewService(chainRepository, transactionManager)
