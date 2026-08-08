@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/validator"
 )
 
 // Handler обрабатывает чтение доступных пользователю цепочек.
@@ -79,8 +81,13 @@ type exchangeOptionResponse struct {
 }
 
 type voteRequest struct {
-	RequestID       int64 `json:"requestId" binding:"required"`
-	TargetRequestID int64 `json:"targetRequestId" binding:"required"`
+	RequestID       int64 `json:"requestId" validate:"required,gt=0"`
+	TargetRequestID int64 `json:"targetRequestId" validate:"required,gt=0,nefield=RequestID"`
+}
+
+type withdrawVoteQuery struct {
+	RequestID       int64 `schema:"requestId" validate:"required,gt=0"`
+	TargetRequestID int64 `schema:"targetRequestId" validate:"required,gt=0,nefield=RequestID"`
 }
 
 type voteResponse struct {
@@ -182,8 +189,13 @@ func (h *Handler) Vote(c *gin.Context) {
 	}
 
 	var body voteRequest
-	if err := c.ShouldBindJSON(&body); err != nil {
-		api.SendError(c, http.StatusUnprocessableEntity, "invalid request body")
+	if err := validator.BindJSON(&body, c.Request); err != nil {
+		var jsonSyntaxErr *json.SyntaxError
+		if errors.As(err, &jsonSyntaxErr) {
+			api.SendError(c, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
@@ -192,7 +204,10 @@ func (h *Handler) Vote(c *gin.Context) {
 		TargetRequestID: body.TargetRequestID,
 	})
 	if err != nil {
+		var ve validator.Error
 		switch {
+		case errors.As(err, &ve):
+			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		case errors.Is(err, entity.ErrChainNotFound):
 			api.SendError(c, http.StatusNotFound, err.Error())
 		case errors.Is(err, entity.ErrChainVoteForbidden):
@@ -229,23 +244,21 @@ func (h *Handler) WithdrawVote(c *gin.Context) {
 		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
 		return
 	}
-	requestID, err := strconv.ParseInt(c.Query("requestId"), 10, 64)
-	if err != nil || requestID <= 0 {
-		api.SendError(c, http.StatusUnprocessableEntity, "requestId must be a positive integer")
-		return
-	}
-	targetRequestID, err := strconv.ParseInt(c.Query("targetRequestId"), 10, 64)
-	if err != nil || targetRequestID <= 0 {
-		api.SendError(c, http.StatusUnprocessableEntity, "targetRequestId must be a positive integer")
+	var query withdrawVoteQuery
+	if err := validator.BindQuery(&query, c.Request); err != nil {
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
 	err = h.service.WithdrawVote(c.Request.Context(), userID, chainID, chainservice.VoteInput{
-		RequestID:       requestID,
-		TargetRequestID: targetRequestID,
+		RequestID:       query.RequestID,
+		TargetRequestID: query.TargetRequestID,
 	})
 	if err != nil {
+		var ve validator.Error
 		switch {
+		case errors.As(err, &ve):
+			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		case errors.Is(err, entity.ErrChainNotFound):
 			api.SendError(c, http.StatusNotFound, err.Error())
 		case errors.Is(err, entity.ErrChainVoteForbidden):

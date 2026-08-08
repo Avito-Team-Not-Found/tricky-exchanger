@@ -6,8 +6,8 @@ import (
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/validator"
 )
 
 const (
@@ -42,8 +42,8 @@ func (s *Service) WithNotifier(notifier Notifier) *Service {
 
 // VoteInput identifies one directed response inside a candidate chain.
 type VoteInput struct {
-	RequestID       int64
-	TargetRequestID int64
+	RequestID       int64 `json:"requestId" validate:"required,gt=0"`
+	TargetRequestID int64 `json:"targetRequestId" validate:"required,gt=0,nefield=RequestID"`
 }
 
 // SaveCandidates проверяет и сохраняет кандидатные цепочки в переданной транзакции.
@@ -106,8 +106,11 @@ func (s *Service) Vote(ctx context.Context, userID string, chainID int64, input 
 	if s.repository == nil || s.transactions == nil {
 		return entity.ChainVote{}, entity.ErrChainRepositoryNotConfigured
 	}
-	if chainID <= 0 || input.RequestID <= 0 || input.TargetRequestID <= 0 || input.RequestID == input.TargetRequestID {
+	if chainID <= 0 {
 		return entity.ChainVote{}, entity.ErrInvalidVoteTarget
+	}
+	if err := validator.Validate(&input); err != nil {
+		return entity.ChainVote{}, err
 	}
 	result := entity.ChainVote{
 		ChainID:         chainID,
@@ -179,8 +182,11 @@ func (s *Service) WithdrawVote(ctx context.Context, userID string, chainID int64
 	if s.repository == nil || s.transactions == nil {
 		return entity.ErrChainRepositoryNotConfigured
 	}
-	if chainID <= 0 || input.RequestID <= 0 || input.TargetRequestID <= 0 || input.RequestID == input.TargetRequestID {
+	if chainID <= 0 {
 		return entity.ErrInvalidVoteTarget
+	}
+	if err := validator.Validate(&input); err != nil {
+		return err
 	}
 
 	return s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {

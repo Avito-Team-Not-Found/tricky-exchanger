@@ -31,7 +31,7 @@ func NewService(repo Repository, tokens TokenIssuer, codes CodeStore, mailer Mai
 }
 
 // Register создаёт нового пользователя и сразу выпускает для него сессионный токен
-// (PROJECT.md §4.1: регистрация одновременно создаёт сессию).
+
 func (s *Service) Register(ctx context.Context, fullName, email, password string) (*entity.User, string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

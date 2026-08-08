@@ -3,13 +3,11 @@ package item
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
@@ -40,7 +38,7 @@ func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 		vectorLiteral(item.Embedding), item.Status,
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("insert item: %w", repository.MapDBError(err))
+		return fmt.Errorf("insert item: %w", repository.DBError(err))
 	}
 
 	return nil
@@ -56,11 +54,8 @@ func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) 
 	`
 
 	item, err := scanItem(r.pool.QueryRow(ctx, q, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, repository.ErrNotFound
-	}
 	if err != nil {
-		return nil, fmt.Errorf("get item: %w", err)
+		return nil, fmt.Errorf("get item: %w", repository.DBError(err))
 	}
 
 	return item, nil
@@ -80,7 +75,7 @@ func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pag
 
 	rows, err := r.pool.Query(ctx, q, ownerID, pageSize, (page-1)*pageSize)
 	if err != nil {
-		return nil, 0, fmt.Errorf("list items by owner: %w", err)
+		return nil, 0, fmt.Errorf("list items by owner: %w", repository.DBError(err))
 	}
 	defer rows.Close()
 
@@ -124,11 +119,8 @@ func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 		item.ID, item.Title, item.Description, item.Category, item.Status,
 		optionalVectorLiteral(item.Embedding),
 	).Scan(&item.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return repository.ErrNotFound
-	}
 	if err != nil {
-		return fmt.Errorf("update item: %w", repository.MapDBError(err))
+		return fmt.Errorf("update item: %w", repository.DBError(err))
 	}
 
 	return nil
@@ -146,7 +138,7 @@ func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status entity.Ite
 
 	tag, err := r.pool.Exec(ctx, q, id, status)
 	if err != nil {
-		return fmt.Errorf("update item status: %w", err)
+		return fmt.Errorf("update item status: %w", repository.DBError(err))
 	}
 	if tag.RowsAffected() == 0 {
 		return repository.ErrNotFound
@@ -167,7 +159,7 @@ func (r *Postgres) UpdateImageURL(ctx context.Context, id int64, url string) err
 
 	tag, err := r.pool.Exec(ctx, q, id, url)
 	if err != nil {
-		return fmt.Errorf("update item image url: %w", err)
+		return fmt.Errorf("update item image url: %w", repository.DBError(err))
 	}
 	if tag.RowsAffected() == 0 {
 		return repository.ErrNotFound

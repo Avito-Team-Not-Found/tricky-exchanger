@@ -3,6 +3,7 @@ package user_test
 import (
 	"context"
 	"errors"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/codestore"
 	"testing"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/codestore"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
 )

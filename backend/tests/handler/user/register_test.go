@@ -156,8 +156,8 @@ func TestRegister_InvalidBody(t *testing.T) {
 		"password": "supersecret",
 	})
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected status %d, got %d", http.StatusUnprocessableEntity, rec.Code)
 	}
 }
 

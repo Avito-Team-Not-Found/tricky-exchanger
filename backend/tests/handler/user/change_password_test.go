@@ -44,8 +44,8 @@ func TestChangePassword_ConfirmationMismatch(t *testing.T) {
 		"newPasswordConfirmation": "different",
 	}, true)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected status %d, got %d", http.StatusUnprocessableEntity, rec.Code)
 	}
 }
 

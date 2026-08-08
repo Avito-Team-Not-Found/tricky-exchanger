@@ -13,6 +13,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 	itemservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/validator"
 )
 
 var ownerID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
@@ -56,8 +57,9 @@ func TestCreateRejectsEmptyTitle(t *testing.T) {
 	service, _ := newItemService(repo)
 
 	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{Title: "   "})
-	if !errors.Is(err, entity.ErrTitleRequired) {
-		t.Fatalf("Create() error = %v, want ErrTitleRequired", err)
+	var ve validator.Error
+	if !errors.As(err, &ve) {
+		t.Fatalf("Create() error = %v, want validator.Error", err)
 	}
 	if repo.created != nil {
 		t.Fatalf("repository.Create must not be called on validation failure")
