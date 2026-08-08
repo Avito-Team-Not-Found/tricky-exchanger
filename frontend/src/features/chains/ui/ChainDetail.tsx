@@ -157,10 +157,12 @@ function ChainSwapSide({ item }: { item: ChainItemRef | null }) {
   return (
     <span className="chain-detail__swap-side">
       <span
-        className={`chain-detail__thumb${item?.image ? '' : ' chain-detail__thumb--empty'}`}
+        className={`chain-detail__thumb${item?.imageUrl ? '' : ' chain-detail__thumb--empty'}`}
         aria-hidden
       >
-        {item?.image ? <img className="chain-detail__thumb-img" src={item.image} alt="" /> : null}
+        {item?.imageUrl ? (
+          <img className="chain-detail__thumb-img" src={item.imageUrl} alt="" />
+        ) : null}
       </span>
       <span className="chain-detail__item">{item?.title ?? 'Товар удалён'}</span>
     </span>

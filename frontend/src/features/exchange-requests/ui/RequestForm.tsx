@@ -1,10 +1,11 @@
 import { useImperativeHandle, type Ref } from 'react';
 
 import { CheckCircleFilled, LockOutlined, PlusOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Form, Input, Radio, Select, Skeleton } from 'antd';
+import { App as AntApp, Button, Form, Input, Radio, Skeleton } from 'antd';
 
 import { ITEM_STATUS_META } from '@entities/item';
 
+import { publicImageUrl } from '@shared/lib/imageUrl';
 import { ErrorState } from '@shared/ui';
 
 import { useRemoveRequest } from '../model/useRemoveRequest';
@@ -17,7 +18,7 @@ export interface RequestFormHandle {
 }
 
 interface RequestFormProps {
-  requestId?: string;
+  requestId?: number;
   ref?: Ref<RequestFormHandle>;
 }
 
@@ -34,7 +35,6 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
     items,
     readOnly,
     readOnlyReason,
-    categories,
     initialValues,
     result,
     handleValuesChange,
@@ -49,13 +49,17 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
   useImperativeHandle(ref, () => ({ confirmLeave }), [confirmLeave]);
 
   function confirmRemove() {
+    // request ещё не загружен — версии нет, удаление слало бы version=0, который
+    // бэкенд отклоняет как 422; блокируем, пока форма не получила данные
+    if (!request) return;
     modal.confirm({
       title: 'Удалить запрос?',
-      content: `Запрос «${request?.wantedDescription ?? ''}» будет отменён и исчезнет из списка.`,
+      content: `Запрос «${request.wantedDescription}» будет отменён и исчезнет из списка.`,
       okText: 'Да, удалить',
       okButtonProps: { danger: true },
       cancelText: 'Отмена',
-      onOk: () => removeRequest.mutate(requestId as string),
+      onOk: () =>
+        removeRequest.mutate({ requestId: requestId as number, version: request.version }),
     });
   }
 
@@ -120,8 +124,9 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
       <section className="request-form__block">
         <h2 className="request-form__heading">Что вы отдаёте?</h2>
         {isEdit ? (
+          // деталь заявки не отдаёт снимок товара — берём название из кеша товаров
           <p className="request-form__summary">
-            {request?.offeredItem?.title ?? 'Товар не найден'}
+            {items.find((item) => item.id === request?.offeredItemId)?.title ?? 'Товар не найден'}
           </p>
         ) : (
           <>
@@ -140,10 +145,10 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
                       className="request-form__item"
                     >
                       <span className="request-form__item-thumb">
-                        {item.image ? (
+                        {item.imageUrl ? (
                           <img
                             className="request-form__item-image"
-                            src={item.image}
+                            src={publicImageUrl(item.imageUrl)}
                             alt={item.title}
                           />
                         ) : null}
@@ -183,20 +188,6 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
             rows={3}
           />
         </Form.Item>
-
-        <div className="request-form__profile">
-          <h3 className="request-form__subheading">Фильтр поиска</h3>
-          <Form.Item
-            label="Категория"
-            name="categoryId"
-            rules={[{ required: true, message: 'Выберите категорию' }]}
-          >
-            <Select
-              placeholder="Выберите категорию"
-              options={categories.map((category) => ({ value: category.id, label: category.name }))}
-            />
-          </Form.Item>
-        </div>
       </section>
 
       <Button

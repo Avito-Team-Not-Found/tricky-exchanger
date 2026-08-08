@@ -7,13 +7,10 @@ export type FreezeVoteStatus = 'CONFIRMED' | 'DECLINED';
 export interface ChainItemRef {
   id: string;
   title: string;
-  image: string | null;
-  // описание/характеристики товара для экрана цепочки (макет 4.7); мок кладёт их в offeredItem
+  imageUrl: string | null;
+  // описание товара для экрана цепочки (макет 4.7); мок кладёт его в offeredItem
   description?: string | null;
-  categoryId?: string | null;
-  color?: string | null;
-  material?: string | null;
-  attributes?: Record<string, string> | null;
+  categoryId?: number | null;
 }
 
 export interface ChainUserRef {

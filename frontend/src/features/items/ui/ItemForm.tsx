@@ -16,7 +16,7 @@ export interface ItemFormHandle {
 }
 
 interface ItemFormProps {
-  itemId?: string;
+  itemId?: number;
   ref?: Ref<ItemFormHandle>;
 }
 
@@ -63,7 +63,7 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
       okText: 'Да, удалить',
       okButtonProps: { danger: true },
       cancelText: 'Отмена',
-      onOk: () => archiveItem.mutate(itemId as string),
+      onOk: () => archiveItem.mutate(itemId as number),
     });
   }
 
@@ -142,12 +142,6 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
         ]}
       >
         <Input.TextArea placeholder="Описание товара" maxLength={500} showCount rows={4} />
-      </Form.Item>
-      <Form.Item label="Цвет" name="color">
-        <Input placeholder="Например, белый" maxLength={50} />
-      </Form.Item>
-      <Form.Item label="Материал" name="material">
-        <Input placeholder="Например, пластик" maxLength={50} />
       </Form.Item>
       <Button
         className="item-form__submit"

@@ -9,6 +9,13 @@ import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
 import { ChainDetailPage } from './ChainDetailPage';
 
+// раздел цепочек включается флагом — в тестах он активен, чтобы код не сгнил до Chains API
+vi.mock('@shared/config/env', () => ({
+  env: { apiBaseUrl: 'http://localhost:8080' },
+  isDev: true,
+  featureChainsEnabled: true,
+}));
+
 function queryOk(data: unknown) {
   return { data, isPending: false, isError: false, refetch: vi.fn() } as never;
 }
@@ -40,7 +47,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         requestId: 'req-1',
         isCurrentUser: true,
         user: { id: 'me', name: 'Я' },
-        offeredItem: { id: 'item-1', title: 'Велосипед', image: null },
+        offeredItem: { id: 'item-1', title: 'Велосипед', imageUrl: null },
         receivesFromPosition: 2,
         responseStatus: null,
         freezeVoteStatus: null,
@@ -53,12 +60,9 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         offeredItem: {
           id: 'item-2',
           title: 'Зеркальный фотоаппарат Canon',
-          image: null,
+          imageUrl: null,
           description: 'Полный комплект: камера, объектив, флешка и чехол',
-          categoryId: 'electronics',
-          color: 'black',
-          material: null,
-          attributes: null,
+          categoryId: 3,
         },
         receivesFromPosition: 1,
         responseStatus: 'ACCEPTED',
@@ -79,7 +83,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedUseCategories.mockReturnValue(queryOk([{ id: 'electronics', name: 'Электроника' }]));
+    mockedUseCategories.mockReturnValue(queryOk([{ id: 3, name: 'Электроника' }]));
   });
 
   it('shows the received item with its description and specs', () => {
@@ -96,7 +100,6 @@ describe('ChainDetailPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Характеристики')).toBeInTheDocument();
     expect(screen.getByText('Электроника')).toBeInTheDocument();
-    expect(screen.getByText('black')).toBeInTheDocument();
   });
 
   it('opens the participants screen on button click', async () => {

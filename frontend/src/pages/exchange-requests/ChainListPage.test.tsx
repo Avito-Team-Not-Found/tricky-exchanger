@@ -4,10 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { selectChain, useRequestChains, type Chain } from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
+import { useItems, type Item } from '@entities/item';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
 import { ChainListPage } from './ChainListPage';
+
+// раздел цепочек включается флагом — в тестах он активен, чтобы код не сгнил до Chains API
+vi.mock('@shared/config/env', () => ({
+  env: { apiBaseUrl: 'http://localhost:8080' },
+  isDev: true,
+  featureChainsEnabled: true,
+}));
 
 function queryOk(data: unknown) {
   return { data, isPending: false, isError: false, refetch: vi.fn() } as never;
@@ -30,8 +38,27 @@ vi.mock('@entities/exchangeRequest', async (importOriginal) => {
   return { ...actual, useRequest: vi.fn() };
 });
 
+vi.mock('@entities/item', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@entities/item')>();
+  return { ...actual, useItems: vi.fn() };
+});
+
 const mockedUseRequestChains = vi.mocked(useRequestChains);
 const mockedUseRequest = vi.mocked(useRequest);
+const mockedUseItems = vi.mocked(useItems);
+
+// отдаваемый товар заявки (offeredItemId: 1) — деталь заявки его не отдаёт,
+// ChainListPage берёт его из кеша товаров
+const offeredItem = {
+  id: 1,
+  title: 'Велосипед',
+  description: 'Городской',
+  categoryId: null,
+  imageUrl: null,
+  status: 'ACTIVE',
+  createdAt: '',
+  updatedAt: '',
+} as Item;
 
 function makeChain(id: string, overrides: Partial<Chain> = {}): Chain {
   return {
@@ -47,7 +74,7 @@ function makeChain(id: string, overrides: Partial<Chain> = {}): Chain {
         requestId: 'req-1',
         isCurrentUser: true,
         user: { id: 'me', name: 'Я' },
-        offeredItem: { id: 'item-1', title: 'Велосипед', image: null },
+        offeredItem: { id: 'item-1', title: 'Велосипед', imageUrl: null },
         receivesFromPosition: 2,
         responseStatus: null,
         freezeVoteStatus: null,
@@ -57,7 +84,7 @@ function makeChain(id: string, overrides: Partial<Chain> = {}): Chain {
         requestId: null,
         isCurrentUser: false,
         user: { id: 'u2', name: 'Мария' },
-        offeredItem: { id: 'item-2', title: 'Фотоаппарат', image: null },
+        offeredItem: { id: 'item-2', title: 'Фотоаппарат', imageUrl: null },
         receivesFromPosition: 1,
         responseStatus: 'ACCEPTED',
         freezeVoteStatus: null,
@@ -75,12 +102,11 @@ function makeChain(id: string, overrides: Partial<Chain> = {}): Chain {
 }
 
 const request = {
-  id: 'req-1',
+  id: 1,
   status: 'IN_PROPOSAL',
-  offeredItemId: 'item-1',
-  offeredItem: null,
+  offeredItemId: 1,
   wantedDescription: 'Хочу фотоаппарат',
-  wantedProfile: null,
+  version: 1,
   createdAt: '',
   updatedAt: '',
 } as never;
@@ -88,6 +114,7 @@ const request = {
 describe('ChainListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedUseItems.mockReturnValue(queryOk({ items: [offeredItem], total: 1 }));
   });
 
   it('shows the request summary and the readiness progress of each chain', () => {
@@ -99,7 +126,7 @@ describe('ChainListPage', () => {
     });
 
     expect(screen.getByText('Варианты обмена')).toBeInTheDocument();
-    expect(screen.getByText('Отдаёте: Товар удалён')).toBeInTheDocument();
+    expect(screen.getByText('Отдаёте: Велосипед')).toBeInTheDocument();
     expect(screen.getByText('Получаете: Хочу фотоаппарат')).toBeInTheDocument();
     // один из двух участников уже согласился
     expect(screen.getByText('1/2 согласий')).toBeInTheDocument();
@@ -130,7 +157,7 @@ describe('ChainListPage', () => {
           requestId: 'req-1',
           isCurrentUser: true,
           user: { id: 'me', name: 'Я' },
-          offeredItem: { id: 'item-1', title: 'Велосипед', image: null },
+          offeredItem: { id: 'item-1', title: 'Велосипед', imageUrl: null },
           receivesFromPosition: 2,
           responseStatus: 'ACCEPTED',
           freezeVoteStatus: null,
@@ -140,7 +167,7 @@ describe('ChainListPage', () => {
           requestId: null,
           isCurrentUser: false,
           user: { id: 'u2', name: 'Мария' },
-          offeredItem: { id: 'item-2', title: 'Фотоаппарат', image: null },
+          offeredItem: { id: 'item-2', title: 'Фотоаппарат', imageUrl: null },
           receivesFromPosition: 1,
           responseStatus: 'ACCEPTED',
           freezeVoteStatus: null,
@@ -223,10 +250,10 @@ describe('ChainListPage', () => {
 
     // ChainListPage рендерится под реальным путём, чтобы useParams вернул requestId
     renderWithProviders(<div>stub</div>, {
-      initialEntries: ['/exchange-requests/req-1'],
+      initialEntries: ['/exchange-requests/1'],
       routes: [
         { path: '/exchange-requests/:requestId', element: <ChainListPage /> },
-        { path: '/exchange-requests/req-1/edit', element: <div>edit screen</div> },
+        { path: '/exchange-requests/1/edit', element: <div>edit screen</div> },
       ],
     });
 

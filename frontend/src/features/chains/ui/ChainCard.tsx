@@ -38,8 +38,8 @@ export function ChainCard({ chain, onOpen, onSelect, onDeselect, isSelecting }: 
       </div>
 
       <div className="chain-card__photo">
-        {received?.image ? (
-          <img className="chain-card__photo-img" src={received.image} alt={received.title} />
+        {received?.imageUrl ? (
+          <img className="chain-card__photo-img" src={received.imageUrl} alt={received.title} />
         ) : (
           <div className="chain-card__photo-placeholder" aria-hidden>
             {received?.title[0] ?? ''}

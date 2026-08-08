@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useRequests, type ExchangeRequest } from '@entities/exchangeRequest';
-import type { Item } from '@entities/item';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -20,37 +19,25 @@ vi.mock('@entities/exchangeRequest', async (importOriginal) => {
 
 const mockedUseRequests = vi.mocked(useRequests);
 
-function makeRequest(id: string, status: ExchangeRequest['status']): ExchangeRequest {
+function makeRequest(id: number, status: ExchangeRequest['status']): ExchangeRequest {
   return {
     id,
     status,
-    offeredItemId: `item-${id}`,
-    offeredItem: {
-      id: `item-${id}`,
-      title: `Товар ${id}`,
-      description: '',
-      categoryId: null,
-      color: null,
-      material: null,
-      attributes: null,
-      image: null,
-      status: 'ACTIVE',
-      createdAt: '',
-      updatedAt: '',
-    } as Item,
+    offeredItemId: id,
+    offeredItemTitle: `Товар ${id}`,
     wantedDescription: `Хочу ${id}`,
-    wantedProfile: null,
+    version: 1,
     createdAt: '',
     updatedAt: '',
   };
 }
 
 const requests = [
-  makeRequest('1', 'ACTIVE'),
-  makeRequest('2', 'IN_PROPOSAL'),
-  makeRequest('3', 'LOCKED'),
-  makeRequest('4', 'DONE'),
-  makeRequest('5', 'REMOVED'),
+  makeRequest(1, 'ACTIVE'),
+  makeRequest(2, 'IN_PROPOSAL'),
+  makeRequest(3, 'LOCKED'),
+  makeRequest(4, 'DONE'),
+  makeRequest(5, 'IN_PROGRESS'),
 ];
 
 describe('ExchangeRequestsPage', () => {
@@ -84,7 +71,7 @@ describe('ExchangeRequestsPage', () => {
     mockedUseRequests.mockReturnValue(queryOk(requests));
     renderWithProviders(<ExchangeRequestsPage />);
 
-    for (const label of ['Активен', 'В процессе', 'Заблокирован', 'Завершён', 'Отменён']) {
+    for (const label of ['Активен', 'В процессе', 'Заблокирован', 'Завершён', 'Выполняется']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });

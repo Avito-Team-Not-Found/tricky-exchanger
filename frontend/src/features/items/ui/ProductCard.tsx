@@ -1,5 +1,6 @@
 import { ITEM_STATUS_META, type Item } from '@entities/item';
 
+import { publicImageUrl } from '@shared/lib/imageUrl';
 import { StatusTag } from '@shared/ui';
 
 import './ProductCard.scss';
@@ -28,8 +29,12 @@ export function ProductCard({ item, onClick }: ProductCardProps) {
       }}
     >
       <div className="product-card__photo">
-        {item.image ? (
-          <img className="product-card__image" src={item.image} alt={item.title} />
+        {item.imageUrl ? (
+          <img
+            className="product-card__image"
+            src={publicImageUrl(item.imageUrl)}
+            alt={item.title}
+          />
         ) : (
           <div className="product-card__placeholder" aria-hidden />
         )}

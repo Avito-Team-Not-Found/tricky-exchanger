@@ -9,24 +9,12 @@ import { renderWithProviders } from '@shared/testing/renderWithProviders';
 import { RequestCard } from './RequestCard';
 
 const request = {
-  id: 'req-1',
+  id: 1,
   status: 'ACTIVE',
-  offeredItemId: 'item-1',
-  offeredItem: {
-    id: 'item-1',
-    title: 'Комбайн',
-    description: '',
-    categoryId: null,
-    color: null,
-    material: null,
-    attributes: null,
-    image: null,
-    status: 'ACTIVE',
-    createdAt: '',
-    updatedAt: '',
-  },
+  offeredItemId: 1,
+  offeredItemTitle: 'Комбайн',
   wantedDescription: 'Ноутбук',
-  wantedProfile: null,
+  version: 1,
   createdAt: '',
   updatedAt: '',
 } as ExchangeRequest;

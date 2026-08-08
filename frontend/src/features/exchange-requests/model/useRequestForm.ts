@@ -2,28 +2,26 @@ import { useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 import { App as AntApp, Form } from 'antd';
+import { isAxiosError } from 'axios';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { useCategories } from '@entities/category';
 import {
   createRequest,
   isRequestEditable,
   updateRequest,
   useRequest,
   type CreateRequestResult,
-  type WantedProfile,
 } from '@entities/exchangeRequest';
 import { useItems } from '@entities/item';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
 export interface RequestFormValues {
-  offeredItemId: string;
+  offeredItemId: number;
   wantedDescription: string;
-  categoryId?: string;
 }
 
-export function useRequestForm(requestId?: string) {
+export function useRequestForm(requestId?: number) {
   const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -36,17 +34,16 @@ export function useRequestForm(requestId?: string) {
   const requestQuery = useRequest(requestId);
   const request = requestQuery.data;
   const itemsQuery = useItems();
-  const categoriesQuery = useCategories();
 
   const isEdit = Boolean(requestId);
-  const items = itemsQuery.data ?? [];
+  const items = itemsQuery.data?.items ?? [];
   const readOnly = isEdit && request ? !isRequestEditable(request.status) : false;
   const readOnlyReason = readOnly && request ? request.status : null;
   const isLoading = isEdit ? requestQuery.isPending : itemsQuery.isPending;
   const isLoadError = isEdit ? requestQuery.isError : itemsQuery.isError;
 
   // пресет выбранного товара при возврате из формы создания товара (PROJECT.md §2.4)
-  const preselectedItemId = searchParams.get('offeredItemId') ?? undefined;
+  const preselectedItemId = searchParams.get('offeredItemId');
 
   // форма монтируется только после загрузки данных (RequestForm рендерит Skeleton),
   // поэтому префоллы задаются через initialValues, а не setState в эффекте
@@ -55,32 +52,24 @@ export function useRequestForm(requestId?: string) {
       ? {
           offeredItemId: request.offeredItemId,
           wantedDescription: request.wantedDescription,
-          categoryId: request.wantedProfile?.categoryId ?? undefined,
         }
       : undefined
     : {
         offeredItemId:
           preselectedItemId &&
-          items.some((item) => item.id === preselectedItemId && item.status === 'ACTIVE')
-            ? preselectedItemId
+          items.some((item) => item.id === Number(preselectedItemId) && item.status === 'ACTIVE')
+            ? Number(preselectedItemId)
             : undefined,
       };
 
   const offeredItemId = Form.useWatch('offeredItemId', form);
   const wantedDescription = Form.useWatch('wantedDescription', form);
-  const categoryId = Form.useWatch('categoryId', form);
 
   const canSubmit =
     Boolean(wantedDescription?.trim()) &&
-    Boolean(categoryId) &&
     (isEdit || Boolean(offeredItemId)) &&
     !submitting &&
     !readOnly;
-
-  // контракт допускает пустой профиль поиска, форма — нет: незаполненное уезжает как null
-  function buildProfile(values: RequestFormValues): WantedProfile {
-    return { categoryId: values.categoryId ?? null };
-  }
 
   async function handleSubmit(values: RequestFormValues) {
     // повторная отправка при активном запросе недопустима — кнопка блокируется на время сабмита
@@ -88,9 +77,11 @@ export function useRequestForm(requestId?: string) {
     setSubmitting(true);
     try {
       if (isEdit) {
-        await updateRequest(requestId as string, {
+        if (!request) return;
+        await updateRequest(requestId as number, {
+          offeredItemId: request.offeredItemId,
           wantedDescription: values.wantedDescription.trim(),
-          wantedProfile: buildProfile(values),
+          version: request.version,
         });
         message.success('Запрос обновлён');
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
@@ -102,14 +93,20 @@ export function useRequestForm(requestId?: string) {
         const created = await createRequest({
           offeredItemId: values.offeredItemId,
           wantedDescription: values.wantedDescription.trim(),
-          wantedProfile: buildProfile(values),
         });
-        setResult(created);
+        // матчинг на бэкенде — заглушка (SCRUM-50 §5), цепочки на фронте выключены флагом
+        setResult({ request: created, matching: { createdCandidateChains: 0 } });
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
       }
       // после успешного сохранения уход с формы не должен спрашивать про несохранённое
       setDirty(false);
     } catch (error) {
+      // конфликт версии (409) — заявка успела измениться в другом окне; кеш устарел, а не форма
+      if (isEdit && isAxiosError(error) && error.response?.status === 409) {
+        message.error('Заявка изменилась — обновите страницу и попробуйте ещё раз');
+        queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
+        return;
+      }
       message.error(
         getErrorMessage(
           error,
@@ -117,6 +114,9 @@ export function useRequestForm(requestId?: string) {
           'Не удалось сохранить запрос',
         ),
       );
+    } finally {
+      // в том числе при раннем выходе до отправки (кеш заявки опустел) — иначе форма
+      // навсегда остаётся заблокированной (disabled={submitting || readOnly})
       setSubmitting(false);
     }
   }
@@ -186,7 +186,6 @@ export function useRequestForm(requestId?: string) {
     items,
     readOnly,
     readOnlyReason,
-    categories: categoriesQuery.data ?? [],
     initialValues,
     result,
     handleValuesChange,

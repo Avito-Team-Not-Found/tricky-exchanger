@@ -6,7 +6,7 @@ import { App as AntApp } from 'antd';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createItem, updateItem, useItem, type Item } from '@entities/item';
+import { createItem, ItemImageUploadError, updateItem, useItem, type Item } from '@entities/item';
 
 import { createTestQueryClient } from '@shared/testing/renderWithProviders';
 
@@ -43,12 +43,10 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 const existingItem = {
-  id: 'item-1',
+  id: 1,
   title: 'Комбайн',
   description: 'Описание',
-  color: 'white',
-  material: 'plastic',
-  image: 'data:image/png;base64,abc',
+  imageUrl: 'data:image/png;base64,abc',
 } as unknown as Item;
 
 describe('useItemForm', () => {
@@ -71,8 +69,6 @@ describe('useItemForm', () => {
       await result.current.handleSubmit({
         title: '  Смарт-часы  ',
         description: 'Работают',
-        color: '  black ',
-        material: '',
       });
     });
 
@@ -80,8 +76,6 @@ describe('useItemForm', () => {
       {
         title: 'Смарт-часы',
         description: 'Работают',
-        color: 'black',
-        material: null,
       },
       null,
     );
@@ -90,37 +84,55 @@ describe('useItemForm', () => {
   it('updates an existing item keeping its image', async () => {
     mockedUseItem.mockReturnValue(queryOk(existingItem));
     mockedUpdateItem.mockResolvedValue(existingItem);
-    const { result } = renderHook(() => useItemForm('item-1'), { wrapper });
+    const { result } = renderHook(() => useItemForm(1), { wrapper });
 
     await act(async () => {
       await result.current.handleSubmit({
         title: 'Комбайн Bosch',
         description: 'Новое описание',
-        color: 'red',
-        material: 'aluminum',
       });
     });
 
     // фото не меняли → image === undefined
     expect(mockedUpdateItem).toHaveBeenCalledWith(
-      'item-1',
+      1,
       {
         title: 'Комбайн Bosch',
         description: 'Новое описание',
-        color: 'red',
-        material: 'aluminum',
       },
       undefined,
     );
   });
 
-  // заявка везёт снимок товара (offeredItem), поэтому правка товара обязана
-  // инвалидировать и список заявок — иначе там ещё минуту висят старые название и фото
+  // PATCH ушёл, но фото не загрузилось: форма должна остаться рабочей (не навсегда disabled)
+  // и инвалидировать список — иначе /products ещё 60 с отдаёт кеш без правок
+  it('stays usable and invalidates items when image upload fails after an update', async () => {
+    mockedUseItem.mockReturnValue(queryOk(existingItem));
+    mockedUpdateItem.mockRejectedValue(
+      new ItemImageUploadError(existingItem as Item, new Error('upload failed')),
+    );
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useItemForm(1), { wrapper });
+
+    await act(async () => {
+      await result.current.handleSubmit({
+        title: 'Комбайн Bosch',
+        description: 'Новое описание',
+      });
+    });
+
+    const keys = invalidate.mock.calls.map(([options]) => options?.queryKey);
+    expect(keys).toContainEqual(['items']);
+    expect(result.current.submitting).toBe(false);
+  });
+
+  // карточки заявок показывают название отдаваемого товара (offeredItemTitle), поэтому
+  // правка товара обязана инвалидировать и список заявок — иначе там ещё минуту висит старое
   it('invalidates both items and exchange requests after an update', async () => {
     mockedUseItem.mockReturnValue(queryOk(existingItem));
     mockedUpdateItem.mockResolvedValue(existingItem);
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-    const { result } = renderHook(() => useItemForm('item-1'), { wrapper });
+    const { result } = renderHook(() => useItemForm(1), { wrapper });
 
     await act(async () => {
       await result.current.handleSubmit({
@@ -164,15 +176,15 @@ describe('useItemForm', () => {
     // выбранный файл всегда важнее фото с сервера: показывать старое фото под видом нового нельзя
     it('shows the picked file instead of the stored image', async () => {
       mockedUseItem.mockReturnValue(queryOk(existingItem));
-      const { result } = renderHook(() => useItemForm('item-1'), { wrapper });
-      expect(result.current.previewUrl).toBe(existingItem.image);
+      const { result } = renderHook(() => useItemForm(1), { wrapper });
+      expect(result.current.previewUrl).toBe(existingItem.imageUrl);
 
       await act(async () => {
         result.current.handleImageSelected(file as never);
       });
 
       expect(result.current.previewUrl).toMatch(/^blob:/);
-      expect(result.current.previewUrl).not.toBe(existingItem.image);
+      expect(result.current.previewUrl).not.toBe(existingItem.imageUrl);
     });
 
     // среда без Object URL API: превью просто нет. Показать вместо нового файла старое
@@ -184,7 +196,7 @@ describe('useItemForm', () => {
       Reflect.set(URL, 'createObjectURL', undefined);
       try {
         mockedUseItem.mockReturnValue(queryOk(existingItem));
-        const { result } = renderHook(() => useItemForm('item-1'), { wrapper });
+        const { result } = renderHook(() => useItemForm(1), { wrapper });
 
         await act(async () => {
           result.current.handleImageSelected(file as never);

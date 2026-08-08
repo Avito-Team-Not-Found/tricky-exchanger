@@ -1,16 +1,13 @@
 import type { StatusTone } from '@shared/ui';
 
-export type ItemStatus = 'ACTIVE' | 'RESERVED' | 'EXCHANGED';
+export type ItemStatus = 'ACTIVE' | 'UNAVAILABLE' | 'ARCHIVED';
 
 export interface Item {
-  id: string;
+  id: number;
   title: string;
   description: string;
-  categoryId: string | null;
-  color: string | null;
-  material: string | null;
-  attributes: Record<string, unknown> | null;
-  image: string | null;
+  categoryId: number | null;
+  imageUrl: string | null;
   status: ItemStatus;
   createdAt: string;
   updatedAt: string;
@@ -19,13 +16,17 @@ export interface Item {
 export interface ItemPayload {
   title: string;
   description: string;
-  color?: string | null;
-  material?: string | null;
-  categoryId?: string | null;
+  categoryId?: number | null;
+}
+
+// страница списка товаров: total отдаёт сервер, чтобы клиент видел обрезание по pageSize
+export interface ItemsList {
+  items: Item[];
+  total: number;
 }
 
 export const ITEM_STATUS_META: Record<ItemStatus, { label: string; tone: StatusTone }> = {
   ACTIVE: { label: 'Активен', tone: 'success' },
-  RESERVED: { label: 'Забронирован', tone: 'warning' },
-  EXCHANGED: { label: 'Обменян', tone: 'success' },
+  UNAVAILABLE: { label: 'Недоступен', tone: 'warning' },
+  ARCHIVED: { label: 'В архиве', tone: 'neutral' },
 };

@@ -4,20 +4,26 @@ import { useQueryClient } from '@tanstack/react-query';
 import { App as AntApp, Form, type UploadProps } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { createItem, updateItem, useItem, type Item, type ItemPayload } from '@entities/item';
+import {
+  createItem,
+  ItemImageUploadError,
+  updateItem,
+  useItem,
+  type ItemPayload,
+  type ItemsList,
+} from '@entities/item';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
+import { publicImageUrl } from '@shared/lib/imageUrl';
 
 type UploadedFile = Parameters<NonNullable<UploadProps['beforeUpload']>>[0];
 
 export interface ItemFormValues {
   title: string;
   description: string;
-  color?: string;
-  material?: string;
 }
 
-export function useItemForm(itemId?: string) {
+export function useItemForm(itemId?: number) {
   const { message, modal } = AntApp.useApp();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -43,13 +49,11 @@ export function useItemForm(itemId?: string) {
     return {
       title: item.title,
       description: item.description,
-      color: item.color ?? undefined,
-      material: item.material ?? undefined,
     };
   }, [item]);
 
   // фото обязательно в обеих формах: убрали фотку у существующего товара — сохранить нельзя
-  const hasPhoto = Boolean(pendingFile) || (isEdit && Boolean(item?.image) && !removingImage);
+  const hasPhoto = Boolean(pendingFile) || (isEdit && Boolean(item?.imageUrl) && !removingImage);
 
   // blob-URL под выбранный файл живёт ровно до смены файла или размонтирования,
   // иначе каждая новая фотка (до 5 МБ) остаётся висеть в памяти вкладки
@@ -69,8 +73,8 @@ export function useItemForm(itemId?: string) {
   // иначе — текущее фото с сервера. Показывать старое фото вместо нового нельзя: это враньё
   const previewUrl = pendingFile
     ? pendingPreview
-    : isEdit && item?.image && !removingImage
-      ? item.image
+    : isEdit && item?.imageUrl && !removingImage
+      ? publicImageUrl(item.imageUrl)
       : null;
 
   const title = Form.useWatch('title', form);
@@ -87,7 +91,7 @@ export function useItemForm(itemId?: string) {
 
   function handleImageRemove() {
     setPendingFile(null);
-    if (item?.image) setRemovingImage(true);
+    if (item?.imageUrl) setRemovingImage(true);
     setDirty(true);
   }
 
@@ -141,29 +145,30 @@ export function useItemForm(itemId?: string) {
     if (submitting) return;
     setSubmitting(true);
     try {
-      // сборка payload — внутри try: на неполных значениях она бросает, и без catch
-      // форма осталась бы навсегда заблокированной (disabled={submitting})
       const payload: ItemPayload = {
         title: values.title.trim(),
         description: values.description.trim(),
-        color: values.color?.trim() || null,
-        material: values.material?.trim() || null,
       };
       if (isEdit) {
-        await updateItem(itemId as string, payload, pendingFile ?? undefined);
+        await updateItem(itemId as number, payload, pendingFile ?? undefined);
         message.success('Товар обновлён');
         queryClient.invalidateQueries({ queryKey: ['items'] });
-        // заявки везут в себе снимок товара (offeredItem) — без инвалидации список
-        // заявок ещё минуту показывает старое название и фото
+        // карточки заявок показывают название отдаваемого товара (offeredItemTitle) —
+        // без инвалидации список заявок ещё минуту показывает старое название
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
-        navigate('/products');
+        // правка после «создать товар из формы запроса» (PROJECT.md §2.4): сохранение
+        // фото возвращает в форму запроса с выбором этого товара, а не в список товаров
+        navigate(returnToRequest ? `/exchange-requests/new?offeredItemId=${itemId}` : '/products');
       } else {
         const created = await createItem(payload, pendingFile);
         message.success('Товар создан');
         queryClient.invalidateQueries({ queryKey: ['items'] });
         // форма запроса читает кеш синхронно при монтировании — новый товар должен там уже быть,
         // иначе пресет offeredItemId не применится до фонового refetch
-        queryClient.setQueryData<Item[]>(['items'], (old) => (old ? [...old, created] : [created]));
+        queryClient.setQueryData<ItemsList>(['items'], (old) => ({
+          items: old ? [...old.items, created] : [created],
+          total: (old?.total ?? 0) + 1,
+        }));
         if (returnToRequest) {
           navigate(`/exchange-requests/new?offeredItemId=${created.id}`);
         } else {
@@ -171,6 +176,32 @@ export function useItemForm(itemId?: string) {
         }
       }
     } catch (error) {
+      // товар уже сохранён, но фото не загрузилось — не теряем изменения, возвращаемся к форме
+      if (error instanceof ItemImageUploadError) {
+        message.error(
+          isEdit
+            ? 'Товар обновлён, но фото не загрузилось — попробуйте загрузить его ещё раз'
+            : 'Товар создан, но фото не загрузилось. Добавьте его на экране редактирования',
+        );
+        // товар создан/обновлён на сервере, но клиентский список его ещё не знает —
+        // иначе /products ещё 60 с отдаёт кеш без изменений
+        queryClient.invalidateQueries({ queryKey: ['items'] });
+        // название товара уже могло поменяться — карточки заявок (offeredItemTitle)
+        // иначе ещё минуту показывают старый текст
+        queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
+        if (!isEdit) {
+          // возврат в форму запроса сохраняется (PROJECT.md §2.4): после дозагрузки фото
+          // пользователь снова попадёт в форму запроса с выбором созданного товара
+          navigate(
+            returnToRequest
+              ? `/products/${error.item.id}/edit?returnTo=request`
+              : `/products/${error.item.id}/edit`,
+          );
+          return;
+        }
+        setSubmitting(false);
+        return;
+      }
       message.error(
         getErrorMessage(
           error,

@@ -42,7 +42,7 @@ describe('useArchiveItem', () => {
     const { result } = renderHook(() => useArchiveItem(), { wrapper });
 
     await act(async () => {
-      result.current.mutate('item-1');
+      result.current.mutate(1);
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -58,7 +58,7 @@ describe('useArchiveItem', () => {
     const { result } = renderHook(() => useArchiveItem(onSuccess), { wrapper });
 
     await act(async () => {
-      result.current.mutate('item-1');
+      result.current.mutate(1);
     });
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());

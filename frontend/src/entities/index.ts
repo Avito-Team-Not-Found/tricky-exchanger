@@ -17,9 +17,8 @@ export {
   type CreateRequestPayload,
   type CreateRequestResult,
   type ExchangeRequest,
-  type RequestDraft,
   type RequestStatus,
-  type WantedProfile,
+  type UpdateRequestPayload,
 } from './exchangeRequest';
 
 export { useCategories, type Category } from './category';

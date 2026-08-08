@@ -1,8 +1,18 @@
+import { useEffect } from 'react';
+
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useSearchParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { archiveItem, createItem, updateItem, useItem, type Item } from '@entities/item';
+import {
+  archiveItem,
+  createItem,
+  ItemImageUploadError,
+  updateItem,
+  useItem,
+  type Item,
+} from '@entities/item';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -29,20 +39,30 @@ const mockedUpdateItem = vi.mocked(updateItem);
 const mockedArchiveItem = vi.mocked(archiveItem);
 
 const existingItem = {
-  id: 'item-1',
+  id: 1,
   title: 'Кухонный комбайн',
   description: 'Мощный',
-  color: 'white',
-  material: 'plastic',
-  image: 'data:image/png;base64,abc',
+  imageUrl: 'data:image/png;base64,abc',
 } as unknown as Item;
 
 const photo = new File(['bytes'], 'photo.png', { type: 'image/png' });
+
+// записываем search-параметры экрана редактирования, чтобы проверить сохранившийся returnTo
+const editLocation = { search: '' };
+
+function EditScreenSpy() {
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    editLocation.search = searchParams.toString();
+  }, [searchParams]);
+  return <div>edit screen</div>;
+}
 
 describe('ItemForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedUseItem.mockReturnValue(queryOk(undefined));
+    editLocation.search = '';
   });
 
   it('keeps the submit button disabled until photo and required fields are filled', async () => {
@@ -77,44 +97,61 @@ describe('ItemForm', () => {
     );
   });
 
+  // создание товара из формы запроса (PROJECT.md §2.4): фото не загрузилось — товар уже создан,
+  // ведём на редактирование, сохраняя returnTo=request, чтобы после дозагрузки вернуться в запрос
+  it('redirects to edit with returnTo=request when the photo upload fails in create-from-request', async () => {
+    const user = userEvent.setup();
+    mockedCreateItem.mockRejectedValue(new ItemImageUploadError(existingItem, new Error('upload')));
+    const { container } = renderWithProviders(<ItemForm />, {
+      initialEntries: ['/products/new?returnTo=request'],
+      routes: [{ path: '/products/:itemId/edit', element: <EditScreenSpy /> }],
+    });
+
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
+    await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
+    await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    await user.click(screen.getByRole('button', { name: /Сохранить/ }));
+
+    expect(await screen.findByText('edit screen')).toBeInTheDocument();
+    expect(editLocation.search).toContain('returnTo=request');
+  });
+
   it('shows an error state when the item fails to load', () => {
     mockedUseItem.mockReturnValue({ data: undefined, isPending: false, isError: true } as never);
-    renderWithProviders(<ItemForm itemId="item-1" />);
+    renderWithProviders(<ItemForm itemId={1} />);
 
     expect(screen.getByText('Что-то пошло не так')).toBeInTheDocument();
   });
 
-  it('prefills an existing item and saves color and material', async () => {
+  it('prefills an existing item and saves the changes', async () => {
     const user = userEvent.setup();
     mockedUseItem.mockReturnValue(queryOk(existingItem));
     mockedUpdateItem.mockResolvedValue(existingItem);
-    renderWithProviders(<ItemForm itemId="item-1" />, {
+    renderWithProviders(<ItemForm itemId={1} />, {
       routes: [{ path: '/products', element: <div>products screen</div> }],
     });
 
     expect(screen.getByLabelText('Название')).toHaveValue('Кухонный комбайн');
-    expect(screen.getByLabelText('Цвет')).toHaveValue('white');
-    expect(screen.getByLabelText('Материал')).toHaveValue('plastic');
+    expect(screen.getByLabelText('Описание')).toHaveValue('Мощный');
 
-    await user.clear(screen.getByLabelText('Цвет'));
-    await user.type(screen.getByLabelText('Цвет'), 'black');
+    await user.clear(screen.getByLabelText('Название'));
+    await user.type(screen.getByLabelText('Название'), 'Комбайн Bosch');
     await user.click(screen.getByRole('button', { name: /Сохранить изменения/ }));
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedUpdateItem).toHaveBeenCalledWith(
-      'item-1',
+      1,
       expect.objectContaining({
-        title: 'Кухонный комбайн',
-        color: 'black',
-        material: 'plastic',
+        title: 'Комбайн Bosch',
+        description: 'Мощный',
       }),
       undefined,
     );
   });
 
   it('requires a photo even when editing an item without one', () => {
-    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, image: null }));
-    renderWithProviders(<ItemForm itemId="item-1" />);
+    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, imageUrl: null }));
+    renderWithProviders(<ItemForm itemId={1} />);
 
     expect(screen.getByText('Добавить фото')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Сохранить изменения/ })).toBeDisabled();
@@ -123,7 +160,7 @@ describe('ItemForm', () => {
   it('removing the photo blocks saving', async () => {
     const user = userEvent.setup();
     mockedUseItem.mockReturnValue(queryOk(existingItem));
-    renderWithProviders(<ItemForm itemId="item-1" />);
+    renderWithProviders(<ItemForm itemId={1} />);
 
     expect(screen.getByRole('button', { name: /Удалить фото/ })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Удалить фото/ }));
@@ -156,7 +193,7 @@ describe('ItemForm', () => {
     const user = userEvent.setup();
     mockedUseItem.mockReturnValue(queryOk(existingItem));
     mockedArchiveItem.mockResolvedValue(undefined);
-    renderWithProviders(<ItemForm itemId="item-1" />, {
+    renderWithProviders(<ItemForm itemId={1} />, {
       routes: [{ path: '/products', element: <div>products screen</div> }],
     });
 
@@ -164,6 +201,6 @@ describe('ItemForm', () => {
     await user.click(await screen.findByRole('button', { name: /Да, удалить/ }));
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
-    expect(mockedArchiveItem).toHaveBeenCalledWith('item-1');
+    expect(mockedArchiveItem).toHaveBeenCalledWith(1);
   });
 });

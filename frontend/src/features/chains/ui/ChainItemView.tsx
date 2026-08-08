@@ -22,19 +22,12 @@ export function ChainItemView({ chain, categoryName, onOpenParticipants }: Chain
 
   const specs: { label: string; value: string }[] = [];
   if (categoryName) specs.push({ label: 'Категория', value: categoryName });
-  if (received?.color) specs.push({ label: 'Цвет', value: received.color });
-  if (received?.material) specs.push({ label: 'Материал', value: received.material });
-  if (received?.attributes) {
-    for (const [label, value] of Object.entries(received.attributes)) {
-      specs.push({ label, value });
-    }
-  }
 
   return (
     <div className="chain-item">
       <div className="chain-item__photo">
-        {received?.image ? (
-          <img className="chain-item__photo-img" src={received.image} alt={received.title} />
+        {received?.imageUrl ? (
+          <img className="chain-item__photo-img" src={received.imageUrl} alt={received.title} />
         ) : (
           <div className="chain-item__photo-placeholder" aria-hidden />
         )}

@@ -8,6 +8,13 @@ import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
 import { ChainParticipantsPage } from './ChainParticipantsPage';
 
+// раздел цепочек включается флагом — в тестах он активен, чтобы код не сгнил до Chains API
+vi.mock('@shared/config/env', () => ({
+  env: { apiBaseUrl: 'http://localhost:8080' },
+  isDev: true,
+  featureChainsEnabled: true,
+}));
+
 function queryOk(data: unknown) {
   return { data, isPending: false, isError: false, refetch: vi.fn() } as never;
 }
@@ -40,7 +47,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         requestId: 'req-1',
         isCurrentUser: true,
         user: { id: 'me', name: 'Я' },
-        offeredItem: { id: 'item-1', title: 'Велосипед', image: null },
+        offeredItem: { id: 'item-1', title: 'Велосипед', imageUrl: null },
         receivesFromPosition: 2,
         responseStatus: null,
         freezeVoteStatus: null,
@@ -50,7 +57,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         requestId: null,
         isCurrentUser: false,
         user: { id: 'u2', name: 'Мария' },
-        offeredItem: { id: 'item-2', title: 'Фотоаппарат', image: null },
+        offeredItem: { id: 'item-2', title: 'Фотоаппарат', imageUrl: null },
         receivesFromPosition: 1,
         responseStatus: 'ACCEPTED',
         freezeVoteStatus: null,
