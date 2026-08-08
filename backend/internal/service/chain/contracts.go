@@ -21,4 +21,40 @@ type Repository interface {
 	DeletePendingVote(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error
 	ListPendingVoteEdges(ctx context.Context, tx database.Tx, chainID int64) ([]entity.VoteEdge, error)
 	Propose(ctx context.Context, tx database.Tx, chainID int64, requestIDsByPosition []int64) error
+	MarkRequestInProposal(ctx context.Context, tx database.Tx, requestID int64) error
+	RestoreActiveIfNoPendingVotes(ctx context.Context, tx database.Tx, requestID int64) error
+	LoadScoreFeatures(ctx context.Context, tx database.Tx, chainID int64) (cosines []float64, reliability []float64, sizes []int, err error)
+	CountPendingVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error)
+	UpdateScore(ctx context.Context, tx database.Tx, chainID int64, score float64) error
+}
+
+// ScoreEvent — действие, вызвавшее пересчёт score.
+type ScoreEvent string
+
+const (
+	ScoreEventRespond ScoreEvent = "RESPOND" // отклик
+	ScoreEventDecline ScoreEvent = "DECLINE" // отзыв отклика
+)
+
+// ChainScoreState — снимок цепочки для пересчёта score.
+type ChainScoreState struct {
+	Count         int
+	Stage         entity.ChainStatus
+	Event         ScoreEvent
+	EdgeCosines   []float64
+	Reliability   []float64
+	ClusterSizes  []int
+	ApprovedVotes int
+}
+
+// ScoreRefresher пересчитывает score после отклика/отзыва.
+type ScoreRefresher interface {
+	Score(s ChainScoreState) (float64, error)
+}
+
+// Notifier отправляет пользовательские уведомления о событиях цепочки
+// (например, письма о замыкании цикла). Подключается явно; до подключения
+// сервис работает без уведомлений.
+type Notifier interface {
+	NotifyChainProposed(ctx context.Context, chainID int64, participants []entity.ChainParticipant) error
 }

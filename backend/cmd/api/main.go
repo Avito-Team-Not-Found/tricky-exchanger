@@ -99,8 +99,11 @@ func main() {
 	)
 	transactionManager := database.NewTransactionManager(pool)
 	chainRepository := chainRepo.NewRepository(pool)
+
+	ranker := matching.NewChainScoreCalculator(matching.NewRankerConfig())
 	chainSvc := chainservice.NewService(chainRepository, transactionManager)
-	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc)
+	chainSvc = chainSvc.WithScorer(chainScorerAdapter{ranker: ranker})
+	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).WithRanker(ranker)
 
 	// Выбор embed-провайдера конфигом: tei | stub.
 	var embedClient embedding.Client
@@ -175,4 +178,24 @@ func main() {
 	}
 
 	logger.Info("exited cleanly")
+}
+
+// chainScorerAdapter приводит chain.ScoreRefresher к matching.Ranker.
+type chainScorerAdapter struct {
+	ranker *matching.ChainScoreCalculator
+}
+
+func (a chainScorerAdapter) Score(s chainservice.ChainScoreState) (float64, error) {
+	state := matching.ChainState{
+		Count:                   s.Count,
+		Stage:                   matching.ChainStateStatus(s.Stage),
+		EdgeCosines:             s.EdgeCosines,
+		ParticipantReliability:  s.Reliability,
+		ParticipantClusterSizes: s.ClusterSizes,
+		ApprovedVotes:           s.ApprovedVotes,
+	}
+	if s.Event == chainservice.ScoreEventDecline {
+		return a.ranker.ScoreForDecline(state)
+	}
+	return a.ranker.ScoreForRespond(state)
 }

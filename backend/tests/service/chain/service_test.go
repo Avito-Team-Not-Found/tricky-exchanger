@@ -95,15 +95,17 @@ func TestSaveCandidatesAllowsOneClusterInDifferentChains(t *testing.T) {
 }
 
 type fakeRepository struct {
-	saved         []entity.ChainDraft
-	status        entity.ChainStatus
-	length        int
-	edges         []entity.VoteEdge
-	existingVote  entity.ChainVote
-	proposed      []int64
-	upsertCalls   int
-	deleteCalls   int
-	validationErr error
+	saved          []entity.ChainDraft
+	status         entity.ChainStatus
+	length         int
+	edges          []entity.VoteEdge
+	existingVote   entity.ChainVote
+	proposed       []int64
+	upsertCalls    int
+	deleteCalls    int
+	markInProposal int
+	restoredActive int
+	validationErr  error
 }
 
 func (r *fakeRepository) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
@@ -155,6 +157,28 @@ func (r *fakeRepository) ListPendingVoteEdges(_ context.Context, _ database.Tx, 
 
 func (r *fakeRepository) Propose(_ context.Context, _ database.Tx, _ int64, requestIDs []int64) error {
 	r.proposed = append([]int64(nil), requestIDs...)
+	return nil
+}
+
+func (r *fakeRepository) MarkRequestInProposal(_ context.Context, _ database.Tx, _ int64) error {
+	r.markInProposal++
+	return nil
+}
+
+func (r *fakeRepository) RestoreActiveIfNoPendingVotes(_ context.Context, _ database.Tx, _ int64) error {
+	r.restoredActive++
+	return nil
+}
+
+func (r *fakeRepository) LoadScoreFeatures(_ context.Context, _ database.Tx, _ int64) ([]float64, []float64, []int, error) {
+	return []float64{}, []float64{}, []int{}, nil
+}
+
+func (r *fakeRepository) CountPendingVoters(_ context.Context, _ database.Tx, _ int64) (int, error) {
+	return 0, nil
+}
+
+func (r *fakeRepository) UpdateScore(_ context.Context, _ database.Tx, _ int64, _ float64) error {
 	return nil
 }
 
@@ -213,6 +237,9 @@ func TestVoteKeepsCandidateWithoutClosedCycle(t *testing.T) {
 	if result.ChainStatus != entity.ChainStatusCandidate || len(repository.proposed) != 0 {
 		t.Fatalf("status = %s, proposed = %v", result.ChainStatus, repository.proposed)
 	}
+	if repository.markInProposal != 1 {
+		t.Fatalf("MarkRequestInProposal calls = %d, want 1", repository.markInProposal)
+	}
 }
 
 func TestVoteRetryAfterProposalIsIdempotent(t *testing.T) {
@@ -264,5 +291,61 @@ func TestWithdrawVoteRejectedAfterProposal(t *testing.T) {
 	}
 	if repository.deleteCalls != 0 {
 		t.Fatalf("delete calls = %d, want 0", repository.deleteCalls)
+	}
+}
+
+func TestVoteProposesFourMemberChainWhenAllRespond(t *testing.T) {
+	repository := &fakeRepository{
+		length: 4,
+		edges: []entity.VoteEdge{
+			{RequestID: 10, TargetRequestID: 20, Position: 0},
+			{RequestID: 20, TargetRequestID: 30, Position: 1},
+			{RequestID: 30, TargetRequestID: 40, Position: 2},
+			{RequestID: 40, TargetRequestID: 10, Position: 3},
+		},
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	result, err := service.Vote(context.Background(), "user-1", 7, chainservice.VoteInput{
+		RequestID: 40, TargetRequestID: 10,
+	})
+	if err != nil {
+		t.Fatalf("Vote() error = %v", err)
+	}
+	if result.ChainStatus != entity.ChainStatusProposed {
+		t.Fatalf("status = %s, want %s", result.ChainStatus, entity.ChainStatusProposed)
+	}
+	want := []int64{10, 20, 30, 40}
+	for i := range want {
+		if repository.proposed[i] != want[i] {
+			t.Fatalf("proposed cycle = %v, want %v", repository.proposed, want)
+		}
+	}
+	if repository.markInProposal != 1 {
+		t.Fatalf("MarkRequestInProposal calls = %d, want 1", repository.markInProposal)
+	}
+}
+
+func TestWithdrawVoteKeepsCandidateWhenCycleNotClosed(t *testing.T) {
+	repository := &fakeRepository{
+		length: 3,
+		edges: []entity.VoteEdge{
+			{RequestID: 10, TargetRequestID: 20, Position: 0},
+			{RequestID: 20, TargetRequestID: 30, Position: 1},
+		},
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	err := service.WithdrawVote(context.Background(), "user-1", 7, chainservice.VoteInput{
+		RequestID: 10, TargetRequestID: 20,
+	})
+	if err != nil {
+		t.Fatalf("WithdrawVote() error = %v", err)
+	}
+	if repository.deleteCalls != 1 {
+		t.Fatalf("delete calls = %d, want 1", repository.deleteCalls)
+	}
+	if repository.restoredActive != 1 {
+		t.Fatalf("RestoreActiveIfNoPendingVotes calls = %d, want 1", repository.restoredActive)
 	}
 }
