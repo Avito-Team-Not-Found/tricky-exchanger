@@ -5,6 +5,3 @@ export const env = {
 };
 
 export const isDev = import.meta.env.DEV;
-
-export const featureChainsEnabled =
-  (import.meta.env.VITE_FEATURE_CHAINS as string | undefined) === 'true';

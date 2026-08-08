@@ -1,22 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { featureChainsEnabled } from '@shared/config/env';
+import { fetchChain, fetchExchangeOptions } from './api';
 
-import { fetchChain, fetchRequestChains } from './api';
-
-export function useRequestChains(requestId?: string) {
+export function useChain(chainId?: number) {
   return useQuery({
-    queryKey: ['chains', 'request', requestId],
-    queryFn: () => fetchRequestChains(requestId as string),
-    // раздел цепочек выключен флагом до появления Chains API на бэкенде (SCRUM-50 §7)
-    enabled: Boolean(requestId) && featureChainsEnabled,
+    queryKey: ['chains', chainId],
+    queryFn: () => fetchChain(chainId as number),
+    enabled: Boolean(chainId),
   });
 }
 
-export function useChain(chainId?: string) {
+export function useExchangeOptions(offerId?: number) {
   return useQuery({
-    queryKey: ['chains', chainId],
-    queryFn: () => fetchChain(chainId as string),
-    enabled: Boolean(chainId) && featureChainsEnabled,
+    queryKey: ['exchange-options', offerId],
+    queryFn: () => fetchExchangeOptions(offerId as number),
+    enabled: Boolean(offerId),
   });
 }

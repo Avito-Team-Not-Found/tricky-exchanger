@@ -8,13 +8,6 @@ import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
 import { ChainDetailPage } from './ChainDetailPage';
 
-// раздел цепочек включается флагом — в тестах он активен, чтобы код не сгнил до Chains API
-vi.mock('@shared/config/env', () => ({
-  env: { apiBaseUrl: 'http://localhost:8080' },
-  isDev: true,
-  featureChainsEnabled: true,
-}));
-
 function queryOk(data: unknown) {
   return { data, isPending: false, isError: false, refetch: vi.fn() } as never;
 }
@@ -28,47 +21,40 @@ const mockedUseChain = vi.mocked(useChain);
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
   return {
-    id: 'chain-1',
-    requestId: 'req-1',
+    id: 1,
     status: 'CANDIDATE',
     score: 0.9,
-    responseDeadlineAt: null,
-    freezeDeadlineAt: null,
+    length: 2,
+    version: 1,
+    currentRequestId: 101,
+    currentPosition: 1,
+    givesToPosition: 2,
+    receivesFromPosition: 2,
+    createdAt: '',
+    updatedAt: '',
     participants: [
       {
+        clusterId: 1,
+        requestId: 101,
         position: 1,
-        requestId: 'req-1',
         isCurrentUser: true,
-        user: { id: 'me', name: 'Я' },
-        offeredItem: { id: 'item-1', title: 'Велосипед', imageUrl: null },
-        receivesFromPosition: 2,
-        responseStatus: null,
-        freezeVoteStatus: null,
+        offeredItemId: 1,
+        offeredItemTitle: 'Велосипед',
+        offeredItemDescription: '',
+        wantedDescription: 'Хочу фотоаппарат',
       },
       {
+        clusterId: 2,
+        requestId: 202,
         position: 2,
-        requestId: null,
         isCurrentUser: false,
-        user: { id: 'u2', name: 'Мария' },
-        offeredItem: {
-          id: 'item-2',
-          title: 'Зеркальный фотоаппарат Canon',
-          imageUrl: null,
-          description: 'Полный комплект: камера, объектив, флешка и чехол',
-          categoryId: 3,
-        },
-        receivesFromPosition: 1,
-        responseStatus: 'ACCEPTED',
-        freezeVoteStatus: null,
+        offeredItemId: 2,
+        offeredItemTitle: 'Зеркальный фотоаппарат Canon',
+        offeredItemDescription: 'Полный комплект: камера, объектив, флешка и чехол',
+        wantedDescription: 'Хочу велосипед',
+        imageUrl: 'http://localhost:9000/photos/canon.jpg',
       },
     ],
-    viewerPermissions: {
-      canRespond: true,
-      canSelect: false,
-      canDeselect: false,
-      canVote: false,
-      canRequestReplacement: false,
-    },
     ...overrides,
   };
 }
@@ -97,22 +83,44 @@ describe('ChainDetailPage', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain()));
 
     renderWithProviders(<ChainDetailPage />, {
-      routes: [{ path: '/chains/chain-1/participants', element: <div>участники</div> }],
+      routes: [{ path: '/chains/1/participants', element: <div>участники</div> }],
     });
 
     await user.click(screen.getByRole('button', { name: 'Посмотреть всю цепочку' }));
     expect(await screen.findByText('участники')).toBeInTheDocument();
   });
 
-  it('shows the assembled pill when every participant agreed', () => {
-    const ready = makeChain({
-      participants: makeChain().participants.map((p) => ({ ...p, responseStatus: 'ACCEPTED' })),
-    });
-    mockedUseChain.mockReturnValue(queryOk(ready));
+  it('shows the assembled pill once the chain is proposed', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 
     renderWithProviders(<ChainDetailPage />);
 
     expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
+  });
+
+  // пул кандидатов может быть больше длины цепочки (§3.1): счётчик участников берём из length,
+  // а получаемое звено с несколькими кандидатами деградирует в счётчик вариантов
+  it('counts participants by chain length, not by the pool size', () => {
+    const pool = Array.from({ length: 5 }, (_, index) => ({
+      clusterId: 2,
+      requestId: 202 + index,
+      position: 2,
+      isCurrentUser: false,
+      offeredItemId: 20 + index,
+      offeredItemTitle: `Фотоаппарат ${index + 1}`,
+      offeredItemDescription: '',
+      wantedDescription: 'Хочу велосипед',
+    }));
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ participants: [makeChain().participants[0], ...pool] })),
+    );
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('2 участника в цепочке')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Получаете: 5 вариантов', level: 2 }),
+    ).toBeInTheDocument();
   });
 
   it('shows an error state with retry when the chain fails to load', async () => {

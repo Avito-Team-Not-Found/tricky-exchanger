@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  chainReadiness,
+  chainLinks,
   myParticipant,
   receivesItem,
   type Chain,
@@ -9,43 +9,43 @@ import {
 } from './model';
 
 const MYSELF: ChainParticipant = {
+  clusterId: 1,
+  requestId: 101,
   position: 1,
-  requestId: 'req-1',
   isCurrentUser: true,
-  user: { id: 'me', name: 'Я' },
-  offeredItem: { id: 'item-1', title: 'Велосипед', imageUrl: null },
-  receivesFromPosition: 2,
-  responseStatus: null,
-  freezeVoteStatus: null,
+  offeredItemId: 1,
+  offeredItemTitle: 'Велосипед',
+  offeredItemDescription: '',
+  wantedDescription: 'Хочу фотоаппарат',
 };
 
 const OTHER: ChainParticipant = {
+  clusterId: 2,
+  requestId: 202,
   position: 2,
-  requestId: 'req-2',
   isCurrentUser: false,
-  user: { id: 'other', name: 'Мария' },
-  offeredItem: { id: 'item-2', title: 'Фотоаппарат', imageUrl: null },
-  receivesFromPosition: 1,
-  responseStatus: 'ACCEPTED',
-  freezeVoteStatus: null,
+  offeredItemId: 2,
+  offeredItemTitle: 'Фотоаппарат',
+  offeredItemDescription: 'Полный комплект',
+  wantedDescription: 'Хочу велосипед',
+  imageUrl: 'http://localhost:9000/photos/camera.jpg',
 };
 
-function buildChain(participants = [MYSELF, OTHER]): Chain {
+function buildChain(participants = [MYSELF, OTHER], overrides: Partial<Chain> = {}): Chain {
   return {
-    id: 'chain-1',
-    requestId: 'req-1',
+    id: 1,
     status: 'CANDIDATE',
     score: 0.72,
-    responseDeadlineAt: null,
-    freezeDeadlineAt: null,
+    length: 2,
+    version: 1,
+    currentRequestId: 101,
+    currentPosition: 1,
+    givesToPosition: 2,
+    receivesFromPosition: 2,
+    createdAt: '',
+    updatedAt: '',
     participants,
-    viewerPermissions: {
-      canRespond: false,
-      canSelect: false,
-      canDeselect: false,
-      canVote: false,
-      canRequestReplacement: false,
-    },
+    ...overrides,
   };
 }
 
@@ -60,28 +60,51 @@ describe('myParticipant', () => {
   });
 });
 
-describe('chainReadiness', () => {
-  it('counts accepted participants out of the total', () => {
-    expect(chainReadiness(buildChain())).toEqual({ agreed: 1, total: 2 });
+describe('chainLinks', () => {
+  it('groups the candidate pool by position', () => {
+    const pool = [
+      MYSELF,
+      OTHER,
+      { ...OTHER, requestId: 203, offeredItemTitle: 'Планшет' },
+      // вторая заявка на позиции 1 — та же позиция, другой кандидат кластера
+      { ...MYSELF, requestId: 104, offeredItemTitle: 'Самокат' },
+    ];
+    const links = chainLinks(buildChain(pool));
+
+    expect(links).toEqual([
+      {
+        position: 1,
+        candidates: [MYSELF, { ...MYSELF, requestId: 104, offeredItemTitle: 'Самокат' }],
+      },
+      {
+        position: 2,
+        candidates: [OTHER, { ...OTHER, requestId: 203, offeredItemTitle: 'Планшет' }],
+      },
+    ]);
   });
 
-  it('reports zero agreed when nobody responded yet', () => {
-    const chain = buildChain([
-      { ...MYSELF, responseStatus: null },
-      { ...OTHER, responseStatus: null },
-    ]);
-    expect(chainReadiness(chain)).toEqual({ agreed: 0, total: 2 });
+  it('keeps positions sorted ascending regardless of input order', () => {
+    const links = chainLinks(buildChain([OTHER, MYSELF]));
+    expect(links.map((link) => link.position)).toEqual([1, 2]);
   });
 });
 
 describe('receivesItem', () => {
-  it('resolves the item the participant gets from the receiving position', () => {
+  it('returns the candidate pool of the receiving position', () => {
     const chain = buildChain();
-    expect(receivesItem(MYSELF, chain)).toEqual(OTHER.offeredItem);
+    expect(receivesItem(chain)).toEqual([OTHER]);
   });
 
-  it('returns null when the receiving position is missing', () => {
-    const chain = buildChain();
-    expect(receivesItem({ ...MYSELF, receivesFromPosition: 9 }, chain)).toBeNull();
+  it('returns all candidates when the receiving position holds a pool', () => {
+    const pool = [MYSELF, OTHER, { ...OTHER, requestId: 203, offeredItemTitle: 'Планшет' }];
+    expect(receivesItem(buildChain(pool))).toEqual([
+      OTHER,
+      { ...OTHER, requestId: 203, offeredItemTitle: 'Планшет' },
+    ]);
+  });
+
+  it('returns an empty array when the receiving position is missing', () => {
+    const chain = buildChain([], { receivesFromPosition: 9 });
+    expect(receivesItem(chain)).toEqual([]);
   });
 });

@@ -1,19 +1,18 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useChain, type Chain } from '@entities/chain';
+import {
+  useChain,
+  voteForRequest,
+  withdrawVote,
+  type Chain,
+  type ChainParticipant,
+} from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
 import { ChainParticipantsPage } from './ChainParticipantsPage';
-
-// раздел цепочек включается флагом — в тестах он активен, чтобы код не сгнил до Chains API
-vi.mock('@shared/config/env', () => ({
-  env: { apiBaseUrl: 'http://localhost:8080' },
-  isDev: true,
-  featureChainsEnabled: true,
-}));
 
 function queryOk(data: unknown) {
   return { data, isPending: false, isError: false, refetch: vi.fn() } as never;
@@ -21,55 +20,50 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return {
-    ...actual,
-    useChain: vi.fn(),
-    acceptChain: vi.fn(),
-    declineChain: vi.fn(),
-    selectChain: vi.fn(),
-    deselectChain: vi.fn(),
-  };
+  return { ...actual, useChain: vi.fn(), voteForRequest: vi.fn(), withdrawVote: vi.fn() };
 });
 
 const mockedUseChain = vi.mocked(useChain);
+const mockedVote = vi.mocked(voteForRequest);
+const mockedWithdraw = vi.mocked(withdrawVote);
+
+const MY_CANDIDATE: ChainParticipant = {
+  clusterId: 1,
+  requestId: 101,
+  position: 1,
+  isCurrentUser: true,
+  offeredItemId: 1,
+  offeredItemTitle: 'Велосипед',
+  offeredItemDescription: '',
+  wantedDescription: 'Хочу фотоаппарат',
+};
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
   return {
-    id: 'chain-1',
-    requestId: 'req-1',
+    id: 1,
     status: 'CANDIDATE',
     score: 0.9,
-    responseDeadlineAt: null,
-    freezeDeadlineAt: null,
+    length: 2,
+    version: 1,
+    currentRequestId: 101,
+    currentPosition: 1,
+    givesToPosition: 2,
+    receivesFromPosition: 2,
+    createdAt: '',
+    updatedAt: '',
     participants: [
+      MY_CANDIDATE,
       {
-        position: 1,
-        requestId: 'req-1',
-        isCurrentUser: true,
-        user: { id: 'me', name: 'Я' },
-        offeredItem: { id: 'item-1', title: 'Велосипед', imageUrl: null },
-        receivesFromPosition: 2,
-        responseStatus: null,
-        freezeVoteStatus: null,
-      },
-      {
+        clusterId: 2,
+        requestId: 202,
         position: 2,
-        requestId: null,
         isCurrentUser: false,
-        user: { id: 'u2', name: 'Мария' },
-        offeredItem: { id: 'item-2', title: 'Фотоаппарат', imageUrl: null },
-        receivesFromPosition: 1,
-        responseStatus: 'ACCEPTED',
-        freezeVoteStatus: null,
+        offeredItemId: 2,
+        offeredItemTitle: 'Зеркальный фотоаппарат Canon',
+        offeredItemDescription: 'Полный комплект',
+        wantedDescription: 'Хочу велосипед',
       },
     ],
-    viewerPermissions: {
-      canRespond: true,
-      canSelect: false,
-      canDeselect: false,
-      canVote: false,
-      canRequestReplacement: false,
-    },
     ...overrides,
   };
 }
@@ -79,67 +73,124 @@ describe('ChainParticipantsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('shows participants with their response statuses', () => {
+  it('shows the chain as links with position aliases and candidate items', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain()));
 
     renderWithProviders(<ChainParticipantsPage />);
 
     expect(screen.getByText('Вы')).toBeInTheDocument();
-    // настоящее имя участника не показывается — только псевдоним по позиции в цепочке
-    expect(screen.queryByText('Мария')).not.toBeInTheDocument();
+    // настоящие имена участников не показываются — только псевдоним по позиции в цепочке
     expect(screen.getByText('Лиса')).toBeInTheDocument();
-    // статус отклика — пилюля с глифом, чтобы он читался не только по цвету (макет 4.8)
-    expect(screen.getByText('✓ Согласился')).toBeInTheDocument();
-    expect(screen.getByText('⏳ Ожидает ответа')).toBeInTheDocument();
-    expect(screen.getByText('1/2 согласий')).toBeInTheDocument();
+    expect(screen.getByText('Зеркальный фотоаппарат Canon')).toBeInTheDocument();
+    expect(screen.getByText('Хочет: Хочу велосипед')).toBeInTheDocument();
   });
 
-  it('offers accept and decline when the user can respond', () => {
+  it('collapses a non-receiving pool into a variants counter', () => {
+    const pool = Array.from({ length: 3 }, (_, index) => ({
+      clusterId: 1,
+      requestId: 101 + index,
+      position: 1,
+      isCurrentUser: index === 0,
+      offeredItemId: 1,
+      offeredItemTitle: `Мой товар ${index + 1}`,
+      offeredItemDescription: '',
+      wantedDescription: 'Хочу фотоаппарат',
+    }));
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ participants: [...pool, makeChain().participants[1]] })),
+    );
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    expect(screen.getByText('3 варианта')).toBeInTheDocument();
+    // пул не получаемого звена сворачивается, а единственный кандидат получаемого звена
+    // по-прежнему откликаем — кнопка остаётся одна
+    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
+  });
+
+  it('offers a vote on every candidate of the receiving position', () => {
+    const pool = [
+      {
+        clusterId: 2,
+        requestId: 202,
+        position: 2,
+        isCurrentUser: false,
+        offeredItemId: 2,
+        offeredItemTitle: 'Зеркальный фотоаппарат Canon',
+        offeredItemDescription: '',
+        wantedDescription: 'Хочу велосипед',
+      },
+      // кандидат без фото: imageUrl с omitempty может отсутствовать вовсе (PROJECT.md §4.4)
+      {
+        clusterId: 2,
+        requestId: 203,
+        position: 2,
+        isCurrentUser: false,
+        offeredItemId: 3,
+        offeredItemTitle: 'Планшет',
+        offeredItemDescription: '',
+        wantedDescription: 'Хочу велосипед',
+      },
+    ];
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ participants: [MY_CANDIDATE, ...pool] })));
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(2);
+  });
+
+  it('casts a vote for the concrete candidate', async () => {
+    mockedVote.mockResolvedValue({
+      chainId: 1,
+      requestId: 101,
+      targetRequestId: 202,
+      vote: 'pending',
+      votedAt: '2026-08-08T12:00:00Z',
+      chainStatus: 'CANDIDATE',
+    });
+    const user = userEvent.setup();
     mockedUseChain.mockReturnValue(queryOk(makeChain()));
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    expect(screen.getByRole('button', { name: 'Принять участие' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Отказаться' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
+    await waitFor(() =>
+      expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
+    );
   });
 
-  it('offers chain selection once it is fully assembled', () => {
-    const ready = makeChain({
-      participants: makeChain().participants.map((p) => ({ ...p, responseStatus: 'ACCEPTED' })),
-      viewerPermissions: {
-        canRespond: false,
-        canSelect: true,
-        canDeselect: false,
-        canVote: false,
-        canRequestReplacement: false,
-      },
-    });
-    mockedUseChain.mockReturnValue(queryOk(ready));
+  it('shows the vote status and withdraws it through the confirmation modal', async () => {
+    mockedWithdraw.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const voted = makeChain();
+    voted.participants[1].vote = 'pending';
+    mockedUseChain.mockReturnValue(queryOk(voted));
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Выбрать цепочку' })).toBeInTheDocument();
+    // статус отклика — пилюля с глифом, чтобы он читался не только по цвету (макет 4.8)
+    expect(screen.getByText('⏳ Отклик отправлен')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Отозвать отклик' }));
+    await user.click(await screen.findByRole('button', { name: 'Да, отозвать' }));
+
+    await waitFor(() =>
+      expect(mockedWithdraw).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
+    );
   });
 
-  // выбор обратим: у уже выбранной цепочки та же кнопка предлагает его отменить
-  it('offers cancelling the selection of an already selected chain', () => {
-    const selected = makeChain({
-      status: 'PROPOSED',
-      viewerPermissions: {
-        canRespond: false,
-        canSelect: false,
-        canDeselect: true,
-        canVote: false,
-        canRequestReplacement: false,
-      },
-    });
-    mockedUseChain.mockReturnValue(queryOk(selected));
+  // после замыкания кольца откликов цепочку переводит в PROPOSED сам бэкенд: статус отклика
+  // на получаемом кандидате остаётся, но отзыв/отклик уже не доступны — DELETE у non-CANDIDATE даёт 409
+  it('keeps the vote pill but hides the vote action on an assembled chain', () => {
+    const voted = makeChain({ status: 'PROPOSED' });
+    voted.participants[1].vote = 'pending';
+    mockedUseChain.mockReturnValue(queryOk(voted));
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    expect(screen.getByRole('button', { name: 'Отменить выбор' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Выбрать цепочку' })).not.toBeInTheDocument();
+    expect(screen.getByText('⏳ Отклик отправлен')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
   });
 
   it('shows an error state with retry when the chain fails to load', async () => {
