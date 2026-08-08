@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	chainHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/chain"
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
@@ -24,6 +25,7 @@ func New(
 	userH *userHandler.Handler,
 	exchangeOfferH *exchangeOfferHandler.Handler,
 	itemH *itemHandler.Handler,
+	chainH *chainHandler.Handler,
 ) *gin.Engine {
 	engine := gin.New()
 	engine.Use(gin.Logger())
@@ -57,6 +59,7 @@ func New(
 		{
 			exchangeOffers.POST("", exchangeOfferH.Create)
 			exchangeOffers.GET("", exchangeOfferH.List)
+			exchangeOffers.GET("/:id/exchange-options", chainH.ExchangeOptions)
 			exchangeOffers.GET("/:id", exchangeOfferH.Get)
 			exchangeOffers.PUT("/:id", exchangeOfferH.Update)
 			exchangeOffers.DELETE("/:id", exchangeOfferH.Delete)
@@ -71,6 +74,13 @@ func New(
 			items.PATCH("/:id", itemH.Update)
 			items.DELETE("/:id", itemH.Archive)
 			items.POST("/:id/image", itemH.UploadImage)
+		}
+
+		chains := api.Group("/chains")
+		chains.Use(middleware.Auth(tokenParser))
+		{
+			chains.GET("", chainH.List)
+			chains.GET("/:id", chainH.Get)
 		}
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен

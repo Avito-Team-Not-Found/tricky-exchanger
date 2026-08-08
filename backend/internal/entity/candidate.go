@@ -17,3 +17,14 @@ type Candidate struct {
 	// Считается как 1 - (embedding <=> want) на стороне SQL.
 	Score float64
 }
+
+// CandidateEdge — направленное ребро локального графа обмена.
+// From хочет получить товар To; оба конца содержат cluster_id, чтобы DFS
+// не мог включить один кластер в цепочку дважды.
+type CandidateEdge struct {
+	FromRequestID int64
+	FromClusterID int64
+	ToRequestID   int64
+	ToClusterID   int64
+	Score         float64
+}
