@@ -29,6 +29,12 @@ type MatchingFacade struct {
 	clusters ClusterSynchronizer
 	cycles   CycleSearcher
 	chains   CandidateChainSaver
+	ranker   *ChainScoreCalculator
+}
+
+func (f *MatchingFacade) WithRanker(r *ChainScoreCalculator) *MatchingFacade {
+	f.ranker = r
+	return f
 }
 
 // NewFacade создаёт рабочий matching-фасад.
@@ -59,6 +65,18 @@ func (f *MatchingFacade) RebuildForRequest(
 		if f.chains == nil {
 			return nil, entity.ErrChainRepositoryNotConfigured
 		}
+		if f.ranker == nil {
+			return nil, entity.ErrScoreNotConfigured
+		}
+		// Score считает Ranker, один раз на каждую собранную цепочку —
+		// перед созданием. CycleFinder не считает score и не отбирает топ-N.
+		for i := range drafts {
+			score, err := f.ranker.Score(chainStateFromDraft(drafts[i]))
+			if err != nil {
+				return nil, err
+			}
+			drafts[i].Score = score
+		}
 		if err := f.chains.SaveCandidates(ctx, tx, drafts); err != nil {
 			return nil, err
 		}
@@ -72,4 +90,18 @@ func (f *MatchingFacade) RemoveRequest(ctx context.Context, tx database.Tx, requ
 		return entity.ErrClusterNotConfigured
 	}
 	return f.clusters.Remove(ctx, tx, requestID)
+}
+
+// chainStateFromDraft переносит сырые данные фич из драфта (собранные CycleFinder'ом)
+// в ChainState для ChainScoreCalculator. Один вызов Ranker перед созданием цепочки.
+func chainStateFromDraft(draft entity.ChainDraft) ChainState {
+	return ChainState{
+		Count:                   len(draft.Participants),
+		Stage:                   ChainStateCandidate,
+		Event:                   EventAdd,
+		EdgeCosines:             draft.EdgeCosines,
+		ParticipantReliability:  draft.ParticipantReliability,
+		ParticipantClusterSizes: draft.ClusterSizes,
+		ApprovedVotes:           0,
+	}
 }

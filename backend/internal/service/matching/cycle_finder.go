@@ -12,8 +12,8 @@ const (
 	minCycleLength        = 2
 	maxCycleLength        = 5
 	defaultOutgoingK      = 20
-	defaultMaxCycleDraft  = 10
 	defaultCycleThreshold = 0.5
+	defaultDraftCapHint   = 64
 )
 
 // FrontierLoader описывает пакетные PostgreSQL-запросы, нужные CycleFinder.
@@ -39,7 +39,7 @@ type FrontierLoader interface {
 type CycleFinder struct {
 	loader    FrontierLoader
 	outgoingK int
-	maxDrafts int
+	capHint   int // только начальная ёмкость слайса драфтов, НЕ лимит на число результатов
 	threshold float64
 }
 
@@ -49,12 +49,12 @@ type cycleVertex struct {
 }
 
 // NewCycleFinder создаёт поиск циклов с безопасными значениями по умолчанию.
-func NewCycleFinder(loader FrontierLoader, outgoingK, maxDrafts int, threshold float64) *CycleFinder {
+func NewCycleFinder(loader FrontierLoader, outgoingK, capHint int, threshold float64) *CycleFinder {
 	if outgoingK <= 0 {
 		outgoingK = defaultOutgoingK
 	}
-	if maxDrafts <= 0 {
-		maxDrafts = defaultMaxCycleDraft
+	if capHint <= 0 {
+		capHint = defaultDraftCapHint
 	}
 	if threshold <= 0 || threshold > 1 {
 		threshold = defaultCycleThreshold
@@ -62,12 +62,14 @@ func NewCycleFinder(loader FrontierLoader, outgoingK, maxDrafts int, threshold f
 	return &CycleFinder{
 		loader:    loader,
 		outgoingK: outgoingK,
-		maxDrafts: maxDrafts,
+		capHint:   capHint,
 		threshold: threshold,
 	}
 }
 
-// Find возвращает лучшие простые циклы длиной 2–5, начинающиеся со startRequestID.
+// Find возвращает ВСЕ уникальные простые циклы длиной 2–5, начинающиеся со
+// startRequestID. Отбор по score тут не выполняется (это дело Ranker на фасаде),
+// поэтому возвращаются все найденные цепочки, без обрезки «топ-N».
 // Отсутствие подходящих циклов является штатным результатом, а не ошибкой.
 func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID int64) ([]entity.ChainDraft, error) {
 	if f.loader == nil || startRequestID <= 0 {
@@ -103,10 +105,10 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 		representativeRequestID: startRequestID,
 	}}
 	visitedClusters := map[int64]bool{startClusterID: true}
-	drafts := make([]entity.ChainDraft, 0, f.maxDrafts)
+	drafts := make([]entity.ChainDraft, 0, f.capHint)
 
-	var dfs func(currentClusterID int64, edgeScoreSum float64)
-	dfs = func(currentClusterID int64, edgeScoreSum float64) {
+	var dfs func(currentClusterID int64, cosines []float64)
+	dfs = func(currentClusterID int64, cosines []float64) {
 		if len(path) >= minCycleLength {
 			if closing, ok := closers[currentClusterID]; ok {
 				participants := make([]entity.ChainDraftParticipant, len(path))
@@ -116,11 +118,23 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 						RequestID: vertex.representativeRequestID,
 					}
 				}
-				draft := entity.ChainDraft{
-					Participants: participants,
-					Score:        (edgeScoreSum + closing.Score) / float64(len(path)),
+
+				edgeCosines := append(append([]float64(nil), cosines...), closing.Score)
+				sizes := make([]int, len(participants))
+				reliability := make([]float64, len(participants))
+				for i := range participants {
+					sizes[i] = 1          // MVP: размер кластера; позже — из ClusterSynchronizer/разметки
+					reliability[i] = 0.75 // MVP: константная надёжность (нет личного рейтинга)
 				}
-				drafts = keepBestDrafts(drafts, draft, f.maxDrafts)
+
+				draft := entity.ChainDraft{
+					Participants:           participants,
+					ClusterSizes:           sizes,
+					EdgeCosines:            edgeCosines,
+					ParticipantReliability: reliability,
+					// Score НЕ заполняем — его назначает Ranker на фасаде.
+				}
+				drafts = dedupeDraft(drafts, draft)
 			}
 		}
 
@@ -141,15 +155,14 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 				representativeRequestID: edge.ToRequestID,
 			})
 
-			dfs(edge.ToClusterID, edgeScoreSum+edge.Score)
+			dfs(edge.ToClusterID, append(cosines, edge.Score))
 
 			path = path[:len(path)-1]
 			delete(visitedClusters, edge.ToClusterID)
 		}
 	}
 
-	dfs(startClusterID, 0)
-	sortDrafts(drafts)
+	dfs(startClusterID, nil)
 	return drafts, nil
 }
 
@@ -264,22 +277,15 @@ func (f *CycleFinder) loadLocalGraph(
 	return adjacency, nil
 }
 
-func keepBestDrafts(drafts []entity.ChainDraft, candidate entity.ChainDraft, limit int) []entity.ChainDraft {
+// dedupeDraft добавляет candidate в drafts, если такого набора кластеров-участников
+// ещё нет. Возвращает ВСЕ уникальные цепочки (без сортировки и обрезки по score).
+func dedupeDraft(drafts []entity.ChainDraft, candidate entity.ChainDraft) []entity.ChainDraft {
 	for i := range drafts {
 		if sameClusterPath(drafts[i], candidate) {
-			if candidate.Score > drafts[i].Score {
-				drafts[i] = candidate
-			}
-			sortDrafts(drafts)
-			return drafts
+			return drafts // уже есть такой путь — не дублируем
 		}
 	}
-	drafts = append(drafts, candidate)
-	sortDrafts(drafts)
-	if len(drafts) > limit {
-		drafts = drafts[:limit]
-	}
-	return drafts
+	return append(drafts, candidate)
 }
 
 func sameClusterPath(left, right entity.ChainDraft) bool {
@@ -292,23 +298,4 @@ func sameClusterPath(left, right entity.ChainDraft) bool {
 		}
 	}
 	return true
-}
-
-func sortDrafts(drafts []entity.ChainDraft) {
-	sort.SliceStable(drafts, func(i, j int) bool {
-		if drafts[i].Score != drafts[j].Score {
-			return drafts[i].Score > drafts[j].Score
-		}
-		if len(drafts[i].Participants) != len(drafts[j].Participants) {
-			return len(drafts[i].Participants) < len(drafts[j].Participants)
-		}
-		for position := range drafts[i].Participants {
-			left := drafts[i].Participants[position].ClusterID
-			right := drafts[j].Participants[position].ClusterID
-			if left != right {
-				return left < right
-			}
-		}
-		return false
-	})
 }
