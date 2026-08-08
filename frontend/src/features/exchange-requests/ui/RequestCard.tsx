@@ -2,16 +2,19 @@ import { ArrowRightOutlined } from '@ant-design/icons';
 
 import { REQUEST_STATUS_META, type ExchangeRequest } from '@entities/exchangeRequest';
 
+import { publicImageUrl } from '@shared/lib/imageUrl';
 import { StatusTag } from '@shared/ui';
 
 import './RequestCard.scss';
 
 interface RequestCardProps {
   request: ExchangeRequest;
+  // заявка не отдаёт снимок отдаваемого товара — страница берёт его из кеша товаров по offeredItemId
+  offeredItemImageUrl?: string | null;
   onClick: () => void;
 }
 
-export function RequestCard({ request, onClick }: RequestCardProps) {
+export function RequestCard({ request, offeredItemImageUrl, onClick }: RequestCardProps) {
   const statusMeta = REQUEST_STATUS_META[request.status];
 
   return (
@@ -28,9 +31,16 @@ export function RequestCard({ request, onClick }: RequestCardProps) {
         }
       }}
     >
-      {/* деталь не отдаёт фото отдаваемого товара — вместо снимка всегда плейсхолдер */}
       <div className="request-card__thumb">
-        <div className="request-card__placeholder" aria-hidden />
+        {offeredItemImageUrl ? (
+          <img
+            className="request-card__image"
+            src={publicImageUrl(offeredItemImageUrl)}
+            alt=""
+          />
+        ) : (
+          <div className="request-card__placeholder" aria-hidden />
+        )}
       </div>
       <div className="request-card__col">
         {/* отдаваемый товар и статус — в одной строке, желаемое — во второй со стрелкой вместо

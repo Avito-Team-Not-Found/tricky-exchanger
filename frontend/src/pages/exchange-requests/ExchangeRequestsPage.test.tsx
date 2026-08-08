@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useRequests, type ExchangeRequest } from '@entities/exchangeRequest';
+import { useItems, type Item } from '@entities/item';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -17,7 +18,24 @@ vi.mock('@entities/exchangeRequest', async (importOriginal) => {
   return { ...actual, useRequests: vi.fn() };
 });
 
+vi.mock('@entities/item', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@entities/item')>();
+  return { ...actual, useItems: vi.fn() };
+});
+
 const mockedUseRequests = vi.mocked(useRequests);
+const mockedUseItems = vi.mocked(useItems);
+
+const item = {
+  id: 1,
+  title: 'Товар 1',
+  description: '',
+  categoryId: null,
+  imageUrl: 'http://localhost:9000/items/1/photo.png',
+  status: 'ACTIVE',
+  createdAt: '',
+  updatedAt: '',
+} as Item;
 
 function makeRequest(id: number, status: ExchangeRequest['status']): ExchangeRequest {
   return {
@@ -43,6 +61,7 @@ const requests = [
 describe('ExchangeRequestsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedUseItems.mockReturnValue(queryOk({ items: [], total: 0 }));
   });
 
   it('shows the empty state with a CTA', () => {
@@ -96,5 +115,15 @@ describe('ExchangeRequestsPage', () => {
 
     await user.click(screen.getByRole('button', { name: /Запрос/ }));
     expect(await screen.findByText('chains screen')).toBeInTheDocument();
+  });
+
+  it('shows the offered item photo taken from the items cache', () => {
+    mockedUseRequests.mockReturnValue(queryOk([requests[0]]));
+    mockedUseItems.mockReturnValue(queryOk({ items: [item], total: 1 }));
+
+    const { container } = renderWithProviders(<ExchangeRequestsPage />);
+
+    const img = container.querySelector('.request-card__image') as HTMLImageElement;
+    expect(img).toHaveAttribute('src', 'http://localhost:9000/items/1/photo.png');
   });
 });

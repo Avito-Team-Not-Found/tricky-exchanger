@@ -44,4 +44,26 @@ describe('RequestCard', () => {
     const head = container.querySelector('.request-card__head') as HTMLElement;
     expect(head).toContainElement(screen.getByText('Активен'));
   });
+
+  it('shows the offered item photo when the page passes it from the items cache', () => {
+    const { container } = renderWithProviders(
+      <RequestCard
+        request={request}
+        offeredItemImageUrl="http://localhost:9000/items/1/photo.png"
+        onClick={vi.fn()}
+      />,
+    );
+
+    const img = container.querySelector('.request-card__image') as HTMLImageElement;
+    expect(img).toHaveAttribute('src', 'http://localhost:9000/items/1/photo.png');
+  });
+
+  it('falls back to the placeholder when the offered item has no photo', () => {
+    const { container } = renderWithProviders(
+      <RequestCard request={request} offeredItemImageUrl={null} onClick={vi.fn()} />,
+    );
+
+    expect(container.querySelector('.request-card__image')).not.toBeInTheDocument();
+    expect(container.querySelector('.request-card__placeholder')).toBeInTheDocument();
+  });
 });
