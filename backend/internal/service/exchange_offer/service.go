@@ -14,12 +14,14 @@ import (
 type CreateInput struct {
 	OfferedItemID     int64
 	WantedDescription string
+	WantedCategory    string
 }
 
 // UpdateInput содержит новые данные и ожидаемую версию для изменения заявки.
 type UpdateInput struct {
 	OfferedItemID     int64
 	WantedDescription string
+	WantedCategory    string
 	Version           int64
 }
 
@@ -69,6 +71,7 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 			UserID:            userID,
 			OfferedItemID:     input.OfferedItemID,
 			WantedDescription: strings.TrimSpace(input.WantedDescription),
+			WantedCategory:    strings.TrimSpace(input.WantedCategory),
 			WantEmbedding:     embeddingValue,
 			Status:            entity.RequestStatusActive,
 			Version:           1,
@@ -119,6 +122,7 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 			UserID:            userID,
 			OfferedItemID:     input.OfferedItemID,
 			WantedDescription: strings.TrimSpace(input.WantedDescription),
+			WantedCategory:    strings.TrimSpace(input.WantedCategory),
 			WantEmbedding:     embeddingValue,
 		}, input.Version)
 		if updateErr != nil {

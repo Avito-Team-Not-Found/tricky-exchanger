@@ -35,10 +35,10 @@ func (r *Postgres) Create(ctx context.Context, tx database.Tx, request entity.Ex
 
 	const query = `
 		INSERT INTO exchange_offers (
-			user_id, offered_item_id, wanted_description, want_embedding,
+			user_id, offered_item_id, wanted_description, wanted_category, want_embedding,
 			status, version
 		)
-		VALUES ($1, $2, $3, $4::vector, $5, 1)
+		VALUES ($1, $2, $3, $4, $5::vector, $6, 1)
 		RETURNING id, status, version, created_at, updated_at
 	`
 
@@ -49,6 +49,7 @@ func (r *Postgres) Create(ctx context.Context, tx database.Tx, request entity.Ex
 		request.UserID,
 		request.OfferedItemID,
 		request.WantedDescription,
+		request.WantedCategory,
 		vectorLiteral(request.WantEmbedding),
 		entity.RequestStatusActive,
 	).Scan(
@@ -68,7 +69,7 @@ func (r *Postgres) Create(ctx context.Context, tx database.Tx, request entity.Ex
 // Get возвращает неархивную заявку пользователя по идентификатору.
 func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (entity.ExchangeOffer, error) {
 	const query = `
-		SELECT id, user_id, offered_item_id, wanted_description,
+		SELECT id, user_id, offered_item_id, wanted_description, COALESCE(wanted_category, ''),
 		       status, version, created_at, updated_at
 		FROM exchange_offers
 		WHERE id = $1 AND user_id = $2 AND status <> 'REMOVED'
@@ -90,7 +91,7 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOf
 	// The join fetches card data in this single query, avoiding N+1 lookups of
 	// offered item titles in the HTTP list endpoint.
 	const query = `
-		SELECT er.id, er.user_id, er.offered_item_id, er.wanted_description,
+		SELECT er.id, er.user_id, er.offered_item_id, er.wanted_description, COALESCE(er.wanted_category, ''),
 		       er.status, er.version, er.created_at,
 		       er.updated_at, i.title
 		FROM exchange_offers AS er
@@ -113,6 +114,7 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOf
 			&item.UserID,
 			&item.OfferedItemID,
 			&item.WantedDescription,
+			&item.WantedCategory,
 			&item.Status,
 			&item.Version,
 			&item.CreatedAt,
@@ -145,14 +147,15 @@ func (r *Postgres) Update(ctx context.Context, tx database.Tx, request entity.Ex
 		UPDATE exchange_offers
 		SET offered_item_id = $3,
 		    wanted_description = $4,
-		    want_embedding = $5::vector,
+		    wanted_category = $5,
+		    want_embedding = $6::vector,
 		    version = version + 1,
 		    updated_at = now()
 		WHERE id = $1
 		  AND user_id = $2
-		  AND version = $6
+		  AND version = $7
 		  AND status NOT IN ('LOCKED', 'REMOVED')
-		RETURNING id, user_id, offered_item_id, wanted_description,
+		RETURNING id, user_id, offered_item_id, wanted_description, COALESCE(wanted_category, ''),
 		          status, version, created_at, updated_at
 	`
 
@@ -163,6 +166,7 @@ func (r *Postgres) Update(ctx context.Context, tx database.Tx, request entity.Ex
 		request.UserID,
 		request.OfferedItemID,
 		request.WantedDescription,
+		request.WantedCategory,
 		vectorLiteral(request.WantEmbedding),
 		expectedVersion,
 	))
@@ -190,7 +194,7 @@ func (r *Postgres) Archive(ctx context.Context, tx database.Tx, userID string, r
 		  AND user_id = $2
 		  AND version = $3
 		  AND status NOT IN ('LOCKED', 'REMOVED')
-		RETURNING id, user_id, offered_item_id, wanted_description,
+		RETURNING id, user_id, offered_item_id, wanted_description, COALESCE(wanted_category, ''),
 		          status, version, created_at, updated_at
 	`
 
@@ -219,6 +223,7 @@ func scanExchangeOffer(row rowScanner) (entity.ExchangeOffer, error) {
 		&request.UserID,
 		&request.OfferedItemID,
 		&request.WantedDescription,
+		&request.WantedCategory,
 		&request.Status,
 		&request.Version,
 		&request.CreatedAt,
