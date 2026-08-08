@@ -6,7 +6,9 @@ export interface Item {
   id: number;
   title: string;
   description: string;
-  categoryId: number | null;
+  // текстовое имя категории из справочника @shared/config/categories; у товаров,
+  // созданных до миграции на текстовую категорию, приходит пустая строка
+  category: string;
   imageUrl: string | null;
   status: ItemStatus;
   createdAt: string;
@@ -16,7 +18,7 @@ export interface Item {
 export interface ItemPayload {
   title: string;
   description: string;
-  categoryId?: number | null;
+  category?: string;
 }
 
 // страница списка товаров: total отдаёт сервер, чтобы клиент видел обрезание по pageSize

@@ -34,7 +34,7 @@ const demoItem: Item = {
   id: 1,
   title: 'Кухонный комбайн Bosch',
   description: 'Почти новый',
-  categoryId: null,
+  category: '',
   imageUrl: null,
   status: 'ACTIVE',
   createdAt: '2026-01-01T00:00:00Z',

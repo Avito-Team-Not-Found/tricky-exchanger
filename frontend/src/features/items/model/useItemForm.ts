@@ -20,6 +20,7 @@ type UploadedFile = Parameters<NonNullable<UploadProps['beforeUpload']>>[0];
 export interface ItemFormValues {
   title: string;
   description: string;
+  category?: string;
 }
 
 export function useItemForm(itemId?: number) {
@@ -48,6 +49,9 @@ export function useItemForm(itemId?: number) {
     return {
       title: item.title,
       description: item.description,
+      // пустая категория (товар старше миграции) не должна выглядеть как выбранная —
+      // Select с value='' рисует пустой чип вместо placeholder'а
+      category: item.category || undefined,
     };
   }, [item]);
 
@@ -78,8 +82,9 @@ export function useItemForm(itemId?: number) {
 
   const title = Form.useWatch('title', form);
   const description = Form.useWatch('description', form);
+  const category = Form.useWatch('category', form);
 
-  const fieldsValid = Boolean(title?.trim()) && Boolean(description?.trim());
+  const fieldsValid = Boolean(title?.trim()) && Boolean(description?.trim()) && Boolean(category);
   const canSubmit = fieldsValid && hasPhoto && !submitting;
 
   function handleImageSelected(file: UploadedFile) {
@@ -147,6 +152,9 @@ export function useItemForm(itemId?: number) {
       const payload: ItemPayload = {
         title: values.title.trim(),
         description: values.description.trim(),
+        // поле обязательное, до сабмита пустым не доходит; ?? '' — страховка от PATCH
+        // без ключа, который оставил бы на сервере прежнее значение
+        category: values.category ?? '',
       };
       if (isEdit) {
         await updateItem(itemId as number, payload, pendingFile ?? undefined);

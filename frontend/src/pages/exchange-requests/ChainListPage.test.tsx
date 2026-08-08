@@ -51,7 +51,7 @@ const offeredItem = {
   id: 1,
   title: 'Велосипед',
   description: 'Городской',
-  categoryId: null,
+  category: '',
   imageUrl: null,
   status: 'ACTIVE',
   createdAt: '',

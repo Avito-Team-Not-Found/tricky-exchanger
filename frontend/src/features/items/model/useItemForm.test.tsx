@@ -69,6 +69,7 @@ describe('useItemForm', () => {
       await result.current.handleSubmit({
         title: '  Смарт-часы  ',
         description: 'Работают',
+        category: 'Личные вещи',
       });
     });
 
@@ -76,6 +77,7 @@ describe('useItemForm', () => {
       {
         title: 'Смарт-часы',
         description: 'Работают',
+        category: 'Личные вещи',
       },
       null,
     );
@@ -93,12 +95,14 @@ describe('useItemForm', () => {
       });
     });
 
-    // фото не меняли → image === undefined
+    // фото не меняли → image === undefined; очищенная категория уходит пустой строкой,
+    // иначе PATCH без поля оставил бы на сервере прежнее значение
     expect(mockedUpdateItem).toHaveBeenCalledWith(
       1,
       {
         title: 'Комбайн Bosch',
         description: 'Новое описание',
+        category: '',
       },
       undefined,
     );

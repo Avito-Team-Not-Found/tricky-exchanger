@@ -1,9 +1,10 @@
 import { useImperativeHandle, type Ref } from 'react';
 
 import { DeleteOutlined, PictureOutlined, UploadOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Form, Input, Skeleton, Upload } from 'antd';
+import { App as AntApp, Button, Form, Input, Select, Skeleton, Upload } from 'antd';
 import { useNavigate } from 'react-router';
 
+import { categoryOptions } from '@shared/config/categories';
 import { ErrorState } from '@shared/ui';
 
 import { useArchiveItem } from '../model/useArchiveItem';
@@ -132,6 +133,19 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
         ]}
       >
         <Input placeholder="Название товара" maxLength={100} showCount />
+      </Form.Item>
+      {/* выбор только из справочника: кластеризация сравнивает категорию точным строковым
+          равенством, поэтому произвольный текст увёл бы заявку в пул из одного себя */}
+      <Form.Item
+        label="Категория"
+        name="category"
+        rules={[{ required: true, message: 'Выберите категорию' }]}
+      >
+        <Select
+          placeholder="Выберите категорию"
+          options={categoryOptions(item?.category)}
+          showSearch
+        />
       </Form.Item>
       <Form.Item
         label="Описание"

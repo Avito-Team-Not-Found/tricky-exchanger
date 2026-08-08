@@ -25,7 +25,7 @@ const item = {
   id: 1,
   title: 'Комбайн',
   description: 'Мощный',
-  categoryId: null,
+  category: 'Для дома и дачи',
   imageUrl: 'data:image/png;base64,x',
   status: 'ACTIVE',
   createdAt: '',

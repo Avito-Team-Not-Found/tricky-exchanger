@@ -42,10 +42,16 @@ const existingItem = {
   id: 1,
   title: 'Кухонный комбайн',
   description: 'Мощный',
+  category: 'Для дома и дачи',
   imageUrl: 'data:image/png;base64,abc',
 } as unknown as Item;
 
 const photo = new File(['bytes'], 'photo.png', { type: 'image/png' });
+
+async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Личные вещи') {
+  await user.click(screen.getByLabelText('Категория'));
+  await user.click(await screen.findByTitle(name));
+}
 
 // записываем search-параметры экрана редактирования, чтобы проверить сохранившийся returnTo
 const editLocation = { search: '' };
@@ -75,6 +81,10 @@ describe('ItemForm', () => {
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
     await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    // категория обязательна — без неё форма всё ещё не отправляется
+    expect(submit).toBeDisabled();
+
+    await pickCategory(user);
     expect(submit).toBeEnabled();
   });
 
@@ -88,6 +98,7 @@ describe('ItemForm', () => {
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
     await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    await pickCategory(user);
     await user.click(screen.getByRole('button', { name: /Сохранить/ }));
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
@@ -95,6 +106,38 @@ describe('ItemForm', () => {
       expect.objectContaining({ title: 'Смарт-часы', description: 'Работают как новые' }),
       expect.any(File),
     );
+  });
+
+  it('sends the picked category on create', async () => {
+    const user = userEvent.setup();
+    mockedCreateItem.mockResolvedValue(existingItem);
+    const { container } = renderWithProviders(<ItemForm />, {
+      routes: [{ path: '/products', element: <div>products screen</div> }],
+    });
+
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
+    await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
+    await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    await pickCategory(user);
+    await user.click(screen.getByRole('button', { name: /Сохранить/ }));
+
+    expect(await screen.findByText('products screen')).toBeInTheDocument();
+    expect(mockedCreateItem).toHaveBeenCalledWith(
+      expect.objectContaining({ category: 'Личные вещи' }),
+      expect.any(File),
+    );
+  });
+
+  // категория товара может быть вне справочника (данные старше миграции на текстовую
+  // категорию) — она обязана остаться выбранной, иначе сохранение молча уводит товар
+  // в другой пул подбора
+  it('keeps a category that is missing from the catalog', async () => {
+    mockedUseItem.mockReturnValue(
+      queryOk({ ...existingItem, category: 'Садовая техника' } as Item),
+    );
+    renderWithProviders(<ItemForm itemId={1} />);
+
+    expect(screen.getByTitle('Садовая техника')).toBeInTheDocument();
   });
 
   // создание товара из формы запроса (PROJECT.md §2.4): фото не загрузилось — товар уже создан,
@@ -110,6 +153,7 @@ describe('ItemForm', () => {
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
     await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    await pickCategory(user);
     await user.click(screen.getByRole('button', { name: /Сохранить/ }));
 
     expect(await screen.findByText('edit screen')).toBeInTheDocument();
