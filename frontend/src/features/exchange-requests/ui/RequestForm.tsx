@@ -5,7 +5,6 @@ import { App as AntApp, Button, Form, Input, Radio, Skeleton } from 'antd';
 
 import { ITEM_STATUS_META } from '@entities/item';
 
-import { publicImageUrl } from '@shared/lib/imageUrl';
 import { ErrorState } from '@shared/ui';
 
 import { useRemoveRequest } from '../model/useRemoveRequest';
@@ -148,7 +147,7 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
                         {item.imageUrl ? (
                           <img
                             className="request-form__item-image"
-                            src={publicImageUrl(item.imageUrl)}
+                            src={item.imageUrl}
                             alt={item.title}
                           />
                         ) : null}

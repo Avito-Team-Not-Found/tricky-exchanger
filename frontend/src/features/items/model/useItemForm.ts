@@ -14,7 +14,6 @@ import {
 } from '@entities/item';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
-import { publicImageUrl } from '@shared/lib/imageUrl';
 
 type UploadedFile = Parameters<NonNullable<UploadProps['beforeUpload']>>[0];
 
@@ -74,7 +73,7 @@ export function useItemForm(itemId?: number) {
   const previewUrl = pendingFile
     ? pendingPreview
     : isEdit && item?.imageUrl && !removingImage
-      ? publicImageUrl(item.imageUrl)
+      ? item.imageUrl
       : null;
 
   const title = Form.useWatch('title', form);
