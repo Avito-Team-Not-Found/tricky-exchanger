@@ -76,7 +76,7 @@ describe('RecoveryFlow', () => {
 
   it('moves to the code step after sending the code', async () => {
     const user = userEvent.setup();
-    mockedSend.mockResolvedValue({ message: 'code_sent', code: '482913' });
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
     setup();
 
     await sendCode(user);
@@ -101,7 +101,7 @@ describe('RecoveryFlow', () => {
 
   it('verifies the code and moves to the new password step', async () => {
     const user = userEvent.setup();
-    mockedSend.mockResolvedValue({ message: 'code_sent', code: '482913' });
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
     mockedVerify.mockResolvedValue();
     setup();
 
@@ -122,7 +122,7 @@ describe('RecoveryFlow', () => {
 
   it('shows a toast for a wrong code', async () => {
     const user = userEvent.setup();
-    mockedSend.mockResolvedValue({ message: 'code_sent', code: '482913' });
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
     const error = new AxiosError('Bad Request');
     Object.assign(error, { response: { status: 400 } });
     mockedVerify.mockRejectedValue(error);
@@ -142,7 +142,7 @@ describe('RecoveryFlow', () => {
 
   it('does not mark the code invalid on a network error', async () => {
     const user = userEvent.setup();
-    mockedSend.mockResolvedValue({ message: 'code_sent', code: '482913' });
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
     mockedVerify.mockRejectedValue(new AxiosError('Network Error'));
     setup();
 
@@ -161,7 +161,7 @@ describe('RecoveryFlow', () => {
 
   it('completes the flow and lets the user go to login', async () => {
     const user = userEvent.setup();
-    mockedSend.mockResolvedValue({ message: 'code_sent', code: '482913' });
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
     mockedVerify.mockResolvedValue();
     mockedReset.mockResolvedValue();
     setup();

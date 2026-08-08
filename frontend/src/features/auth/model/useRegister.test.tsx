@@ -47,7 +47,7 @@ describe('useRegister', () => {
   it('stores the session on a successful registration', async () => {
     mockedRegisterRequest.mockResolvedValue({
       token: 'jwt',
-      user: { id: '1', name: 'Анна', email: 'anna@example.com' },
+      user: { id: '1', fullName: 'Анна', email: 'anna@example.com' },
     });
     const { result } = renderHook(() => useRegister(), { wrapper });
 

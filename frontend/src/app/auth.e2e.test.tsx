@@ -1,35 +1,51 @@
-/// <reference types="node" />
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
-import type { Server } from 'node:http';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { Provider } from 'react-redux';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { store } from '@app/store';
 import { logout } from '@app/store/slices/userSlice';
 
-import { createMockApp } from '../../mock/server';
+import { loginRequest, registerRequest } from '@features/auth/api/authApi';
+
+import { fetchCategories } from '@entities/category/api';
+import { fetchItems } from '@entities/item/api';
+import type { Item } from '@entities/item/model';
+
 import { AuthPage } from '../pages/auth/AuthPage';
-import { ExchangeRequestsPage } from '../pages/exchange-requests/ExchangeRequestsPage';
 import { ProductsPage } from '../pages/products/ProductsPage';
 
-vi.mock('@shared/config/env', () => ({
-  env: { apiBaseUrl: 'http://127.0.0.1:4137' },
-  isDev: true,
+vi.mock('@features/auth/api/authApi', () => ({
+  loginRequest: vi.fn(),
+  registerRequest: vi.fn(),
 }));
 
-const mockDir = dirname(fileURLToPath(import.meta.url));
+vi.mock('@entities/item/api', () => ({
+  fetchItems: vi.fn(),
+}));
 
-let server: Server;
-let tmpDir: string;
+vi.mock('@entities/category/api', () => ({
+  fetchCategories: vi.fn(),
+}));
+
+const mockedLoginRequest = vi.mocked(loginRequest);
+const mockedRegisterRequest = vi.mocked(registerRequest);
+const mockedFetchItems = vi.mocked(fetchItems);
+const mockedFetchCategories = vi.mocked(fetchCategories);
+
+const demoItem: Item = {
+  id: 1,
+  title: 'Кухонный комбайн Bosch',
+  description: 'Почти новый',
+  categoryId: null,
+  imageUrl: null,
+  status: 'ACTIVE',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+};
 
 function renderApp() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -43,7 +59,6 @@ function renderApp() {
                 <Route path="/login" element={<AuthPage />} />
                 <Route path="/register" element={<AuthPage />} />
                 <Route path="/products" element={<ProductsPage />} />
-                <Route path="/exchange-requests" element={<ExchangeRequestsPage />} />
               </Routes>
             </MemoryRouter>
           </AntApp>
@@ -53,31 +68,21 @@ function renderApp() {
   );
 }
 
-beforeAll(async () => {
-  tmpDir = mkdtempSync(join(tmpdir(), 'tricky-auth-e2e-'));
-  const dbPath = join(tmpDir, 'db.json');
-  const passwordsPath = join(tmpDir, 'passwords.json');
-  copyFileSync(join(mockDir, '..', '..', 'mock', 'db.json'), dbPath);
-  copyFileSync(join(mockDir, '..', '..', 'mock', 'passwords.json'), passwordsPath);
-  const app = createMockApp({ dbPath, passwordsPath });
-  server = app.listen(4137);
-  await new Promise<void>((resolve) => server.once('listening', resolve));
-});
+describe('auth e2e', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    store.dispatch(logout());
+    vi.clearAllMocks();
+    mockedFetchItems.mockResolvedValue({ items: [], total: 0 });
+    mockedFetchCategories.mockResolvedValue([]);
+  });
 
-afterAll(async () => {
-  await new Promise<void>((resolve, reject) =>
-    server.close((err) => (err ? reject(err) : resolve())),
-  );
-  rmSync(tmpDir, { recursive: true, force: true });
-});
-
-beforeEach(() => {
-  localStorage.clear();
-  store.dispatch(logout());
-});
-
-describe('auth e2e against the mock', () => {
-  it('logs in with demo credentials, redirects and renders the products page', async () => {
+  it('logs in, redirects and renders the products page with the owned items', async () => {
+    mockedLoginRequest.mockResolvedValue({
+      token: 'jwt',
+      user: { id: '1', fullName: 'Анна', email: 'anna@example.com' },
+    });
+    mockedFetchItems.mockResolvedValue({ items: [demoItem], total: 1 });
     const user = userEvent.setup();
     renderApp();
 
@@ -89,15 +94,19 @@ describe('auth e2e against the mock', () => {
     expect(screen.getByText('Товары')).toBeInTheDocument();
   });
 
-  it('registers a new user and redirects to products', async () => {
+  it('registers a new user and redirects to the empty products page', async () => {
+    mockedRegisterRequest.mockResolvedValue({
+      token: 'jwt',
+      user: { id: '2', fullName: 'Елена', email: 'elena@example.com' },
+    });
     const user = userEvent.setup();
     renderApp();
 
     await user.click(screen.getByText('Регистрация'));
     await user.type(screen.getByLabelText('Имя'), 'Елена');
-    await user.type(screen.getByLabelText(/Email/i), `elena${Date.now()}@example.com`);
-    await user.type(screen.getByLabelText('Пароль'), 'password123');
-    await user.type(screen.getByLabelText('Повторите пароль'), 'password123');
+    await user.type(screen.getByLabelText(/Email/i), 'elena@example.com');
+    await user.type(screen.getByLabelText(/^Пароль$/), 'password123');
+    await user.type(screen.getByLabelText(/Повторите пароль/i), 'password123');
     await user.click(screen.getByRole('button', { name: /Зарегистрироваться/ }));
 
     expect(await screen.findByText('У вас пока нет товаров')).toBeInTheDocument();

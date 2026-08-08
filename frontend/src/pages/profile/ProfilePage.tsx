@@ -17,8 +17,8 @@ export function ProfilePage() {
   const navigate = useNavigate();
   const handleLogout = useLogout();
 
-  const initials = user?.name
-    .split(/\s+/)
+  const initials = user?.fullName
+    ?.split(/\s+/)
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
@@ -29,7 +29,7 @@ export function ProfilePage() {
       <Avatar className="profile__avatar" size={64}>
         {initials ?? '—'}
       </Avatar>
-      <h1 className="profile__name">{user?.name ?? '—'}</h1>
+      <h1 className="profile__name">{user?.fullName ?? '—'}</h1>
       <p className="profile__email">{user?.email ?? '—'}</p>
       <div className="profile__theme">
         <span className="profile__theme-label">Тема</span>

@@ -93,7 +93,7 @@ describe('ChangePasswordFlow', () => {
     await user.click(screen.getByRole('button', { name: /Сохранить пароль/ }));
 
     expect(await screen.findByText('Пароль изменён')).toBeInTheDocument();
-    expect(mockedChangePassword).toHaveBeenCalledWith('demo1234', 'new-pass-123');
+    expect(mockedChangePassword).toHaveBeenCalledWith('demo1234', 'new-pass-123', 'new-pass-123');
 
     await user.click(screen.getByRole('button', { name: /Готово/ }));
     expect(screen.getByText('profile screen')).toBeInTheDocument();

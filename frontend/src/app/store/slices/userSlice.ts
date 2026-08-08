@@ -25,6 +25,11 @@ const userSlice = createSlice({
       tokenStorage.set(action.payload.token);
       userStorage.set(action.payload.user);
     },
+    // сессия восстановлена по существующему токену (GET /auth/me) — токен не меняется
+    sessionRestored(state, action: PayloadAction<User>) {
+      state.user = action.payload;
+      userStorage.set(action.payload);
+    },
     logout(state) {
       state.token = null;
       state.user = null;
@@ -34,5 +39,5 @@ const userSlice = createSlice({
   },
 });
 
-export const { loginSucceeded, logout } = userSlice.actions;
+export const { loginSucceeded, logout, sessionRestored } = userSlice.actions;
 export const userReducer = userSlice.reducer;

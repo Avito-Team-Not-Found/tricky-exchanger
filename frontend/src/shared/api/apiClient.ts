@@ -21,8 +21,11 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    // выход из аккаунта с протухшим токеном возвращает 401 — это штатный сценарий логаута,
+    // его обрабатывает useLogout локально (очистка + SPA-редирект), без полного перезахода
+    const isLogoutCall = error.config?.url === '/auth/logout';
     // токен протух или отозван сервером — чистим хранилище (токен и юзера, как logout()) и отправляем на вход
-    if (error.response?.status === 401 && window.location.pathname !== '/login') {
+    if (error.response?.status === 401 && !isLogoutCall && window.location.pathname !== '/login') {
       tokenStorage.remove();
       userStorage.remove();
       window.location.assign('/login');

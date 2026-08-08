@@ -8,27 +8,34 @@ export interface AuthResponse {
 }
 
 export async function loginRequest(email: string, password: string): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>('/account/login/', { email, password });
+  const { data } = await apiClient.post<AuthResponse>('/auth/login', { email, password });
   return data;
 }
 
 export async function registerRequest(
-  name: string,
+  fullName: string,
   email: string,
   password: string,
 ): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>('/account/registration/', {
-    name,
+  const { data } = await apiClient.post<AuthResponse>('/auth/register', {
+    fullName,
     email,
     password,
   });
   return data;
 }
 
+export async function logoutRequest(): Promise<void> {
+  await apiClient.post('/auth/logout');
+}
+
+export async function fetchMeRequest(): Promise<User> {
+  const { data } = await apiClient.get<User>('/auth/me');
+  return data;
+}
+
 export interface SendCodeResponse {
   message: 'code_sent';
-  // мок-сервер возвращает код, чтобы флоу можно было пройти без эмейл-доставки (PROJECT.md §4.1)
-  code: string;
 }
 
 export async function sendRecoveryCode(email: string): Promise<SendCodeResponse> {

@@ -46,6 +46,22 @@ describe('apiClient', () => {
     expect(assign).toHaveBeenCalledWith('/login');
   });
 
+  // выход из аккаунта с протухшим токеном — штатный сценарий, 401 обрабатывается
+  // локально в useLogout без полного редиректа и без очистки хранилища здесь
+  it('does not redirect or clear the session on a 401 from the logout call', async () => {
+    const error = new AxiosError('Request failed');
+    Object.assign(error, { response: { status: 401 }, config: { url: '/auth/logout' } });
+    const adapter = () => Promise.reject(error);
+
+    await expect(apiClient.post('/auth/logout', undefined, { adapter })).rejects.toBeInstanceOf(
+      AxiosError,
+    );
+
+    expect(tokenStorage.get()).toBe('jwt-token');
+    expect(userStorage.get()).not.toBeNull();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it('leaves the session untouched for a non-401 error', async () => {
     await expect(
       apiClient.get('/whatever', { adapter: rejectingAdapter(500) }),

@@ -30,13 +30,8 @@ export function useLogin() {
       const session = await loginRequest(values.email.trim(), values.password);
       applySession(session);
     } catch (error) {
-      // 404 — email не зарегистрирован, 401 — пароль не подошёл; мок различает эти случаи (PROJECT.md §4.1)
-      message.error(
-        getErrorMessage(error, {
-          404: 'Пользователь с таким email не найден',
-          401: 'Неверный пароль',
-        }),
-      );
+      // бэкенд осознанно не различает «нет такого email» и «неверный пароль» — всегда 401
+      message.error(getErrorMessage(error, { 401: 'Неверный email или пароль' }));
     } finally {
       setSubmitting(false);
     }
