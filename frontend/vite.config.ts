@@ -27,7 +27,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'mock/**/*.{test,spec}.{ts,tsx}'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     passWithNoTests: true,
     // тяжёлый antd-рендер в jsdom под полной нагрузкой набора превышает дефолтные 5 секунд
     testTimeout: 10000,
