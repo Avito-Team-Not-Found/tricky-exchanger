@@ -11,7 +11,7 @@ import (
 type OfferVectors struct {
 	OfferEmbedding string
 	WantEmbedding  string
-	CategoryID     *int64
+	Category       string
 }
 
 // Repository описывает SQL-операции, нужные сервису кластеризации.
@@ -31,7 +31,7 @@ type CandidateSearcher interface {
 		ctx context.Context,
 		offer string,
 		want string,
-		categoryID *int64,
+		category string,
 		excludeOfferID int64,
 		threshold float64,
 		k int,

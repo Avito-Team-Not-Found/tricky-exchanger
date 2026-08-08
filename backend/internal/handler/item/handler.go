@@ -29,13 +29,13 @@ func NewHandler(service itemService) *Handler {
 type createItemRequest struct {
 	Title       string `json:"title" binding:"required"`
 	Description string `json:"description"`
-	CategoryID  *int64 `json:"categoryId"`
+	Category    string `json:"category"`
 }
 
 type updateItemRequest struct {
 	Title       *string            `json:"title"`
 	Description *string            `json:"description"`
-	CategoryID  *int64             `json:"categoryId"`
+	Category    *string            `json:"category"`
 	Status      *entity.ItemStatus `json:"status"`
 }
 
@@ -44,7 +44,7 @@ type itemResponse struct {
 	OwnerUserID string  `json:"ownerUserId"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
-	CategoryID  *int64  `json:"categoryId"`
+	Category    string  `json:"category"`
 	ImageURL    *string `json:"imageUrl"`
 	Status      string  `json:"status"`
 	CreatedAt   string  `json:"createdAt"`
@@ -73,7 +73,7 @@ func (h *Handler) Create(c *gin.Context) {
 	created, err := h.service.Create(c.Request.Context(), ownerID, itemservice.CreateInput{
 		Title:       body.Title,
 		Description: body.Description,
-		CategoryID:  body.CategoryID,
+		Category:    body.Category,
 	})
 	if err != nil {
 		writeItemError(c, err)
@@ -158,7 +158,7 @@ func (h *Handler) Update(c *gin.Context) {
 	updated, err := h.service.Update(c.Request.Context(), userID, itemID, itemservice.UpdateInput{
 		Title:       body.Title,
 		Description: body.Description,
-		CategoryID:  body.CategoryID,
+		Category:    body.Category,
 		Status:      body.Status,
 	})
 	if err != nil {
@@ -247,7 +247,6 @@ func writeItemError(c *gin.Context, err error) {
 		errors.Is(err, entity.ErrTitleTooLong),
 		errors.Is(err, entity.ErrDescriptionTooLong),
 		errors.Is(err, entity.ErrInvalidItemStatus),
-		errors.Is(err, entity.ErrCategoryNotFound),
 		errors.Is(err, entity.ErrInvalidImageType),
 		errors.Is(err, entity.ErrImageTooLarge):
 		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
@@ -262,7 +261,7 @@ func newItemResponse(item *entity.Item) itemResponse {
 		OwnerUserID: item.OwnerUserID.String(),
 		Title:       item.Title,
 		Description: item.Description,
-		CategoryID:  item.CategoryID,
+		Category:    item.Category,
 		ImageURL:    item.ImageURL,
 		Status:      string(item.Status),
 		CreatedAt:   item.CreatedAt.UTC().Format(time.RFC3339),

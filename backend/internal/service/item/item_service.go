@@ -28,7 +28,7 @@ var imageExtensionByContentType = map[string]string{
 type CreateInput struct {
 	Title       string
 	Description string
-	CategoryID  *int64
+	Category    string
 }
 
 // UpdateInput содержит новые данные для частичного изменения товара.
@@ -36,7 +36,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	Title       *string
 	Description *string
-	CategoryID  *int64
+	Category    *string
 	Status      *entity.ItemStatus
 }
 
@@ -65,9 +65,6 @@ func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, input CreateInp
 	if err := validateDescription(description); err != nil {
 		return nil, err
 	}
-	if err := s.validateCategory(ctx, input.CategoryID); err != nil {
-		return nil, err
-	}
 
 	embeddingValue, err := s.embedItem(ctx, title, description)
 	if err != nil {
@@ -78,7 +75,7 @@ func (s *Service) Create(ctx context.Context, ownerID uuid.UUID, input CreateInp
 		OwnerUserID: ownerID,
 		Title:       title,
 		Description: description,
-		CategoryID:  input.CategoryID,
+		Category:    strings.TrimSpace(input.Category),
 		Embedding:   embeddingValue,
 		Status:      entity.ItemStatusActive,
 	}
@@ -135,11 +132,8 @@ func (s *Service) Update(ctx context.Context, requesterID uuid.UUID, itemID int6
 		item.Description = description
 	}
 
-	if input.CategoryID != nil {
-		if err := s.validateCategory(ctx, input.CategoryID); err != nil {
-			return nil, err
-		}
-		item.CategoryID = input.CategoryID
+	if input.Category != nil {
+		item.Category = strings.TrimSpace(*input.Category)
 	}
 
 	if input.Status != nil {
@@ -239,22 +233,6 @@ func (s *Service) getOwned(ctx context.Context, requesterID uuid.UUID, itemID in
 	}
 
 	return item, nil
-}
-
-func (s *Service) validateCategory(ctx context.Context, categoryID *int64) error {
-	if categoryID == nil {
-		return nil
-	}
-
-	exists, err := s.repo.CategoryExists(ctx, *categoryID)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return entity.ErrCategoryNotFound
-	}
-
-	return nil
 }
 
 func (s *Service) ensureNoHardReservation(ctx context.Context, itemID int64) error {

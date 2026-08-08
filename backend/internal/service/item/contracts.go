@@ -18,7 +18,6 @@ type ItemRepository interface {
 	Update(ctx context.Context, item *entity.Item) error
 	UpdateStatus(ctx context.Context, id int64, status entity.ItemStatus) error
 	UpdateImageURL(ctx context.Context, id int64, url string) error
-	CategoryExists(ctx context.Context, categoryID int64) (bool, error)
 }
 
 // ReservationChecker — временный адаптер до появления полноценной фичи цепочек

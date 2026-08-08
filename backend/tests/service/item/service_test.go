@@ -64,20 +64,6 @@ func TestCreateRejectsEmptyTitle(t *testing.T) {
 	}
 }
 
-func TestCreateRejectsUnknownCategory(t *testing.T) {
-	repo := &fakeRepo{categoryExists: false}
-	service, _ := newItemService(repo, &fakeReservations{})
-
-	categoryID := int64(999)
-	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
-		Title:      "Item",
-		CategoryID: &categoryID,
-	})
-	if !errors.Is(err, entity.ErrCategoryNotFound) {
-		t.Fatalf("Create() error = %v, want ErrCategoryNotFound", err)
-	}
-}
-
 func TestGetReturnsNotFoundForOtherOwner(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: uuid.New()}}
 	service, _ := newItemService(repo, &fakeReservations{})
@@ -234,14 +220,13 @@ func TestUploadImageSavesURLAndReturnsUpdatedItem(t *testing.T) {
 }
 
 type fakeRepo struct {
-	item           *entity.Item
-	getErr         error
-	created        *entity.Item
-	categoryExists bool
-	listPage       int
-	listPageSize   int
-	statusSet      entity.ItemStatus
-	imageURLSet    string
+	item         *entity.Item
+	getErr       error
+	created      *entity.Item
+	listPage     int
+	listPageSize int
+	statusSet    entity.ItemStatus
+	imageURLSet  string
 }
 
 func (r *fakeRepo) Create(_ context.Context, item *entity.Item) error {
@@ -276,10 +261,6 @@ func (r *fakeRepo) Update(_ context.Context, item *entity.Item) error {
 func (r *fakeRepo) UpdateStatus(_ context.Context, _ int64, status entity.ItemStatus) error {
 	r.statusSet = status
 	return nil
-}
-
-func (r *fakeRepo) CategoryExists(_ context.Context, _ int64) (bool, error) {
-	return r.categoryExists, nil
 }
 
 func (r *fakeRepo) UpdateImageURL(_ context.Context, _ int64, url string) error {

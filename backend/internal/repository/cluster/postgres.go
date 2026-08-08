@@ -94,13 +94,13 @@ func (r *Postgres) ListActiveMembers(ctx context.Context, clusterID int64) ([]en
 func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int64) (clusterservice.OfferVectors, error) {
 	var offerEmbedding *string
 	var wantEmbedding *string
-	var categoryID *int64
+	var category string
 	err := tx.QueryRow(ctx, `
-		SELECT i.embedding::text, eo.want_embedding::text, i.category_id
+		SELECT i.embedding::text, eo.want_embedding::text, COALESCE(i.category, '')
 		FROM exchange_offers AS eo
 		JOIN items AS i ON i.id = eo.offered_item_id
 		WHERE eo.id = $1 AND eo.status = 'ACTIVE'
-	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &categoryID)
+	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &category)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return clusterservice.OfferVectors{}, entity.ErrExchangeOfferNotFound
 	}
@@ -113,7 +113,7 @@ func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int6
 	return clusterservice.OfferVectors{
 		OfferEmbedding: *offerEmbedding,
 		WantEmbedding:  *wantEmbedding,
-		CategoryID:     categoryID,
+		Category:       category,
 	}, nil
 }
 
