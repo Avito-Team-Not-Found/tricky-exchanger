@@ -54,7 +54,7 @@ const activeItem = {
   id: 1,
   title: 'Комбайн',
   description: 'Мощный',
-  categoryId: null,
+  category: '',
   imageUrl: null,
   status: 'ACTIVE',
   createdAt: '',
@@ -106,12 +106,14 @@ describe('useRequestForm', () => {
       await result.current.handleSubmit({
         offeredItemId: 1,
         wantedDescription: 'Ноутбук',
+        wantedCategory: 'Электроника',
       });
     });
 
     expect(mockedCreateRequest).toHaveBeenCalledWith({
       offeredItemId: 1,
       wantedDescription: 'Ноутбук',
+      wantedCategory: 'Электроника',
     });
     expect(result.current.result?.request.id).toBe(2);
     expect(result.current.result?.matching.createdCandidateChains).toBe(0);

@@ -19,6 +19,7 @@ import { getErrorMessage } from '@shared/lib/errorMessage';
 export interface RequestFormValues {
   offeredItemId: number;
   wantedDescription: string;
+  wantedCategory?: string;
 }
 
 export function useRequestForm(requestId?: number) {
@@ -52,6 +53,8 @@ export function useRequestForm(requestId?: number) {
       ? {
           offeredItemId: request.offeredItemId,
           wantedDescription: request.wantedDescription,
+          // пустую категорию не подставляем: Select с value='' рисует пустой чип вместо placeholder'а
+          wantedCategory: request.wantedCategory || undefined,
         }
       : undefined
     : {
@@ -64,9 +67,11 @@ export function useRequestForm(requestId?: number) {
 
   const offeredItemId = Form.useWatch('offeredItemId', form);
   const wantedDescription = Form.useWatch('wantedDescription', form);
+  const wantedCategory = Form.useWatch('wantedCategory', form);
 
   const canSubmit =
     Boolean(wantedDescription?.trim()) &&
+    Boolean(wantedCategory) &&
     (isEdit || Boolean(offeredItemId)) &&
     !submitting &&
     !readOnly;
@@ -81,6 +86,8 @@ export function useRequestForm(requestId?: number) {
         await updateRequest(requestId as number, {
           offeredItemId: request.offeredItemId,
           wantedDescription: values.wantedDescription.trim(),
+          // поле обязательное; ?? '' — страховка, PUT перезаписывает заявку целиком
+          wantedCategory: values.wantedCategory ?? '',
           version: request.version,
         });
         message.success('Запрос обновлён');
@@ -93,6 +100,7 @@ export function useRequestForm(requestId?: number) {
         const created = await createRequest({
           offeredItemId: values.offeredItemId,
           wantedDescription: values.wantedDescription.trim(),
+          wantedCategory: values.wantedCategory ?? '',
         });
         // матчинг на бэкенде — заглушка (SCRUM-50 §5), цепочки на фронте выключены флагом
         setResult({ request: created, matching: { createdCandidateChains: 0 } });

@@ -9,6 +9,9 @@ export interface ExchangeRequest {
   offeredItemId: number;
   offeredItemTitle?: string;
   wantedDescription: string;
+  // категория желаемого товара; в подборе не участвует (бэкенд строит эмбеддинг
+  // только по wantedDescription) — поле витринное
+  wantedCategory: string;
   status: RequestStatus;
   version: number;
   createdAt: string;
@@ -18,6 +21,7 @@ export interface ExchangeRequest {
 export interface CreateRequestPayload {
   offeredItemId: number;
   wantedDescription: string;
+  wantedCategory?: string;
 }
 
 // Обёртка, которую раньше отдавал мок; реальный бэкенд возвращает только объект
@@ -30,6 +34,7 @@ export interface CreateRequestResult {
 export interface UpdateRequestPayload {
   offeredItemId: number;
   wantedDescription: string;
+  wantedCategory?: string;
   version: number;
 }
 

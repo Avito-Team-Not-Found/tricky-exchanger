@@ -1,10 +1,11 @@
 import { useImperativeHandle, type Ref } from 'react';
 
 import { CheckCircleFilled, LockOutlined, PlusOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Form, Input, Radio, Skeleton } from 'antd';
+import { App as AntApp, Button, Form, Input, Radio, Select, Skeleton } from 'antd';
 
 import { ITEM_STATUS_META } from '@entities/item';
 
+import { categoryOptions } from '@shared/config/categories';
 import { ErrorState } from '@shared/ui';
 
 import { useRemoveRequest } from '../model/useRemoveRequest';
@@ -172,6 +173,17 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
 
       <section className="request-form__block">
         <h2 className="request-form__heading">Что вы хотите получить?</h2>
+        <Form.Item
+          label="Категория"
+          name="wantedCategory"
+          rules={[{ required: true, message: 'Выберите категорию' }]}
+        >
+          <Select
+            placeholder="Выберите категорию"
+            options={categoryOptions(request?.wantedCategory)}
+            showSearch
+          />
+        </Form.Item>
         <Form.Item
           label="Что вы хотите получить"
           name="wantedDescription"

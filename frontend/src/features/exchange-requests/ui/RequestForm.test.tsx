@@ -44,7 +44,7 @@ const items = [
     id: 1,
     title: 'Кухонный комбайн',
     description: 'Мощный',
-    categoryId: null,
+    category: '',
     imageUrl: null,
     status: 'ACTIVE',
   },
@@ -52,7 +52,7 @@ const items = [
     id: 2,
     title: 'Велосипед',
     description: 'Городской',
-    categoryId: null,
+    category: '',
     imageUrl: 'bike.png',
     status: 'UNAVAILABLE',
   },
@@ -71,8 +71,15 @@ const lockedRequest = {
 
 const liveRequest = { ...lockedRequest, status: 'ACTIVE' } as ExchangeRequest;
 
+async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Электроника') {
+  await user.click(screen.getByLabelText('Категория'));
+  await user.click(await screen.findByTitle(name));
+}
+
+// оба поля блока «что хочу получить» обязательны — заполняем их вместе
 async function fillWanted(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+  await pickCategory(user);
 }
 
 describe('RequestForm', () => {
@@ -107,6 +114,7 @@ describe('RequestForm', () => {
     expect(mockedCreateRequest).toHaveBeenCalledWith({
       offeredItemId: 1,
       wantedDescription: 'Ноутбук',
+      wantedCategory: 'Электроника',
     });
   });
 
@@ -142,6 +150,10 @@ describe('RequestForm', () => {
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
 
     await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+    // категория обязательна — одного описания мало
+    expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
+
+    await pickCategory(user);
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeEnabled();
   });
 
