@@ -12,9 +12,11 @@ import (
 
 	router "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/router"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	chainHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/chain"
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	chainService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
 	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 )
@@ -65,7 +67,30 @@ func newTestEngine() *gin.Engine {
 		userHandler.NewHandler(stubUserService{}),
 		exchangeOfferHandler.NewHandler(stubExchangeOfferService{}),
 		itemHandler.NewHandler(stubItemService{}),
+		chainHandler.NewHandler(stubChainService{}),
 	)
+}
+
+type stubChainService struct{}
+
+func (stubChainService) List(_ context.Context, _ string) ([]entity.Chain, error) {
+	return []entity.Chain{}, nil
+}
+
+func (stubChainService) ListForOffer(_ context.Context, _ string, _ int64) ([]entity.Chain, error) {
+	return []entity.Chain{}, nil
+}
+
+func (stubChainService) Get(_ context.Context, _ string, _ int64) (entity.Chain, error) {
+	return entity.Chain{}, entity.ErrChainNotFound
+}
+
+func (stubChainService) Vote(_ context.Context, _ string, _ int64, _ chainService.VoteInput) (entity.ChainVote, error) {
+	return entity.ChainVote{}, nil
+}
+
+func (stubChainService) WithdrawVote(_ context.Context, _ string, _ int64, _ chainService.VoteInput) error {
+	return nil
 }
 
 type stubExchangeOfferService struct{}
@@ -178,6 +203,19 @@ func TestItems_RequiresAuth(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status %d for /api/v1/items without Authorization header, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestChains_RequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := newTestEngine()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/chains", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d for /api/v1/chains without Authorization header, got %d", http.StatusUnauthorized, rec.Code)
 	}
 }
 

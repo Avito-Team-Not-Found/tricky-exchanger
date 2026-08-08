@@ -14,10 +14,13 @@
 //     отдать свой предмет. Подобие 1 - (er.want_embedding <=> item).
 //
 // Оба направления доступны в двух формах:
-//   - ByThreshold — возвращают ВСЕ кандидаты, прошедшие порог (используется при
-//     формировании кластеров: нужно именно множество, без жёсткого лимита).
+//   - ByThreshold — возвращают ВСЕ соседние по направлению обмена заявки,
+//     прошедшие порог.
 //   - TopK — возвращают K лучших (ORDER BY ... LIMIT K). Используется на этапе
 //     поиска цепочек (BFS), чтобы не раздувать граф.
+//
+// Кластерный поиск использует отдельный FindSimilarOffers: он сравнивает
+// "отдаю" с "отдаю" и "хочу" с "хочу", то есть не смешивает кластер с ребром графа.
 //
 // Все запросы выполняют фильтрацию и сортировку на стороне SQL (WHERE + ORDER BY ... <=>),
 // поэтому используют HNSW-индекс и НЕ загружают все строки таблицы в память.
@@ -45,7 +48,6 @@ type Search struct {
 func New(pool *pgxpool.Pool) *Search {
 	return &Search{pool: pool}
 }
-
 
 // constQueryOutgoing — поиск предметов, близких к want_embedding.
 // Параметры: $1 вектор, $2 исключаемый пользователь, $3 порог | $4 = k.
@@ -116,6 +118,106 @@ const constQueryIncomingTopK = `
 	LIMIT $3
 `
 
+// querySimilarOffers ищет заявки с тем же направлением обмена:
+// одновременно похожи и отдаваемый товар, и описание желаемого товара.
+// Сначала HNSW-индекс ограничивает выборку ближайшими отдаваемыми товарами,
+// затем внутри Top-K применяется второй порог по want_embedding.
+const querySimilarOffers = `
+	WITH nearest_by_offer AS MATERIALIZED (
+		SELECT eo.id AS request_id,
+		       eo.offered_item_id AS item_id,
+		       eo.user_id AS owner_id,
+		       1 - (i.embedding <=> $1::vector) AS offer_score,
+		       1 - (eo.want_embedding <=> $2::vector) AS want_score
+		FROM exchange_offers AS eo
+		JOIN items AS i ON i.id = eo.offered_item_id
+		WHERE eo.status = 'ACTIVE'
+		  AND i.status = 'ACTIVE'
+		  AND eo.id <> $3
+		  AND i.category_id IS NOT DISTINCT FROM $4::bigint
+		  AND i.embedding IS NOT NULL
+		  AND eo.want_embedding IS NOT NULL
+		ORDER BY i.embedding <=> $1::vector
+		LIMIT $6
+	)
+	SELECT request_id, item_id, owner_id,
+	       LEAST(offer_score, want_score) AS score
+	FROM nearest_by_offer
+	WHERE offer_score >= $5
+	  AND want_score >= $5
+	ORDER BY offer_score + want_score DESC, request_id
+`
+
+// queryOutgoingFrontier загружает Top-K исходящих рёбер сразу для всего frontier.
+// LATERAL ограничивает соседей каждой исходной заявки отдельно, поэтому один уровень
+// обхода графа требует одного SQL-запроса, а не запроса на каждую вершину.
+const queryOutgoingFrontier = `
+	SELECT source.id AS from_request_id,
+	       source_member.cluster_id AS from_cluster_id,
+	       candidate.request_id AS to_request_id,
+	       candidate.cluster_id AS to_cluster_id,
+	       candidate.score
+	FROM exchange_offers AS source
+	JOIN items AS source_item ON source_item.id = source.offered_item_id
+	JOIN cluster_members AS source_member ON source_member.request_id = source.id
+	JOIN LATERAL (
+		SELECT target.id AS request_id,
+		       target_member.cluster_id,
+		       1 - (target_item.embedding <=> source.want_embedding) AS score
+		FROM exchange_offers AS target
+		JOIN items AS target_item ON target_item.id = target.offered_item_id
+		JOIN cluster_members AS target_member ON target_member.request_id = target.id
+		WHERE target.status = 'ACTIVE'
+		  AND target_item.status = 'ACTIVE'
+		  AND target_item.embedding IS NOT NULL
+		  AND target.user_id <> source.user_id
+		  AND target.id <> source.id
+		  AND 1 - (target_item.embedding <=> source.want_embedding) >= $3
+		ORDER BY target_item.embedding <=> source.want_embedding
+		LIMIT $2
+	) AS candidate ON true
+	WHERE source.id = ANY($1::bigint[])
+	  AND source.status = 'ACTIVE'
+	  AND source_item.status = 'ACTIVE'
+	  AND source.want_embedding IS NOT NULL
+	ORDER BY source.id, candidate.score DESC, candidate.request_id
+`
+
+// queryIncomingToStart ищет заявки, которые могут получить отдаваемый товар start.
+// Полученное множество используется как проверка замыкающего ребра current -> start,
+// поэтому DFS не загружает пятый уровень размером K^5.
+const queryIncomingToStart = `
+	WITH start_offer AS MATERIALIZED (
+		SELECT start.id,
+		       start.user_id,
+		       start_member.cluster_id,
+		       start_item.embedding
+		FROM exchange_offers AS start
+		JOIN items AS start_item ON start_item.id = start.offered_item_id
+		JOIN cluster_members AS start_member ON start_member.request_id = start.id
+		WHERE start.id = $1
+		  AND start.status = 'ACTIVE'
+		  AND start_item.status = 'ACTIVE'
+		  AND start_item.embedding IS NOT NULL
+	)
+	SELECT candidate.id AS from_request_id,
+	       candidate_member.cluster_id AS from_cluster_id,
+	       start_offer.id AS to_request_id,
+	       start_offer.cluster_id AS to_cluster_id,
+	       1 - (candidate.want_embedding <=> start_offer.embedding) AS score
+	FROM start_offer
+	JOIN exchange_offers AS candidate ON candidate.status = 'ACTIVE'
+	JOIN items AS candidate_item ON candidate_item.id = candidate.offered_item_id
+	JOIN cluster_members AS candidate_member ON candidate_member.request_id = candidate.id
+	WHERE candidate.id <> start_offer.id
+	  AND candidate.user_id <> start_offer.user_id
+	  AND candidate_item.status = 'ACTIVE'
+	  AND candidate.want_embedding IS NOT NULL
+	  AND 1 - (candidate.want_embedding <=> start_offer.embedding) >= $3
+	ORDER BY candidate.want_embedding <=> start_offer.embedding
+	LIMIT $2
+`
+
 // FindOutgoingByThreshold ищет чужие предметы, похожие на want, с порогом подобия.
 func (s *Search) FindOutgoingByThreshold(ctx context.Context, want []float32, excludeUserID string, threshold float64) ([]entity.Candidate, error) {
 	rows, err := s.pool.Query(ctx, constQueryOutgoingThreshold, embedLiteral(want), excludeUserID, threshold)
@@ -152,6 +254,58 @@ func (s *Search) FindIncomingTopK(ctx context.Context, mine []float32, excludeUs
 	return collectCandidates(rows)
 }
 
+// FindSimilarOffers возвращает Top-K ACTIVE-заявок с тем же направлением обмена.
+// offer и want передаются как валидные pgvector-литералы, загруженные из БД.
+func (s *Search) FindSimilarOffers(
+	ctx context.Context,
+	offer string,
+	want string,
+	categoryID *int64,
+	excludeOfferID int64,
+	threshold float64,
+	k int,
+) ([]entity.Candidate, error) {
+	rows, err := s.pool.Query(ctx, querySimilarOffers, offer, want, excludeOfferID, categoryID, threshold, k)
+	if err != nil {
+		return nil, fmt.Errorf("search similar offers: %w", err)
+	}
+	return collectCandidates(rows)
+}
+
+// LoadOutgoingFrontier загружает исходящие рёбра для набора заявок одним запросом.
+func (s *Search) LoadOutgoingFrontier(
+	ctx context.Context,
+	tx pgx.Tx,
+	requestIDs []int64,
+	k int,
+	threshold float64,
+) ([]entity.CandidateEdge, error) {
+	if len(requestIDs) == 0 {
+		return []entity.CandidateEdge{}, nil
+	}
+
+	rows, err := tx.Query(ctx, queryOutgoingFrontier, requestIDs, k, threshold)
+	if err != nil {
+		return nil, fmt.Errorf("load outgoing frontier: %w", err)
+	}
+	return collectCandidateEdges(rows)
+}
+
+// LoadIncomingToStart загружает возможные замыкающие рёбра к стартовой заявке.
+func (s *Search) LoadIncomingToStart(
+	ctx context.Context,
+	tx pgx.Tx,
+	startRequestID int64,
+	k int,
+	threshold float64,
+) ([]entity.CandidateEdge, error) {
+	rows, err := tx.Query(ctx, queryIncomingToStart, startRequestID, k, threshold)
+	if err != nil {
+		return nil, fmt.Errorf("load incoming to start: %w", err)
+	}
+	return collectCandidateEdges(rows)
+}
+
 // collectCandidates читает строки результата и собирает список кандидатов.
 func collectCandidates(rows pgx.Rows) ([]entity.Candidate, error) {
 	defer rows.Close()
@@ -168,4 +322,27 @@ func collectCandidates(rows pgx.Rows) ([]entity.Candidate, error) {
 		return nil, fmt.Errorf("iterate candidates: %w", err)
 	}
 	return candidates, nil
+}
+
+func collectCandidateEdges(rows pgx.Rows) ([]entity.CandidateEdge, error) {
+	defer rows.Close()
+
+	edges := make([]entity.CandidateEdge, 0)
+	for rows.Next() {
+		var edge entity.CandidateEdge
+		if err := rows.Scan(
+			&edge.FromRequestID,
+			&edge.FromClusterID,
+			&edge.ToRequestID,
+			&edge.ToClusterID,
+			&edge.Score,
+		); err != nil {
+			return nil, fmt.Errorf("scan candidate edge: %w", err)
+		}
+		edges = append(edges, edge)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate candidate edges: %w", err)
+	}
+	return edges, nil
 }

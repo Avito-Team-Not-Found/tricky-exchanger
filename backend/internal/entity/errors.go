@@ -22,6 +22,17 @@ var (
 	ErrEmbeddingNotConfigured       = errors.New("клиент embeddings не настроен")
 	ErrMatchingNotConfigured        = errors.New("фасад matching не настроен")
 	ErrEmptyEmbedding               = errors.New("сервис embeddings вернул пустой вектор")
+	ErrOfferEmbeddingMissing        = errors.New("для предлагаемого товара не сформирован embedding")
+	ErrClusterNotConfigured         = errors.New("сервис кластеризации не настроен")
+	ErrChainNotFound                = errors.New("цепочка не найдена")
+	ErrChainRepositoryNotConfigured = errors.New("репозиторий цепочек не настроен")
+	ErrInvalidChainDraft            = errors.New("некорректный черновик цепочки")
+	ErrInvalidChainState            = errors.New("invalid chain state: Count must be >= 2 and ApprovedVotes must be in [0, Count]")
+	ErrScoreNotConfigured           = errors.New("ranker не подключён: вызовите MatchingFacade.WithRanker(...)")
+
+	ErrInvalidVoteTarget  = errors.New("target request must belong to the next chain position")
+	ErrChainVoteForbidden = errors.New("the source request does not belong to the current user")
+	ErrChainNotCandidate  = errors.New("chain no longer accepts candidate responses")
 
 	ErrItemNotFound           = errors.New("item not found")
 	ErrItemForbidden          = errors.New("item belongs to another user")

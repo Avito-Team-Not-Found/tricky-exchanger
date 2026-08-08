@@ -1,16 +1,21 @@
+// параметры названия — из макета «Бренд» (Inter, 18/700, letter-spacing -1px, line-height 1.5)
 .brand-logo {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
   font-size: var(--font-size-subtitle);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
-  line-height: var(--line-height-heading);
+  line-height: 1.5;
+  letter-spacing: -1px;
+  user-select: none;
 }
 
 .brand-logo__icon {
-  color: var(--color-accent-primary);
-  font-size: 24px;
+  display: block;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
 }
 
 .status-tag {

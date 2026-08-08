@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
@@ -27,13 +28,7 @@ func NewRepository(pool *pgxpool.Pool) *Postgres {
 }
 
 // Create сохраняет новую активную заявку после проверки предлагаемого товара.
-func (r *Postgres) Create(ctx context.Context, request entity.ExchangeOffer) (entity.ExchangeOffer, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return entity.ExchangeOffer{}, fmt.Errorf("begin create exchange request: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
+func (r *Postgres) Create(ctx context.Context, tx database.Tx, request entity.ExchangeOffer) (entity.ExchangeOffer, error) {
 	if err := ensureActiveOwnedItem(ctx, tx, request.UserID, request.OfferedItemID); err != nil {
 		return entity.ExchangeOffer{}, err
 	}
@@ -48,7 +43,7 @@ func (r *Postgres) Create(ctx context.Context, request entity.ExchangeOffer) (en
 	`
 
 	created := request
-	err = tx.QueryRow(
+	err := tx.QueryRow(
 		ctx,
 		query,
 		request.UserID,
@@ -65,10 +60,6 @@ func (r *Postgres) Create(ctx context.Context, request entity.ExchangeOffer) (en
 	)
 	if err != nil {
 		return entity.ExchangeOffer{}, fmt.Errorf("insert exchange request: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return entity.ExchangeOffer{}, fmt.Errorf("commit create exchange request: %w", err)
 	}
 
 	return created, nil
@@ -141,13 +132,7 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOf
 }
 
 // Update изменяет заявку, проверяет версию и инвалидирует затронутые цепочки.
-func (r *Postgres) Update(ctx context.Context, request entity.ExchangeOffer, expectedVersion int64) (entity.ExchangeOffer, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return entity.ExchangeOffer{}, fmt.Errorf("begin update exchange request: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
+func (r *Postgres) Update(ctx context.Context, tx database.Tx, request entity.ExchangeOffer, expectedVersion int64) (entity.ExchangeOffer, error) {
 	if err := ensureMutableRequest(ctx, tx, request.ID, request.UserID, expectedVersion); err != nil {
 		return entity.ExchangeOffer{}, err
 	}
@@ -191,22 +176,11 @@ func (r *Postgres) Update(ctx context.Context, request entity.ExchangeOffer, exp
 	if err := invalidateCandidateChains(ctx, tx, updated.ID, "request_changed"); err != nil {
 		return entity.ExchangeOffer{}, err
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return entity.ExchangeOffer{}, fmt.Errorf("commit update exchange request: %w", err)
-	}
-
 	return updated, nil
 }
 
 // Archive архивирует заявку, проверяет версию и инвалидирует затронутые цепочки.
-func (r *Postgres) Archive(ctx context.Context, userID string, requestID, expectedVersion int64) (entity.ExchangeOffer, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return entity.ExchangeOffer{}, fmt.Errorf("begin archive exchange request: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
+func (r *Postgres) Archive(ctx context.Context, tx database.Tx, userID string, requestID, expectedVersion int64) (entity.ExchangeOffer, error) {
 	const query = `
 		UPDATE exchange_offers
 		SET status = 'REMOVED',
@@ -231,11 +205,6 @@ func (r *Postgres) Archive(ctx context.Context, userID string, requestID, expect
 	if err := invalidateCandidateChains(ctx, tx, archived.ID, "request_archived"); err != nil {
 		return entity.ExchangeOffer{}, err
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return entity.ExchangeOffer{}, fmt.Errorf("commit archive exchange request: %w", err)
-	}
-
 	return archived, nil
 }
 
@@ -258,7 +227,7 @@ func scanExchangeOffer(row rowScanner) (entity.ExchangeOffer, error) {
 	return request, err
 }
 
-func ensureActiveOwnedItem(ctx context.Context, tx pgx.Tx, userID string, itemID int64) error {
+func ensureActiveOwnedItem(ctx context.Context, tx database.Tx, userID string, itemID int64) error {
 	const query = `
 		SELECT EXISTS (
 			SELECT 1
@@ -279,7 +248,7 @@ func ensureActiveOwnedItem(ctx context.Context, tx pgx.Tx, userID string, itemID
 	return nil
 }
 
-func ensureMutableRequest(ctx context.Context, tx pgx.Tx, requestID int64, userID string, expectedVersion int64) error {
+func ensureMutableRequest(ctx context.Context, tx database.Tx, requestID int64, userID string, expectedVersion int64) error {
 	var status entity.RequestStatus
 	var currentVersion int64
 	err := tx.QueryRow(ctx, `
@@ -306,7 +275,7 @@ func ensureMutableRequest(ctx context.Context, tx pgx.Tx, requestID int64, userI
 	return nil
 }
 
-func invalidateCandidateChains(ctx context.Context, tx pgx.Tx, requestID int64, reason string) error {
+func invalidateCandidateChains(ctx context.Context, tx database.Tx, requestID int64, reason string) error {
 	const query = `
 		UPDATE chains AS c
 		SET status = 'BROKEN',
@@ -317,8 +286,9 @@ func invalidateCandidateChains(ctx context.Context, tx pgx.Tx, requestID int64, 
 		  AND EXISTS (
 			SELECT 1
 			FROM chain_participants AS cp
+			JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
 			WHERE cp.chain_id = c.id
-			  AND cp.request_id = $1
+			  AND member.request_id = $1
 		)
 	`
 	if _, err := tx.Exec(ctx, query, requestID, reason); err != nil {
@@ -327,7 +297,7 @@ func invalidateCandidateChains(ctx context.Context, tx pgx.Tx, requestID int64, 
 	return nil
 }
 
-func mutationError(ctx context.Context, tx pgx.Tx, requestID int64, userID string, expectedVersion int64, original error) error {
+func mutationError(ctx context.Context, tx database.Tx, requestID int64, userID string, expectedVersion int64, original error) error {
 	if !errors.Is(original, pgx.ErrNoRows) {
 		return nil
 	}

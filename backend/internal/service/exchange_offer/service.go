@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 )
 
 // CreateInput содержит данные для создания заявки на обмен.
@@ -26,17 +26,24 @@ type UpdateInput struct {
 // Service реализует сценарии работы с заявками без привязки к HTTP.
 // Идентификатор аутентифицированного пользователя передаёт вызывающий код.
 type Service struct {
-	repository ExchangeOfferRepository
-	embedding  embedding.Client
-	matching   matching.Facade
+	repository   ExchangeOfferRepository
+	embedding    embedding.Client
+	matching     MatchingFacade
+	transactions database.TransactionManager
 }
 
 // NewService создаёт сервис заявок с зависимостями для хранения, embeddings и matching.
-func NewService(repository ExchangeOfferRepository, embeddingClient embedding.Client, matchingFacade matching.Facade) *Service {
+func NewService(
+	repository ExchangeOfferRepository,
+	embeddingClient embedding.Client,
+	matchingFacade MatchingFacade,
+	transactionManager database.TransactionManager,
+) *Service {
 	return &Service{
-		repository: repository,
-		embedding:  embeddingClient,
-		matching:   matchingFacade,
+		repository:   repository,
+		embedding:    embeddingClient,
+		matching:     matchingFacade,
+		transactions: transactionManager,
 	}
 }
 
@@ -51,24 +58,29 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 		return entity.ExchangeOffer{}, err
 	}
 
-	created, err := s.repository.Create(ctx, entity.ExchangeOffer{
-		UserID:            userID,
-		OfferedItemID:     input.OfferedItemID,
-		WantedDescription: strings.TrimSpace(input.WantedDescription),
-		WantEmbedding:     embeddingValue,
-		Status:            entity.RequestStatusActive,
-		Version:           1,
+	if s.transactions == nil || s.matching == nil {
+		return entity.ExchangeOffer{}, entity.ErrMatchingNotConfigured
+	}
+
+	var created entity.ExchangeOffer
+	err = s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		var createErr error
+		created, createErr = s.repository.Create(ctx, tx, entity.ExchangeOffer{
+			UserID:            userID,
+			OfferedItemID:     input.OfferedItemID,
+			WantedDescription: strings.TrimSpace(input.WantedDescription),
+			WantEmbedding:     embeddingValue,
+			Status:            entity.RequestStatusActive,
+			Version:           1,
+		})
+		if createErr != nil {
+			return createErr
+		}
+		_, matchingErr := s.matching.RebuildForRequest(ctx, tx, created.ID)
+		return matchingErr
 	})
 	if err != nil {
 		return entity.ExchangeOffer{}, err
-	}
-
-	if s.matching == nil {
-		return created, entity.ErrMatchingNotConfigured
-	}
-
-	if err := s.matching.RebuildForRequest(ctx, created.ID); err != nil {
-		return created, fmt.Errorf("request was saved but matching failed: %w", err)
 	}
 
 	return created, nil
@@ -95,23 +107,28 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 		return entity.ExchangeOffer{}, err
 	}
 
-	updated, err := s.repository.Update(ctx, entity.ExchangeOffer{
-		ID:                requestID,
-		UserID:            userID,
-		OfferedItemID:     input.OfferedItemID,
-		WantedDescription: strings.TrimSpace(input.WantedDescription),
-		WantEmbedding:     embeddingValue,
-	}, input.Version)
+	if s.transactions == nil || s.matching == nil {
+		return entity.ExchangeOffer{}, entity.ErrMatchingNotConfigured
+	}
+
+	var updated entity.ExchangeOffer
+	err = s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		var updateErr error
+		updated, updateErr = s.repository.Update(ctx, tx, entity.ExchangeOffer{
+			ID:                requestID,
+			UserID:            userID,
+			OfferedItemID:     input.OfferedItemID,
+			WantedDescription: strings.TrimSpace(input.WantedDescription),
+			WantEmbedding:     embeddingValue,
+		}, input.Version)
+		if updateErr != nil {
+			return updateErr
+		}
+		_, matchingErr := s.matching.RebuildForRequest(ctx, tx, updated.ID)
+		return matchingErr
+	})
 	if err != nil {
 		return entity.ExchangeOffer{}, err
-	}
-
-	if s.matching == nil {
-		return updated, entity.ErrMatchingNotConfigured
-	}
-
-	if err := s.matching.RebuildForRequest(ctx, updated.ID); err != nil {
-		return updated, fmt.Errorf("request was updated but matching failed: %w", err)
 	}
 
 	return updated, nil
@@ -123,17 +140,21 @@ func (s *Service) Delete(ctx context.Context, userID string, requestID, version 
 		return entity.ErrInvalidVersion
 	}
 
-	archived, err := s.repository.Archive(ctx, userID, requestID, version)
-	if err != nil {
-		return err
-	}
-
-	if s.matching == nil {
+	if s.transactions == nil || s.matching == nil {
 		return entity.ErrMatchingNotConfigured
 	}
 
-	if err := s.matching.RemoveRequest(ctx, archived.ID); err != nil {
-		return fmt.Errorf("request was archived but matching cleanup failed: %w", err)
+	var archived entity.ExchangeOffer
+	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		var archiveErr error
+		archived, archiveErr = s.repository.Archive(ctx, tx, userID, requestID, version)
+		if archiveErr != nil {
+			return archiveErr
+		}
+		return s.matching.RemoveRequest(ctx, tx, archived.ID)
+	})
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -144,7 +165,7 @@ func (s *Service) embedWanted(ctx context.Context, description string) ([]float3
 		return nil, entity.ErrEmbeddingNotConfigured
 	}
 
-	prompt := strings.TrimSpace(description)
+	prompt := "query: " + strings.TrimSpace(description)
 
 	result, err := s.embedding.Embed(ctx, prompt)
 	if err != nil {
