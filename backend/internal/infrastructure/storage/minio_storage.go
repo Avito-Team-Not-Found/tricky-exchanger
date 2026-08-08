@@ -13,11 +13,17 @@ import (
 
 // Config — параметры подключения к MinIO (см. internal/core/config).
 type Config struct {
+	// Endpoint — адрес MinIO для самого S3-клиента (в докер-сети это, например,
+	// "minio:9000" — так к нему стучится приложение из соседнего контейнера).
 	Endpoint  string
 	AccessKey string
 	SecretKey string
 	Bucket    string
 	UseSSL    bool
+	// PublicEndpoint — адрес, который подставляется в возвращаемый пользователю URL
+	// фото (то, что реально открывается в браузере с хост-машины, например
+	// "localhost:9000"). Если не задан, используется Endpoint.
+	PublicEndpoint string
 }
 
 // Storage — S3-совместимое объектное хранилище для фото товаров.
@@ -63,10 +69,15 @@ func New(ctx context.Context, cfg Config) (*Storage, error) {
 		scheme = "https"
 	}
 
+	publicEndpoint := cfg.PublicEndpoint
+	if publicEndpoint == "" {
+		publicEndpoint = cfg.Endpoint
+	}
+
 	return &Storage{
 		client:        client,
 		bucket:        cfg.Bucket,
-		publicBaseURL: fmt.Sprintf("%s://%s/%s", scheme, cfg.Endpoint, cfg.Bucket),
+		publicBaseURL: fmt.Sprintf("%s://%s/%s", scheme, publicEndpoint, cfg.Bucket),
 	}, nil
 }
 

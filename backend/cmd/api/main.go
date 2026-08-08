@@ -97,11 +97,12 @@ func main() {
 	exchangeOfferH := exchangeOfferHandler.NewHandler(exchangeOfferSvc)
 
 	imageStorage, err := storage.New(ctx, storage.Config{
-		Endpoint:  cfg.MinIOEndpoint,
-		AccessKey: cfg.MinIOAccessKey,
-		SecretKey: cfg.MinIOSecretKey,
-		Bucket:    cfg.MinIOBucket,
-		UseSSL:    cfg.MinIOUseSSL,
+		Endpoint:       cfg.MinIOEndpoint,
+		PublicEndpoint: cfg.MinIOPublicEndpoint,
+		AccessKey:      cfg.MinIOAccessKey,
+		SecretKey:      cfg.MinIOSecretKey,
+		Bucket:         cfg.MinIOBucket,
+		UseSSL:         cfg.MinIOUseSSL,
 	})
 	if err != nil {
 		logger.Fatalf("minio storage init error: %v", err)

@@ -41,11 +41,15 @@ type Config struct {
 	EmbeddingTimeout  time.Duration
 	MaxInputLength    int
 	// MinIO* — настройки объектного хранилища для фото товаров (см. internal/infrastructure/storage).
-	MinIOEndpoint  string
-	MinIOAccessKey string
-	MinIOSecretKey string
-	MinIOBucket    string
-	MinIOUseSSL    bool
+	// MinIOEndpoint — адрес для S3-клиента внутри докер-сети (например, "minio:9000").
+	// MinIOPublicEndpoint — адрес, который попадает в image_url и должен открываться
+	// в браузере с хост-машины (например, "localhost:9000", т.к. порт MinIO пробрасывается наружу).
+	MinIOEndpoint       string
+	MinIOPublicEndpoint string
+	MinIOAccessKey      string
+	MinIOSecretKey      string
+	MinIOBucket         string
+	MinIOUseSSL         bool
 
 	// Matching* — настройки векторного поиска кандидатов (задача SCRUM-24).
 	// pgvector даёт только Top-/пороговых семантических кандидатов; поиск циклов и
@@ -92,11 +96,12 @@ func Load() (*Config, error) {
 		MatchingThreshold: envFloatOrDefault("MATCHING_THRESHOLD", 0.5),
 		VectorMetric:      envOrDefault("VECTOR_METRIC", "cosine"),
 
-		MinIOEndpoint:  envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
-		MinIOAccessKey: envOrDefault("MINIO_ACCESS_KEY", ""),
-		MinIOSecretKey: envOrDefault("MINIO_SECRET_KEY", ""),
-		MinIOBucket:    envOrDefault("MINIO_BUCKET", "items"),
-		MinIOUseSSL:    envOrDefault("MINIO_USE_SSL", "false") == "true",
+		MinIOEndpoint:       envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
+		MinIOPublicEndpoint: envOrDefault("MINIO_PUBLIC_ENDPOINT", "localhost:9000"),
+		MinIOAccessKey:      envOrDefault("MINIO_ACCESS_KEY", ""),
+		MinIOSecretKey:      envOrDefault("MINIO_SECRET_KEY", ""),
+		MinIOBucket:         envOrDefault("MINIO_BUCKET", "items"),
+		MinIOUseSSL:         envOrDefault("MINIO_USE_SSL", "false") == "true",
 	}, nil
 }
 
