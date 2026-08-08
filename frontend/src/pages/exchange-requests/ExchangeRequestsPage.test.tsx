@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useRequests, type ExchangeRequest } from '@entities/exchangeRequest';
-import type { Item } from '@entities/item';
+import { useItems, type Item } from '@entities/item';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -18,44 +18,51 @@ vi.mock('@entities/exchangeRequest', async (importOriginal) => {
   return { ...actual, useRequests: vi.fn() };
 });
 
-const mockedUseRequests = vi.mocked(useRequests);
+vi.mock('@entities/item', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@entities/item')>();
+  return { ...actual, useItems: vi.fn() };
+});
 
-function makeRequest(id: string, status: ExchangeRequest['status']): ExchangeRequest {
+const mockedUseRequests = vi.mocked(useRequests);
+const mockedUseItems = vi.mocked(useItems);
+
+const item = {
+  id: 1,
+  title: 'Товар 1',
+  description: '',
+  category: '',
+  imageUrl: 'http://localhost:9000/items/1/photo.png',
+  status: 'ACTIVE',
+  createdAt: '',
+  updatedAt: '',
+} as Item;
+
+function makeRequest(id: number, status: ExchangeRequest['status']): ExchangeRequest {
   return {
     id,
     status,
-    offeredItemId: `item-${id}`,
-    offeredItem: {
-      id: `item-${id}`,
-      title: `Товар ${id}`,
-      description: '',
-      categoryId: null,
-      color: null,
-      material: null,
-      attributes: null,
-      image: null,
-      status: 'ACTIVE',
-      createdAt: '',
-      updatedAt: '',
-    } as Item,
+    offeredItemId: id,
+    offeredItemTitle: `Товар ${id}`,
     wantedDescription: `Хочу ${id}`,
-    wantedProfile: null,
+    wantedCategory: '',
+    version: 1,
     createdAt: '',
     updatedAt: '',
   };
 }
 
 const requests = [
-  makeRequest('1', 'ACTIVE'),
-  makeRequest('2', 'IN_PROPOSAL'),
-  makeRequest('3', 'LOCKED'),
-  makeRequest('4', 'DONE'),
-  makeRequest('5', 'REMOVED'),
+  makeRequest(1, 'ACTIVE'),
+  makeRequest(2, 'IN_PROPOSAL'),
+  makeRequest(3, 'LOCKED'),
+  makeRequest(4, 'DONE'),
+  makeRequest(5, 'IN_PROGRESS'),
 ];
 
 describe('ExchangeRequestsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedUseItems.mockReturnValue(queryOk({ items: [], total: 0 }));
   });
 
   it('shows the empty state with a CTA', () => {
@@ -84,7 +91,7 @@ describe('ExchangeRequestsPage', () => {
     mockedUseRequests.mockReturnValue(queryOk(requests));
     renderWithProviders(<ExchangeRequestsPage />);
 
-    for (const label of ['Активен', 'В процессе', 'Заблокирован', 'Завершён', 'Отменён']) {
+    for (const label of ['Активен', 'В процессе', 'Заблокирован', 'Завершён', 'Выполняется']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
@@ -109,5 +116,15 @@ describe('ExchangeRequestsPage', () => {
 
     await user.click(screen.getByRole('button', { name: /Запрос/ }));
     expect(await screen.findByText('chains screen')).toBeInTheDocument();
+  });
+
+  it('shows the offered item photo taken from the items cache', () => {
+    mockedUseRequests.mockReturnValue(queryOk([requests[0]]));
+    mockedUseItems.mockReturnValue(queryOk({ items: [item], total: 1 }));
+
+    const { container } = renderWithProviders(<ExchangeRequestsPage />);
+
+    const img = container.querySelector('.request-card__image') as HTMLImageElement;
+    expect(img).toHaveAttribute('src', 'http://localhost:9000/items/1/photo.png');
   });
 });

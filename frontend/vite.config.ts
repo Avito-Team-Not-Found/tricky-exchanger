@@ -14,10 +14,20 @@ export default defineConfig({
       '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
     },
   },
+  // фронт ходит на бэкенд same-origin через прокси (VITE_API_BASE_URL пустой) —
+  // тогда бэкенду не нужен CORS (SCRUM-50: задача чисто фронтовая)
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'mock/**/*.{test,spec}.{ts,tsx}'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     passWithNoTests: true,
     // тяжёлый antd-рендер в jsdom под полной нагрузкой набора превышает дефолтные 5 секунд
     testTimeout: 10000,

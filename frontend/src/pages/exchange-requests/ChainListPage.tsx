@@ -2,28 +2,33 @@ import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { useChainActions, ChainCard } from '@features/chains';
+import { useChainVote, ChainCard } from '@features/chains';
 
-import { useRequestChains } from '@entities/chain';
+import { useExchangeOptions } from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
+import { useItems } from '@entities/item';
 
 import { EmptyState, ErrorState } from '@shared/ui';
 
 import './ChainListPage.scss';
 
-// Варианты обмена по заявке (PROJECT.md §2.6, макет 4.6): кандидатные цепочки, на каждую можно
-// откликнуться «принять/отказаться», готовую — выбрать и перевести в PROPOSED.
+// Варианты обмена по заявке (PROJECT.md §2.6, макет 4.6): пул кандидатов следующего звена,
+// на каждого можно откликнуться или отозвать отклик.
 export function ChainListPage() {
-  const { requestId } = useParams<{ requestId: string }>();
+  const { requestId: requestIdParam } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
+  const requestId = requestIdParam ? Number(requestIdParam) : undefined;
   const requestQuery = useRequest(requestId);
-  const chainsQuery = useRequestChains(requestId);
-  const { chooseChain, confirmCancelChoice, isSelecting } = useChainActions();
+  const optionsQuery = useExchangeOptions(requestId);
+  const itemsQuery = useItems();
+  const { confirmVote, isVoting } = useChainVote();
 
   const request = requestQuery.data;
-  const chains = chainsQuery.data ?? [];
+  const options = optionsQuery.data ?? [];
+  // деталь заявки не отдаёт снимок отдаваемого товара — берём его из кеша товаров
+  const offeredItem = itemsQuery.data?.items.find((item) => item.id === request?.offeredItemId);
 
-  if (requestQuery.isLoading || chainsQuery.isLoading) {
+  if (requestQuery.isLoading || optionsQuery.isLoading || itemsQuery.isLoading) {
     return (
       <div className="chain-list-page">
         <ChainListHeader onBack={() => navigate('/exchange-requests')} />
@@ -32,19 +37,23 @@ export function ChainListPage() {
     );
   }
 
-  if (requestQuery.isError || chainsQuery.isError) {
+  if (requestQuery.isError || optionsQuery.isError) {
     return (
       <div className="chain-list-page">
         <ChainListHeader onBack={() => navigate('/exchange-requests')} />
         <ErrorState
           onRetry={() => {
             void requestQuery.refetch();
-            void chainsQuery.refetch();
+            void optionsQuery.refetch();
           }}
         />
       </div>
     );
   }
+
+  const receiveOptions = options.flatMap((entry) =>
+    entry.receiveOptions.map((option) => ({ entry, option })),
+  );
 
   return (
     <div className="chain-list-page">
@@ -53,18 +62,14 @@ export function ChainListPage() {
         {request ? (
           <div className="chain-list-page__summary">
             {/* миниатюра отдаваемого товара — 40×40, radius-sm (макет 4.6) */}
-            {request.offeredItem?.image ? (
-              <img
-                className="chain-list-page__summary-photo"
-                src={request.offeredItem.image}
-                alt=""
-              />
+            {offeredItem?.imageUrl ? (
+              <img className="chain-list-page__summary-photo" src={offeredItem.imageUrl} alt="" />
             ) : (
               <div className="chain-list-page__summary-photo" aria-hidden />
             )}
             <div className="chain-list-page__summary-text">
               <p className="chain-list-page__summary-line">
-                Отдаёте: {request.offeredItem?.title ?? 'Товар удалён'}
+                Отдаёте: {offeredItem?.title ?? 'Товар удалён'}
               </p>
               <p className="chain-list-page__summary-line chain-list-page__summary-line--muted">
                 Получаете: {request.wantedDescription}
@@ -80,21 +85,30 @@ export function ChainListPage() {
           </div>
         ) : null}
 
-        {chains.length === 0 ? (
+        {receiveOptions.length === 0 ? (
           <EmptyState
             title="Пока нет подходящих цепочек"
             description="Попробуйте изменить запрос позже"
           />
         ) : (
           <div className="chain-list-page__list">
-            {chains.map((chain) => (
+            {receiveOptions.map(({ entry, option }) => (
               <ChainCard
-                key={chain.id}
-                chain={chain}
-                isSelecting={isSelecting}
-                onOpen={() => navigate(`/chains/${chain.id}`)}
-                onSelect={() => chooseChain(chain)}
-                onDeselect={() => confirmCancelChoice(chain)}
+                key={`${entry.chainId}-${option.requestId}`}
+                options={entry}
+                option={option}
+                isVoting={isVoting}
+                onOpen={() => navigate(`/chains/${entry.chainId}`)}
+                onVote={(active) =>
+                  confirmVote(
+                    {
+                      chainId: entry.chainId,
+                      requestId: entry.currentRequestId,
+                      targetRequestId: option.requestId,
+                    },
+                    active,
+                  )
+                }
               />
             ))}
           </div>

@@ -21,22 +21,20 @@ function queryOk(data: unknown) {
 
 const items = [
   {
-    id: 'item-1',
+    id: 1,
     title: 'Кухонный комбайн',
     description: 'Мощный',
-    color: 'white',
-    material: 'plastic',
-    image: null,
+    category: '',
+    imageUrl: null,
     status: 'ACTIVE',
   },
   {
-    id: 'item-2',
+    id: 2,
     title: 'Пылесос',
     description: 'Вертикальный',
-    color: 'red',
-    material: 'plastic',
-    image: null,
-    status: 'RESERVED',
+    category: '',
+    imageUrl: null,
+    status: 'UNAVAILABLE',
   },
 ] as unknown as Item[];
 
@@ -46,7 +44,7 @@ describe('ProductsPage', () => {
   });
 
   it('shows the empty state with a CTA', () => {
-    mockedUseItems.mockReturnValue(queryOk([]));
+    mockedUseItems.mockReturnValue(queryOk({ items: [], total: 0 }));
     const { container } = renderWithProviders(<ProductsPage />);
 
     const emptyState = container.querySelector('.empty-state') as HTMLElement;
@@ -71,7 +69,7 @@ describe('ProductsPage', () => {
 
   it('renders product cards with statuses and opens edit on tap', async () => {
     const user = userEvent.setup();
-    mockedUseItems.mockReturnValue(queryOk(items));
+    mockedUseItems.mockReturnValue(queryOk({ items, total: items.length }));
     renderWithProviders(<ProductsPage />, {
       routes: [{ path: '/products/:itemId/edit', element: <div>edit screen</div> }],
     });
@@ -79,9 +77,16 @@ describe('ProductsPage', () => {
     expect(screen.getByText('Кухонный комбайн')).toBeInTheDocument();
     expect(screen.getByText('Пылесос')).toBeInTheDocument();
     expect(screen.getByText('Активен')).toBeInTheDocument();
-    expect(screen.getByText('Забронирован')).toBeInTheDocument();
+    expect(screen.getByText('Недоступен')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Кухонный комбайн/ }));
     expect(await screen.findByText('edit screen')).toBeInTheDocument();
+  });
+
+  it('shows a note when the server holds more items than the page', () => {
+    mockedUseItems.mockReturnValue(queryOk({ items, total: 150 }));
+    renderWithProviders(<ProductsPage />);
+
+    expect(screen.getByText(`Показаны первые ${items.length} из 150 товаров`)).toBeInTheDocument();
   });
 });

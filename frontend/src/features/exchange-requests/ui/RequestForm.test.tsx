@@ -2,7 +2,6 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useCategories } from '@entities/category';
 import {
   createRequest,
   removeRequest,
@@ -35,96 +34,74 @@ vi.mock('@entities/item', async (importOriginal) => {
   return { ...actual, useItems: vi.fn() };
 });
 
-vi.mock('@entities/category', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@entities/category')>();
-  return { ...actual, useCategories: vi.fn() };
-});
-
 const mockedCreateRequest = vi.mocked(createRequest);
 const mockedRemoveRequest = vi.mocked(removeRequest);
 const mockedUseRequest = vi.mocked(useRequest);
 const mockedUseItems = vi.mocked(useItems);
-const mockedUseCategories = vi.mocked(useCategories);
 
 const items = [
   {
-    id: 'item-1',
+    id: 1,
     title: 'Кухонный комбайн',
     description: 'Мощный',
-    color: 'white',
-    material: 'plastic',
-    image: null,
+    category: '',
+    imageUrl: null,
     status: 'ACTIVE',
   },
   {
-    id: 'item-2',
+    id: 2,
     title: 'Велосипед',
     description: 'Городской',
-    color: 'blue',
-    material: 'steel',
-    image: 'bike.png',
-    status: 'RESERVED',
+    category: '',
+    imageUrl: 'bike.png',
+    status: 'UNAVAILABLE',
   },
 ] as unknown as Item[];
 
 const lockedRequest = {
-  id: 'req-1',
+  id: 1,
   status: 'LOCKED',
-  offeredItemId: 'item-1',
-  offeredItem: items[0],
+  offeredItemId: 1,
+  offeredItemTitle: 'Кухонный комбайн',
   wantedDescription: 'Ноутбук',
-  wantedProfile: null,
-} as unknown as ExchangeRequest;
+  version: 1,
+  createdAt: '',
+  updatedAt: '',
+} as ExchangeRequest;
 
 const liveRequest = { ...lockedRequest, status: 'ACTIVE' } as ExchangeRequest;
 
-// фильтр поиска обязателен — без него кнопка сабмита остаётся заблокированной
+async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Электроника') {
+  await user.click(screen.getByLabelText('Категория'));
+  await user.click(await screen.findByTitle(name));
+}
+
+// оба поля блока «что хочу получить» обязательны — заполняем их вместе
 async function fillWanted(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
-  await user.click(screen.getByRole('combobox'));
-  await user.click(await screen.findByText('Электроника'));
+  await pickCategory(user);
 }
 
 describe('RequestForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedUseItems.mockReturnValue(queryOk(items));
-    mockedUseCategories.mockReturnValue(queryOk([{ id: 'electronics', name: 'Электроника' }]));
+    mockedUseItems.mockReturnValue(queryOk({ items, total: items.length }));
     mockedUseRequest.mockReturnValue(queryOk(undefined));
   });
 
-  it('shows the matching result when chains are found', async () => {
+  it('shows the search result with zero candidate chains and keeps the request searchable', async () => {
     const user = userEvent.setup();
+    // матчинг на бэкенде — заглушка, поэтому заявка остаётся в поиске (SCRUM-50 §5)
     mockedCreateRequest.mockResolvedValue({
-      request: { id: 'req-2', status: 'IN_PROPOSAL' } as unknown as ExchangeRequest,
-      matching: { createdCandidateChains: 2 },
-    });
-    renderWithProviders(<RequestForm />);
-
-    await user.click(screen.getByText('Кухонный комбайн'));
-    await fillWanted(user);
-    await user.click(screen.getByRole('button', { name: /Создать запрос/ }));
-
-    expect(
-      await screen.findByText(
-        'Найдено 2 подходящих цепочек. Заявка перешла в статус «В процессе».',
-      ),
-    ).toBeInTheDocument();
-    expect(mockedCreateRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        offeredItemId: 'item-1',
-        wantedDescription: 'Ноутбук',
-        wantedProfile: { categoryId: 'electronics' },
-      }),
-    );
-  });
-
-  it('keeps the request in search when no chains are found', async () => {
-    const user = userEvent.setup();
-    mockedCreateRequest.mockResolvedValue({
-      request: { id: 'req-2', status: 'ACTIVE' } as unknown as ExchangeRequest,
-      matching: { createdCandidateChains: 0 },
-    });
+      id: 2,
+      status: 'ACTIVE',
+      offeredItemId: 1,
+      offeredItemTitle: 'Кухонный комбайн',
+      wantedDescription: 'Ноутбук',
+      version: 1,
+      createdAt: '',
+      updatedAt: '',
+    } as ExchangeRequest);
     renderWithProviders(<RequestForm />);
 
     await user.click(screen.getByText('Кухонный комбайн'));
@@ -134,36 +111,49 @@ describe('RequestForm', () => {
     expect(
       await screen.findByText('Пока подходящих цепочек нет — заявка остаётся в поиске.'),
     ).toBeInTheDocument();
+    expect(mockedCreateRequest).toHaveBeenCalledWith({
+      offeredItemId: 1,
+      wantedDescription: 'Ноутбук',
+      wantedCategory: 'Электроника',
+    });
   });
 
-  it('leads to the exchange options when chains are found', async () => {
+  it('leads to the requests list from the search result', async () => {
     const user = userEvent.setup();
     mockedCreateRequest.mockResolvedValue({
-      request: { id: 'req-2', status: 'IN_PROPOSAL' } as unknown as ExchangeRequest,
-      matching: { createdCandidateChains: 2 },
-    });
+      id: 2,
+      status: 'ACTIVE',
+      offeredItemId: 1,
+      offeredItemTitle: 'Кухонный комбайн',
+      wantedDescription: 'Ноутбук',
+      version: 1,
+      createdAt: '',
+      updatedAt: '',
+    } as ExchangeRequest);
     renderWithProviders(<RequestForm />, {
-      routes: [{ path: '/exchange-requests/req-2', element: <div>chains screen</div> }],
+      routes: [{ path: '/exchange-requests', element: <div>requests screen</div> }],
     });
 
     await user.click(screen.getByText('Кухонный комбайн'));
     await fillWanted(user);
     await user.click(screen.getByRole('button', { name: /Создать запрос/ }));
-    await user.click(await screen.findByRole('button', { name: /Посмотреть цепочки/ }));
+    await user.click(await screen.findByRole('button', { name: /К моим запросам/ }));
 
-    expect(await screen.findByText('chains screen')).toBeInTheDocument();
+    expect(await screen.findByText('requests screen')).toBeInTheDocument();
   });
 
-  it('keeps submit disabled until the search filter is filled', async () => {
+  it('keeps submit disabled until the wanted description is filled', async () => {
     const user = userEvent.setup();
     renderWithProviders(<RequestForm />);
 
     await user.click(screen.getByText('Кухонный комбайн'));
-    await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
 
-    await user.click(screen.getByRole('combobox'));
-    await user.click(await screen.findByText('Электроника'));
+    await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+    // категория обязательна — одного описания мало
+    expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
+
+    await pickCategory(user);
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeEnabled();
   });
 
@@ -175,7 +165,7 @@ describe('RequestForm', () => {
 
   it('leads to item creation when the user has no items', async () => {
     const user = userEvent.setup();
-    mockedUseItems.mockReturnValue(queryOk([]));
+    mockedUseItems.mockReturnValue(queryOk({ items: [], total: 0 }));
     renderWithProviders(<RequestForm />, {
       routes: [{ path: '/products/new', element: <div>new item screen</div> }],
     });
@@ -186,7 +176,7 @@ describe('RequestForm', () => {
 
   it('locks the form for a locked request', () => {
     mockedUseRequest.mockReturnValue(queryOk(lockedRequest));
-    renderWithProviders(<RequestForm requestId="req-1" />);
+    renderWithProviders(<RequestForm requestId={1} />);
 
     expect(
       screen.getByText('Заявка заблокирована и защищена от редактирования'),
@@ -198,18 +188,29 @@ describe('RequestForm', () => {
     const user = userEvent.setup();
     mockedUseRequest.mockReturnValue(queryOk(liveRequest));
     mockedRemoveRequest.mockResolvedValue(undefined);
-    renderWithProviders(<RequestForm requestId="req-1" />);
+    renderWithProviders(<RequestForm requestId={1} />);
 
     await user.click(screen.getByRole('button', { name: /Удалить запрос/ }));
     await user.click(await screen.findByRole('button', { name: /Да, удалить/ }));
 
-    expect(mockedRemoveRequest).toHaveBeenCalledWith('req-1');
+    expect(mockedRemoveRequest).toHaveBeenCalledWith(1, 1);
   });
 
   it('hides removal for a request that is no longer editable', () => {
     mockedUseRequest.mockReturnValue(queryOk(lockedRequest));
-    renderWithProviders(<RequestForm requestId="req-1" />);
+    renderWithProviders(<RequestForm requestId={1} />);
 
     expect(screen.queryByRole('button', { name: /Удалить запрос/ })).not.toBeInTheDocument();
+  });
+
+  // request ещё не загрузился — версии нет, удаление ушло бы с version=0 (422 на бэкенде)
+  it('does not open removal until the request is loaded', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<RequestForm requestId={1} />);
+
+    await user.click(screen.getByRole('button', { name: /Удалить запрос/ }));
+
+    expect(mockedRemoveRequest).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Да, удалить/ })).not.toBeInTheDocument();
   });
 });

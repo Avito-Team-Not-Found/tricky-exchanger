@@ -8,10 +8,12 @@ import './RequestCard.scss';
 
 interface RequestCardProps {
   request: ExchangeRequest;
+  // заявка не отдаёт снимок отдаваемого товара — страница берёт его из кеша товаров по offeredItemId
+  offeredItemImageUrl?: string | null;
   onClick: () => void;
 }
 
-export function RequestCard({ request, onClick }: RequestCardProps) {
+export function RequestCard({ request, offeredItemImageUrl, onClick }: RequestCardProps) {
   const statusMeta = REQUEST_STATUS_META[request.status];
 
   return (
@@ -19,7 +21,7 @@ export function RequestCard({ request, onClick }: RequestCardProps) {
       className="request-card"
       role="button"
       tabIndex={0}
-      aria-label={`Запрос: отдаю ${request.offeredItem?.title ?? 'товар'}, хочу ${request.wantedDescription}`}
+      aria-label={`Запрос: отдаю ${request.offeredItemTitle ?? 'товар'}, хочу ${request.wantedDescription}`}
       onClick={onClick}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -29,12 +31,8 @@ export function RequestCard({ request, onClick }: RequestCardProps) {
       }}
     >
       <div className="request-card__thumb">
-        {request.offeredItem?.image ? (
-          <img
-            className="request-card__image"
-            src={request.offeredItem.image}
-            alt={request.offeredItem.title}
-          />
+        {offeredItemImageUrl ? (
+          <img className="request-card__image" src={offeredItemImageUrl} alt="" />
         ) : (
           <div className="request-card__placeholder" aria-hidden />
         )}
@@ -43,9 +41,7 @@ export function RequestCard({ request, onClick }: RequestCardProps) {
         {/* отдаваемый товар и статус — в одной строке, желаемое — во второй со стрелкой вместо
             подписей: на узких экранах всё вместе в одну строку не умещается (DESIGN.md §4.5) */}
         <div className="request-card__head">
-          <span className="request-card__offer">
-            {request.offeredItem?.title ?? 'Товар удалён'}
-          </span>
+          <span className="request-card__offer">{request.offeredItemTitle ?? 'Товар удалён'}</span>
           <StatusTag tone={statusMeta.tone}>{statusMeta.label}</StatusTag>
         </div>
         <p className="request-card__swap">

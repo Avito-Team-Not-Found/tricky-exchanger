@@ -4,10 +4,8 @@ export {
   type CreateRequestPayload,
   type CreateRequestResult,
   type ExchangeRequest,
-  type RequestPatch,
-  type RequestDraft,
   type RequestStatus,
-  type WantedProfile,
+  type UpdateRequestPayload,
 } from './model';
 export { createRequest, fetchRequest, fetchRequests, removeRequest, updateRequest } from './api';
 export { useRequest, useRequests } from './hooks';

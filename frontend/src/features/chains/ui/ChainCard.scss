@@ -8,87 +8,9 @@
   cursor: pointer;
 }
 
-// на 375–390px мини-цепочка с чипом «+N чел.» и пилюля прогресса делят одну строку впритык,
-// поэтому отступы здесь минимальные; если строка всё же не вмещается — пилюля переносится вниз,
-// а не сжимает цепочку в горизонтальный скролл
-.chain-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs);
-  row-gap: var(--spacing-sm);
-}
-
-.chain-card__endpoints {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  overflow-x: auto;
-}
-
-.chain-card__endpoint {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.chain-card__endpoint--me .avatar {
-  border: 2px solid var(--color-accent-primary);
-}
-
-.chain-card__arrow {
-  flex-shrink: 0;
-  font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
-}
-
-// круглый чип свёрнутых звеньев — как бейджики участников (макет 4.6)
-.chain-card__collapsed {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 28px;
-  padding: 0 var(--spacing-xs);
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-card);
-  font-size: var(--font-size-caption);
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-
-// «Цепочка собрана» занимает слот ProbabilityBadge — та же пилюля в тоне success
-.chain-card__ready {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 var(--spacing-sm);
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-heading);
-  color: var(--color-status-success);
-  white-space: nowrap;
-}
-
-.chain-card__progress {
-  display: inline-flex;
-  align-items: center;
-  flex-shrink: 0;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-full);
-  background: var(--color-accent-primary);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-body);
-  color: #ffffff;
-  white-space: nowrap;
-}
-
 // фото получаемого товара — крупный блок в верхней части карточки (макет 4.6)
 .chain-card__photo {
+  position: relative;
   width: 100%;
   aspect-ratio: 311 / 171;
   border-radius: var(--radius-md);
@@ -96,7 +18,11 @@
   background: var(--color-bg-page);
 }
 
+// position: absolute уводит картинку из потока — иначе портретная фотография растягивает
+// контейнер и ломает aspect-ratio 311:171 (та же проблема, что и в ProductCard)
 .chain-card__photo-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -124,6 +50,17 @@
   white-space: nowrap;
 }
 
+// что кандидат хочет взамен — вторая строка заголовка, чтобы понятно было, на что откликаемся
+.chain-card__wanted {
+  margin-top: calc(-1 * var(--spacing-sm));
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-body);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chain-card__meta {
   display: flex;
   align-items: center;
@@ -137,6 +74,21 @@
   white-space: nowrap;
 }
 
+// «Цепочка собрана» занимает слот ProbabilityBadge — та же пилюля в тоне success
+.chain-card__ready {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 var(--spacing-sm);
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-success);
+  white-space: nowrap;
+}
+
 // в карточке ровно одно действие, поэтому кнопка всегда во всю ширину (макет 4.6)
 .chain-card__actions {
   display: flex;
@@ -144,12 +96,4 @@
 
 .chain-card__actions .chain-card__action {
   flex: 1;
-}
-
-.chain-card__declined {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  font-size: var(--font-size-body-sm);
-  color: var(--color-status-error);
 }

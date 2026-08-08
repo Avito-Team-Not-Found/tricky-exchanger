@@ -42,7 +42,7 @@ describe('useRecoveryFlow', () => {
   });
 
   it('moves from email to code step on a successful send', async () => {
-    mockedSend.mockResolvedValue({ message: 'code_sent', code: '482913' });
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
     const { result } = renderHook(() => useRecoveryFlow(), { wrapper });
 
     await act(async () => {
@@ -73,7 +73,7 @@ describe('useRecoveryFlow', () => {
   });
 
   it('marks the code invalid on a wrong-code (400) response but not on a network error', async () => {
-    mockedSend.mockResolvedValue({ message: 'code_sent', code: '482913' });
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
     const { result } = renderHook(() => useRecoveryFlow(), { wrapper });
     await act(async () => {
       await result.current.handleSend({ email: 'anna@example.com' });
@@ -97,7 +97,7 @@ describe('useRecoveryFlow', () => {
   });
 
   it('moves through verify and reset to the success step', async () => {
-    mockedSend.mockResolvedValue({ message: 'code_sent', code: '482913' });
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
     mockedVerify.mockResolvedValue();
     mockedReset.mockResolvedValue();
     const { result } = renderHook(() => useRecoveryFlow(), { wrapper });

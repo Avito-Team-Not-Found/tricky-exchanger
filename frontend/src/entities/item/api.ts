@@ -1,60 +1,67 @@
 import { apiClient } from '@shared/api';
 
-import type { Item, ItemPayload } from './model';
+import type { Item, ItemPayload, ItemsList } from './model';
 
-export async function fetchItems(): Promise<Item[]> {
-  const { data } = await apiClient.get<Item[]>('/items');
-  return data;
+// Бэкенд не умеет фильтровать по статусу — список приходит вместе с архивными
+// (личный список владельца), поэтому архивные отсекаем на клиенте. Запрашиваем
+// максимальную страницу, чтобы на «Моих товарах» и в пикере товара ничего не терялось.
+export async function fetchItems(): Promise<ItemsList> {
+  const { data } = await apiClient.get<ItemsList>('/items', { params: { pageSize: 100 } });
+  return { items: data.items.filter((item) => item.status !== 'ARCHIVED'), total: data.total };
 }
 
-export async function fetchItem(itemId: string): Promise<Item> {
+export async function fetchItem(itemId: number): Promise<Item> {
   const { data } = await apiClient.get<Item>(`/items/${itemId}`);
   return data;
 }
 
+// Бэкенд создаёт товар JSON'ом, а фото грузит отдельной ручкой. Если загрузка фото
+// упала, товар уже создан — выбрасываем ItemImageUploadError с созданным товаром,
+// чтобы форма могла показать ошибку и увести на редактирование, не теряя созданное.
 export async function createItem(payload: ItemPayload, image: File | null): Promise<Item> {
-  const { data } = await apiClient.post<Item>('/items', toItemFormData(payload, image), {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return data;
+  const { data: created } = await apiClient.post<Item>('/items', payload);
+  if (!image) return created;
+
+  try {
+    return await uploadItemImage(created.id, image);
+  } catch (error) {
+    throw new ItemImageUploadError(created, error);
+  }
 }
 
-// image === undefined — фото не трогаем, File — заменить. Удаление фото недоступно:
-// фото обязательно в обеих формах (см. useItemForm.hasPhoto), поэтому нечем и незачем его чистить.
 export async function updateItem(
-  itemId: string,
+  itemId: number,
   payload: ItemPayload,
   image: File | undefined,
 ): Promise<Item> {
-  if (image === undefined) {
-    const { data } = await apiClient.patch<Item>(`/items/${itemId}`, payload);
-    return data;
+  const { data: updated } = await apiClient.patch<Item>(`/items/${itemId}`, payload);
+  if (!image) return updated;
+  try {
+    return await uploadItemImage(itemId, image);
+  } catch (error) {
+    throw new ItemImageUploadError(updated, error);
   }
-  const { data } = await apiClient.patch<Item>(`/items/${itemId}`, toItemFormData(payload, image), {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return data;
 }
 
-export async function archiveItem(itemId: string): Promise<void> {
+export async function archiveItem(itemId: number): Promise<void> {
   await apiClient.delete(`/items/${itemId}`);
 }
 
-function toItemFormData(payload: ItemPayload, image: File | null): FormData {
-  const form = new FormData();
-  form.append('title', payload.title);
-  form.append('description', payload.description);
-  // multipart не умеет null, поэтому очистка поля едет пустой строкой (сервер трактует её как null),
-  // а «не трогать поле» — отсутствием ключа. Раньше здесь была проверка на truthy, из-за которой
-  // очистка цвета/материала терялась, если пользователь заодно менял фото.
-  appendOptional(form, 'color', payload.color);
-  appendOptional(form, 'material', payload.material);
-  appendOptional(form, 'categoryId', payload.categoryId);
-  if (image) form.append('image', image);
-  return form;
+export class ItemImageUploadError extends Error {
+  readonly item: Item;
+
+  constructor(item: Item, cause: unknown) {
+    super('Товар сохранён, но фото не загрузилось', { cause });
+    this.name = 'ItemImageUploadError';
+    this.item = item;
+  }
 }
 
-function appendOptional(form: FormData, key: string, value: string | null | undefined): void {
-  if (value === undefined) return;
-  form.append(key, value ?? '');
+async function uploadItemImage(itemId: number, image: File): Promise<Item> {
+  const form = new FormData();
+  form.append('image', image);
+  const { data } = await apiClient.post<Item>(`/items/${itemId}/image`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
 }

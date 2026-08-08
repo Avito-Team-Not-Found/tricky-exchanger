@@ -1,9 +1,10 @@
 import { useImperativeHandle, type Ref } from 'react';
 
 import { DeleteOutlined, PictureOutlined, UploadOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Form, Input, Skeleton, Upload } from 'antd';
+import { App as AntApp, Button, Form, Input, Select, Skeleton, Upload } from 'antd';
 import { useNavigate } from 'react-router';
 
+import { categoryOptions } from '@shared/config/categories';
 import { ErrorState } from '@shared/ui';
 
 import { useArchiveItem } from '../model/useArchiveItem';
@@ -16,7 +17,7 @@ export interface ItemFormHandle {
 }
 
 interface ItemFormProps {
-  itemId?: string;
+  itemId?: number;
   ref?: Ref<ItemFormHandle>;
 }
 
@@ -63,7 +64,7 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
       okText: 'Да, удалить',
       okButtonProps: { danger: true },
       cancelText: 'Отмена',
-      onOk: () => archiveItem.mutate(itemId as string),
+      onOk: () => archiveItem.mutate(itemId as number),
     });
   }
 
@@ -133,6 +134,19 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
       >
         <Input placeholder="Название товара" maxLength={100} showCount />
       </Form.Item>
+      {/* выбор только из справочника: кластеризация сравнивает категорию точным строковым
+          равенством, поэтому произвольный текст увёл бы заявку в пул из одного себя */}
+      <Form.Item
+        label="Категория"
+        name="category"
+        rules={[{ required: true, message: 'Выберите категорию' }]}
+      >
+        <Select
+          placeholder="Выберите категорию"
+          options={categoryOptions(item?.category)}
+          showSearch
+        />
+      </Form.Item>
       <Form.Item
         label="Описание"
         name="description"
@@ -142,12 +156,6 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
         ]}
       >
         <Input.TextArea placeholder="Описание товара" maxLength={500} showCount rows={4} />
-      </Form.Item>
-      <Form.Item label="Цвет" name="color">
-        <Input placeholder="Например, белый" maxLength={50} />
-      </Form.Item>
-      <Form.Item label="Материал" name="material">
-        <Input placeholder="Например, пластик" maxLength={50} />
       </Form.Item>
       <Button
         className="item-form__submit"

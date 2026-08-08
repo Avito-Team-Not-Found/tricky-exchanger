@@ -1,24 +1,18 @@
 export {
-  chainReadiness,
+  chainLinks,
   myParticipant,
   receivesItem,
-  RESPONSE_STATUS_META,
+  VOTE_META,
   type Chain,
-  type ChainItemRef,
+  type ChainLink,
   type ChainParticipant,
-  type ChainPermissions,
-  type ChainResponseResult,
   type ChainStatus,
-  type FreezeVoteStatus,
-  type ResponseStatus,
+  type ChainVoteResult,
+  type ExchangeOption,
+  type ExchangeOptions,
+  type VotePayload,
+  type VoteValue,
 } from './model';
 export { participantAlias, type ParticipantAlias } from './alias';
-export {
-  acceptChain,
-  declineChain,
-  deselectChain,
-  fetchChain,
-  fetchRequestChains,
-  selectChain,
-} from './api';
-export { useChain, useRequestChains } from './hooks';
+export { fetchChain, fetchExchangeOptions, voteForRequest, withdrawVote } from './api';
+export { useChain, useExchangeOptions } from './hooks';

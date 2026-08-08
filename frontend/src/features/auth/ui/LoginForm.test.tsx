@@ -73,7 +73,7 @@ describe('LoginForm', () => {
     const user = userEvent.setup();
     mockedLoginRequest.mockResolvedValue({
       token: 'jwt',
-      user: { id: '1', name: 'Анна', email: 'anna@example.com' },
+      user: { id: '1', fullName: 'Анна', email: 'anna@example.com' },
     });
     setup();
 
@@ -97,15 +97,16 @@ describe('LoginForm', () => {
     await user.type(screen.getByLabelText(/Пароль/i), 'wrong-password');
     await user.click(screen.getByRole('button', { name: /Войти/ }));
 
-    expect(await screen.findByText('Неверный пароль')).toBeInTheDocument();
+    expect(await screen.findByText('Неверный email или пароль')).toBeInTheDocument();
     expect(store.getState().user.token).toBeNull();
     expect(screen.getByLabelText(/Email/i)).toHaveValue('anna@example.com');
   });
 
-  it('shows a toast for an unregistered email', async () => {
+  it('shows the same toast for an unregistered email', async () => {
     const user = userEvent.setup();
-    const error = new AxiosError('Not Found');
-    Object.assign(error, { response: { status: 404 } });
+    // бэкенд осознанно отвечает 401 в обоих случаях — текст для юзера не должен их различать
+    const error = new AxiosError('Unauthorized');
+    Object.assign(error, { response: { status: 401 } });
     mockedLoginRequest.mockRejectedValue(error);
     setup();
 
@@ -113,7 +114,7 @@ describe('LoginForm', () => {
     await user.type(screen.getByLabelText(/Пароль/i), 'whatever123');
     await user.click(screen.getByRole('button', { name: /Войти/ }));
 
-    expect(await screen.findByText('Пользователь с таким email не найден')).toBeInTheDocument();
+    expect(await screen.findByText('Неверный email или пароль')).toBeInTheDocument();
     expect(store.getState().user.token).toBeNull();
   });
 });

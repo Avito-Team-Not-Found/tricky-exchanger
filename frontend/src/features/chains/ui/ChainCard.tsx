@@ -1,89 +1,79 @@
-import { WarningOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
 
-import { chainReadiness, myParticipant, receivesItem, type Chain } from '@entities/chain';
+import { type ExchangeOption, type ExchangeOptions } from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
-
-import { ChainEndpoints } from './ChainEndpoints';
 
 import './ChainCard.scss';
 
 interface ChainCardProps {
-  chain: Chain;
+  options: ExchangeOptions;
+  option: ExchangeOption;
+  isVoting: boolean;
   onOpen: () => void;
-  onSelect: () => void;
-  onDeselect: () => void;
-  isSelecting: boolean;
+  onVote: (active: boolean) => void;
 }
 
-// Карточка варианта обмена (макет 4.6): у карточки ровно одна кнопка. Выбор не эксклюзивен —
-// пользователь может отметить любое количество цепочек и снять отметку («Отменить выбор»).
-// Отклик на карточке не даётся — только на детальном экране.
-export function ChainCard({ chain, onOpen, onSelect, onDeselect, isSelecting }: ChainCardProps) {
-  const me = myParticipant(chain);
-  const received = me ? receivesItem(me, chain) : null;
-  const { agreed, total } = chainReadiness(chain);
-  const isReady = agreed === total && total > 0;
-  const { canDeselect, canSelect } = chain.viewerPermissions;
+// Карточка варианта обмена (макет 4.6): один конкретный получаемый товар из пула кандидатов
+// следующего звена. Действие — «Откликнуться» / «Отозвать отклик» по option.vote; отозвать можно
+// только pending-отклик (DELETE их снимает лишь у кандидатной цепочки, PROJECT.md §4.5), у
+// собранной цепочки действие скрыто, место бейджа занимает пилюля «Цепочка собрана».
+export function ChainCard({ options, option, isVoting, onOpen, onVote }: ChainCardProps) {
+  const canVote = options.status === 'CANDIDATE';
+  const canAct = canVote && (!option.vote || option.vote === 'pending');
 
   return (
     <article className="chain-card" onClick={onOpen}>
-      <div className="chain-card__head">
-        <ChainEndpoints chain={chain} />
-        {/* прогресс откликов — синяя пилюля в шапке карточки (макет 4.6) */}
-        <span className="chain-card__progress">
-          {agreed}/{total} согласий
-        </span>
-      </div>
-
       <div className="chain-card__photo">
-        {received?.image ? (
-          <img className="chain-card__photo-img" src={received.image} alt={received.title} />
+        {option.imageUrl ? (
+          <img className="chain-card__photo-img" src={option.imageUrl} alt={option.title} />
         ) : (
           <div className="chain-card__photo-placeholder" aria-hidden>
-            {received?.title[0] ?? ''}
+            {option.title[0] ?? ''}
           </div>
         )}
       </div>
 
-      <p className="chain-card__title">{received?.title ?? 'Товар удалён'}</p>
+      <p className="chain-card__title">{option.title}</p>
+      <p className="chain-card__wanted">Хочет: {option.wantedDescription}</p>
 
       <div className="chain-card__meta">
         <span className="chain-card__count">
-          {total} {pluralize(total)}
+          {options.length} {pluralize(options.length)}
         </span>
-        {/* у собранной цепочки слот вероятности занимает зелёная пилюля «Цепочка собрана» */}
-        {isReady ? (
-          <span className="chain-card__ready">Цепочка собрана</span>
+        {canVote ? (
+          <ProbabilityBadge score={options.score} />
         ) : (
-          <ProbabilityBadge score={chain.score} />
+          <span className="chain-card__ready">Цепочка собрана</span>
         )}
       </div>
 
-      <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
-        {canDeselect ? (
-          <Button
-            className="chain-card__action"
-            type="primary"
-            danger
-            block
-            loading={isSelecting}
-            onClick={onDeselect}
-          >
-            Отменить выбор
-          </Button>
-        ) : canSelect ? (
-          <Button className="chain-card__action" block loading={isSelecting} onClick={onSelect}>
-            Выбрать цепочку
-          </Button>
-        ) : me?.responseStatus === 'DECLINED' ? (
-          <span className="chain-card__declined">
-            <WarningOutlined aria-hidden />
-            Вы отказались
-          </span>
-        ) : null}
-      </div>
+      {canAct ? (
+        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
+          {option.vote === 'pending' ? (
+            <Button
+              className="chain-card__action"
+              type="primary"
+              danger
+              block
+              loading={isVoting}
+              onClick={() => onVote(false)}
+            >
+              Отозвать отклик
+            </Button>
+          ) : (
+            <Button
+              className="chain-card__action"
+              type="primary"
+              block
+              loading={isVoting}
+              onClick={() => onVote(true)}
+            >
+              Откликнуться
+            </Button>
+          )}
+        </div>
+      ) : null}
     </article>
   );
 }

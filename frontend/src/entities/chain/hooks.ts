@@ -1,19 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { fetchChain, fetchRequestChains } from './api';
+import { fetchChain, fetchExchangeOptions } from './api';
 
-export function useRequestChains(requestId?: string) {
+export function useChain(chainId?: number) {
   return useQuery({
-    queryKey: ['chains', 'request', requestId],
-    queryFn: () => fetchRequestChains(requestId as string),
-    enabled: Boolean(requestId),
+    queryKey: ['chains', chainId],
+    queryFn: () => fetchChain(chainId as number),
+    enabled: Boolean(chainId),
   });
 }
 
-export function useChain(chainId?: string) {
+export function useExchangeOptions(offerId?: number) {
   return useQuery({
-    queryKey: ['chains', chainId],
-    queryFn: () => fetchChain(chainId as string),
-    enabled: Boolean(chainId),
+    queryKey: ['exchange-options', offerId],
+    queryFn: () => fetchExchangeOptions(offerId as number),
+    enabled: Boolean(offerId),
   });
 }

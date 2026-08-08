@@ -49,7 +49,11 @@ describe('useChangePassword', () => {
     });
 
     expect(result.current.state).toEqual({ status: 'success' });
-    expect(mockedChangePassword).toHaveBeenCalledWith('old-password', 'new-password-1');
+    expect(mockedChangePassword).toHaveBeenCalledWith(
+      'old-password',
+      'new-password-1',
+      'new-password-1',
+    );
   });
 
   it('stays on the form and shows a toast when the current password is wrong', async () => {

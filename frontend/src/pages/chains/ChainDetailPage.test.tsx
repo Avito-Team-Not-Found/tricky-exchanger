@@ -2,7 +2,6 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useCategories } from '@entities/category';
 import { useChain, type Chain } from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
@@ -18,60 +17,44 @@ vi.mock('@entities/chain', async (importOriginal) => {
   return { ...actual, useChain: vi.fn() };
 });
 
-vi.mock('@entities/category', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@entities/category')>();
-  return { ...actual, useCategories: vi.fn() };
-});
-
 const mockedUseChain = vi.mocked(useChain);
-const mockedUseCategories = vi.mocked(useCategories);
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
   return {
-    id: 'chain-1',
-    requestId: 'req-1',
+    id: 1,
     status: 'CANDIDATE',
     score: 0.9,
-    responseDeadlineAt: null,
-    freezeDeadlineAt: null,
+    length: 2,
+    version: 1,
+    currentRequestId: 101,
+    currentPosition: 1,
+    givesToPosition: 2,
+    receivesFromPosition: 2,
+    createdAt: '',
+    updatedAt: '',
     participants: [
       {
+        clusterId: 1,
+        requestId: 101,
         position: 1,
-        requestId: 'req-1',
         isCurrentUser: true,
-        user: { id: 'me', name: 'Я' },
-        offeredItem: { id: 'item-1', title: 'Велосипед', image: null },
-        receivesFromPosition: 2,
-        responseStatus: null,
-        freezeVoteStatus: null,
+        offeredItemId: 1,
+        offeredItemTitle: 'Велосипед',
+        offeredItemDescription: '',
+        wantedDescription: 'Хочу фотоаппарат',
       },
       {
+        clusterId: 2,
+        requestId: 202,
         position: 2,
-        requestId: null,
         isCurrentUser: false,
-        user: { id: 'u2', name: 'Мария' },
-        offeredItem: {
-          id: 'item-2',
-          title: 'Зеркальный фотоаппарат Canon',
-          image: null,
-          description: 'Полный комплект: камера, объектив, флешка и чехол',
-          categoryId: 'electronics',
-          color: 'black',
-          material: null,
-          attributes: null,
-        },
-        receivesFromPosition: 1,
-        responseStatus: 'ACCEPTED',
-        freezeVoteStatus: null,
+        offeredItemId: 2,
+        offeredItemTitle: 'Зеркальный фотоаппарат Canon',
+        offeredItemDescription: 'Полный комплект: камера, объектив, флешка и чехол',
+        wantedDescription: 'Хочу велосипед',
+        imageUrl: 'http://localhost:9000/photos/canon.jpg',
       },
     ],
-    viewerPermissions: {
-      canRespond: true,
-      canSelect: false,
-      canDeselect: false,
-      canVote: false,
-      canRequestReplacement: false,
-    },
     ...overrides,
   };
 }
@@ -79,10 +62,9 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedUseCategories.mockReturnValue(queryOk([{ id: 'electronics', name: 'Электроника' }]));
   });
 
-  it('shows the received item with its description and specs', () => {
+  it('shows the received item with its description', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain()));
 
     renderWithProviders(<ChainDetailPage />);
@@ -94,9 +76,6 @@ describe('ChainDetailPage', () => {
     expect(
       screen.getByText('Полный комплект: камера, объектив, флешка и чехол'),
     ).toBeInTheDocument();
-    expect(screen.getByText('Характеристики')).toBeInTheDocument();
-    expect(screen.getByText('Электроника')).toBeInTheDocument();
-    expect(screen.getByText('black')).toBeInTheDocument();
   });
 
   it('opens the participants screen on button click', async () => {
@@ -104,22 +83,44 @@ describe('ChainDetailPage', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain()));
 
     renderWithProviders(<ChainDetailPage />, {
-      routes: [{ path: '/chains/chain-1/participants', element: <div>участники</div> }],
+      routes: [{ path: '/chains/1/participants', element: <div>участники</div> }],
     });
 
     await user.click(screen.getByRole('button', { name: 'Посмотреть всю цепочку' }));
     expect(await screen.findByText('участники')).toBeInTheDocument();
   });
 
-  it('shows the assembled pill when every participant agreed', () => {
-    const ready = makeChain({
-      participants: makeChain().participants.map((p) => ({ ...p, responseStatus: 'ACCEPTED' })),
-    });
-    mockedUseChain.mockReturnValue(queryOk(ready));
+  it('shows the assembled pill once the chain is proposed', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 
     renderWithProviders(<ChainDetailPage />);
 
     expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
+  });
+
+  // пул кандидатов может быть больше длины цепочки (§3.1): счётчик участников берём из length,
+  // а получаемое звено с несколькими кандидатами деградирует в счётчик вариантов
+  it('counts participants by chain length, not by the pool size', () => {
+    const pool = Array.from({ length: 5 }, (_, index) => ({
+      clusterId: 2,
+      requestId: 202 + index,
+      position: 2,
+      isCurrentUser: false,
+      offeredItemId: 20 + index,
+      offeredItemTitle: `Фотоаппарат ${index + 1}`,
+      offeredItemDescription: '',
+      wantedDescription: 'Хочу велосипед',
+    }));
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ participants: [makeChain().participants[0], ...pool] })),
+    );
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('2 участника в цепочке')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Получаете: 5 вариантов', level: 2 }),
+    ).toBeInTheDocument();
   });
 
   it('shows an error state with retry when the chain fails to load', async () => {

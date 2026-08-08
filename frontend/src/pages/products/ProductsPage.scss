@@ -27,6 +27,11 @@
   gap: var(--spacing-md);
 }
 
+.products-page__limit-note {
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-secondary);
+}
+
 @media (min-width: 768px) {
   .products-page__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -9,7 +9,10 @@ import { loginSucceeded, logout } from '@app/store/slices/userSlice';
 import { RedirectIfAuthed } from './RedirectIfAuthed';
 import { RequireAuth } from './RequireAuth';
 
-const session = { token: 'jwt', user: { id: '1', name: 'Анна', email: 'anna@example.com' } };
+const session = {
+  token: 'jwt',
+  user: { id: '1', fullName: 'Анна', email: 'anna@example.com' },
+};
 
 function renderRequireAuth() {
   return render(

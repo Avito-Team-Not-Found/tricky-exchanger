@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { isRequestEditable, REQUEST_STATUS_META, type RequestStatus } from './model';
 
-const ALL_STATUSES: RequestStatus[] = ['ACTIVE', 'IN_PROPOSAL', 'LOCKED', 'DONE', 'REMOVED'];
+const ALL_STATUSES: RequestStatus[] = ['ACTIVE', 'IN_PROPOSAL', 'LOCKED', 'DONE', 'IN_PROGRESS'];
 
 describe('REQUEST_STATUS_META', () => {
   it('covers all statuses from the contract', () => {
@@ -26,9 +26,9 @@ describe('isRequestEditable', () => {
     expect(isRequestEditable('IN_PROPOSAL')).toBe(true);
   });
 
-  it('blocks editing locked, done and removed requests', () => {
+  it('blocks editing locked, done and in-progress requests', () => {
     expect(isRequestEditable('LOCKED')).toBe(false);
     expect(isRequestEditable('DONE')).toBe(false);
-    expect(isRequestEditable('REMOVED')).toBe(false);
+    expect(isRequestEditable('IN_PROGRESS')).toBe(false);
   });
 });

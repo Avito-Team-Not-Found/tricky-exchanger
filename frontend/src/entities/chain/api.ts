@@ -1,35 +1,28 @@
 import { apiClient } from '@shared/api';
 
-import type { Chain, ChainResponseResult } from './model';
+import type { Chain, ChainVoteResult, ExchangeOptions, VotePayload } from './model';
 
-export async function fetchRequestChains(requestId: string): Promise<Chain[]> {
-  const { data } = await apiClient.get<Chain[]>(`/exchange-requests/${requestId}/chains`);
-  return data;
-}
-
-export async function fetchChain(chainId: string): Promise<Chain> {
+export async function fetchChain(chainId: number): Promise<Chain> {
   const { data } = await apiClient.get<Chain>(`/chains/${chainId}`);
   return data;
 }
 
-export async function acceptChain(chainId: string): Promise<ChainResponseResult> {
-  const { data } = await apiClient.post<ChainResponseResult>(`/chains/${chainId}/responses/accept`);
-  return data;
-}
-
-export async function declineChain(chainId: string): Promise<ChainResponseResult> {
-  const { data } = await apiClient.post<ChainResponseResult>(
-    `/chains/${chainId}/responses/decline`,
+export async function fetchExchangeOptions(offerId: number): Promise<ExchangeOptions[]> {
+  const { data } = await apiClient.get<ExchangeOptions[]>(
+    `/exchange-offers/${offerId}/exchange-options`,
   );
   return data;
 }
 
-export async function selectChain(chainId: string): Promise<{ id: string; status: string }> {
-  const { data } = await apiClient.post(`/chains/${chainId}/select`);
+// направленный отклик на конкретную заявку следующего звена; кольцо откликов замыкает бэкенд
+export async function voteForRequest(
+  chainId: number,
+  payload: VotePayload,
+): Promise<ChainVoteResult> {
+  const { data } = await apiClient.put<ChainVoteResult>(`/chains/${chainId}/votes`, payload);
   return data;
 }
 
-export async function deselectChain(chainId: string): Promise<{ id: string; status: string }> {
-  const { data } = await apiClient.delete(`/chains/${chainId}/select`);
-  return data;
+export async function withdrawVote(chainId: number, payload: VotePayload): Promise<void> {
+  await apiClient.delete(`/chains/${chainId}/votes`, { params: payload });
 }

@@ -6,10 +6,10 @@ export function useItems() {
   return useQuery({ queryKey: ['items'], queryFn: fetchItems });
 }
 
-export function useItem(itemId?: string) {
+export function useItem(itemId?: number) {
   return useQuery({
     queryKey: ['items', itemId],
-    queryFn: () => fetchItem(itemId as string),
+    queryFn: () => fetchItem(itemId as number),
     enabled: Boolean(itemId),
   });
 }
