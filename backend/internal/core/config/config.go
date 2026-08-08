@@ -53,6 +53,8 @@ type Config struct {
 	MatchingTopK      int     // LIMIT для Top-K (default 20)
 	MatchingThreshold float64 // порог cosine similarity (default 0.5)
 	VectorMetric      string  // "cosine" (зафиксировано, соответствует индексу)
+	CycleOutgoingK    int     // максимум исходящих рёбер одной вершины
+	CycleMaxDrafts    int     // максимум возвращаемых вариантов цепочки
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -91,6 +93,8 @@ func Load() (*Config, error) {
 		MatchingTopK:      envIntOrDefault("MATCHING_TOPK", 20),
 		MatchingThreshold: envFloatOrDefault("MATCHING_THRESHOLD", 0.5),
 		VectorMetric:      envOrDefault("VECTOR_METRIC", "cosine"),
+		CycleOutgoingK:    envIntOrDefault("CYCLE_OUTGOING_K", 20),
+		CycleMaxDrafts:    envIntOrDefault("CYCLE_MAX_DRAFTS", 10),
 
 		MinIOEndpoint:  envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey: envOrDefault("MINIO_ACCESS_KEY", ""),

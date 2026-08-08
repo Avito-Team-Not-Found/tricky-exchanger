@@ -24,6 +24,9 @@ var (
 	ErrEmptyEmbedding               = errors.New("сервис embeddings вернул пустой вектор")
 	ErrOfferEmbeddingMissing        = errors.New("для предлагаемого товара не сформирован embedding")
 	ErrClusterNotConfigured         = errors.New("сервис кластеризации не настроен")
+	ErrChainNotFound                = errors.New("цепочка не найдена")
+	ErrChainRepositoryNotConfigured = errors.New("репозиторий цепочек не настроен")
+	ErrInvalidChainDraft            = errors.New("некорректный черновик цепочки")
 
 	ErrItemNotFound           = errors.New("item not found")
 	ErrItemForbidden          = errors.New("item belongs to another user")
