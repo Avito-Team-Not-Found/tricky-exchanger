@@ -29,14 +29,14 @@ func NewRepository(pool *pgxpool.Pool) *Postgres {
 // Create сохраняет новый товар. Заполняет ID, Status, CreatedAt, UpdatedAt в переданной структуре.
 func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 	const q = `
-		INSERT INTO items (owner_user_id, title, description, category, embedding, status)
+		INSERT INTO items (owner_user_id, title, description, category_id, embedding, status)
 		VALUES ($1, $2, $3, $4, $5::vector, $6)
 		RETURNING id, created_at, updated_at
 	`
 
 	err := r.pool.QueryRow(
 		ctx, q,
-		item.OwnerUserID, item.Title, item.Description, item.Category,
+		item.OwnerUserID, item.Title, item.Description, item.CategoryID,
 		vectorLiteral(item.Embedding), item.Status,
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
@@ -50,7 +50,7 @@ func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 // проверку прав доступа выполняет вызывающий слой (service).
 func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) {
 	const q = `
-		SELECT id, owner_user_id, title, description, COALESCE(category, ''), image_url, status, created_at, updated_at
+		SELECT id, owner_user_id, title, description, category_id, image_url, status, created_at, updated_at
 		FROM items
 		WHERE id = $1
 	`
@@ -70,7 +70,7 @@ func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) 
 // и общее количество товаров, отсортированные по дате создания (новые сверху).
 func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pageSize int) ([]*entity.Item, int, error) {
 	const q = `
-		SELECT id, owner_user_id, title, description, COALESCE(category, ''), image_url, status, created_at, updated_at,
+		SELECT id, owner_user_id, title, description, category_id, image_url, status, created_at, updated_at,
 		       count(*) OVER() AS total
 		FROM items
 		WHERE owner_user_id = $1
@@ -89,7 +89,7 @@ func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pag
 	for rows.Next() {
 		var it entity.Item
 		if err := rows.Scan(
-			&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.Category, &it.ImageURL,
+			&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.CategoryID, &it.ImageURL,
 			&it.Status, &it.CreatedAt, &it.UpdatedAt, &total,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan item list row: %w", err)
@@ -104,14 +104,14 @@ func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pag
 	return items, total, nil
 }
 
-// Update перезаписывает редактируемые поля товара (title/description/category/status)
+// Update перезаписывает редактируемые поля товара (title/description/categoryId/status)
 // и обновляет updated_at. Если товар не найден — repository.ErrNotFound.
 func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 	const q = `
 		UPDATE items
 		SET title = $2,
 		    description = $3,
-		    category = $4,
+		    category_id = $4,
 		    status = $5,
 		    embedding = COALESCE($6::vector, embedding),
 		    updated_at = now()
@@ -121,7 +121,7 @@ func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 
 	err := r.pool.QueryRow(
 		ctx, q,
-		item.ID, item.Title, item.Description, item.Category, item.Status,
+		item.ID, item.Title, item.Description, item.CategoryID, item.Status,
 		optionalVectorLiteral(item.Embedding),
 	).Scan(&item.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -176,6 +176,38 @@ func (r *Postgres) UpdateImageURL(ctx context.Context, id int64, url string) err
 	return nil
 }
 
+// CategoryExists проверяет, что категория с указанным ID существует в справочнике.
+func (r *Postgres) CategoryExists(ctx context.Context, categoryID int64) (bool, error) {
+	const q = `SELECT EXISTS (SELECT 1 FROM categories WHERE id = $1)`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, q, categoryID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check category exists: %w", err)
+	}
+
+	return exists, nil
+}
+
+// HasActiveHardReservation сообщает, есть ли у товара «живая» заявка в статусах
+// мягкой/жёсткой блокировки (IN_PROPOSAL / LOCKED). Такой товар нельзя
+// редактировать, архивировать или менять ему фото.
+func (r *Postgres) HasActiveHardReservation(ctx context.Context, itemID int64) (bool, error) {
+	const q = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM exchange_offers
+			WHERE offered_item_id = $1
+			  AND status IN ('LOCKED', 'IN_PROPOSAL')
+		)
+	`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, q, itemID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check living offer on item: %w", err)
+	}
+	return exists, nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -183,7 +215,7 @@ type rowScanner interface {
 func scanItem(row rowScanner) (*entity.Item, error) {
 	var it entity.Item
 	err := row.Scan(
-		&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.Category, &it.ImageURL,
+		&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.CategoryID, &it.ImageURL,
 		&it.Status, &it.CreatedAt, &it.UpdatedAt,
 	)
 	if err != nil {

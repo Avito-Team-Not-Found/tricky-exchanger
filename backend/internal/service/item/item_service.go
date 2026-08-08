@@ -40,18 +40,14 @@ type UpdateInput struct {
 	Status      *entity.ItemStatus
 }
 
-// Service реализует CRUD-сценарии работы с товарами без привязки к HTTP.
 type Service struct {
-	repo         ItemRepository
-	reservations ReservationChecker
-	embedding    embedding.Client
-	storage      Storage
+	repo      ItemRepository
+	embedding embedding.Client
+	storage   Storage
 }
 
-// NewService создаёт сервис товаров с зависимостями для хранения, проверки
-// hard-резерваций, генерации embeddings и объектного хранилища фото.
-func NewService(repo ItemRepository, reservations ReservationChecker, embeddingClient embedding.Client, storage Storage) *Service {
-	return &Service{repo: repo, reservations: reservations, embedding: embeddingClient, storage: storage}
+func NewService(repo ItemRepository, embeddingClient embedding.Client, storage Storage) *Service {
+	return &Service{repo: repo, embedding: embeddingClient, storage: storage}
 }
 
 // Create создаёт активный товар от имени владельца.
@@ -236,18 +232,13 @@ func (s *Service) getOwned(ctx context.Context, requesterID uuid.UUID, itemID in
 }
 
 func (s *Service) ensureNoHardReservation(ctx context.Context, itemID int64) error {
-	if s.reservations == nil {
-		return nil
-	}
-
-	reserved, err := s.reservations.HasActiveHardReservation(ctx, itemID)
+	reserved, err := s.repo.HasActiveHardReservation(ctx, itemID)
 	if err != nil {
 		return err
 	}
 	if reserved {
 		return entity.ErrItemHasHardReservation
 	}
-
 	return nil
 }
 

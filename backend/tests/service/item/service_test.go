@@ -17,14 +17,14 @@ import (
 
 var ownerID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
 
-func newItemService(repo *fakeRepo, reservations *fakeReservations) (*itemservice.Service, *fakeEmbedding) {
+func newItemService(repo *fakeRepo) (*itemservice.Service, *fakeEmbedding) {
 	embeddings := &fakeEmbedding{vector: []float32{0.1, 0.2}}
-	return itemservice.NewService(repo, reservations, embeddings, &fakeStorage{}), embeddings
+	return itemservice.NewService(repo, embeddings, &fakeStorage{}), embeddings
 }
 
 func TestCreateTrimsAndPersistsActiveItem(t *testing.T) {
 	repo := &fakeRepo{}
-	service, embeddings := newItemService(repo, &fakeReservations{})
+	service, embeddings := newItemService(repo)
 
 	created, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
 		Title:       "  PlayStation 5  ",
@@ -53,7 +53,7 @@ func TestCreateTrimsAndPersistsActiveItem(t *testing.T) {
 
 func TestCreateRejectsEmptyTitle(t *testing.T) {
 	repo := &fakeRepo{}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{Title: "   "})
 	if !errors.Is(err, entity.ErrTitleRequired) {
@@ -64,9 +64,23 @@ func TestCreateRejectsEmptyTitle(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsUnknownCategory(t *testing.T) {
+	repo := &fakeRepo{categoryExists: false}
+	service, _ := newItemService(repo)
+
+	categoryID := int64(999)
+	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
+		Title:      "Item",
+		CategoryID: &categoryID,
+	})
+	if !errors.Is(err, entity.ErrCategoryNotFound) {
+		t.Fatalf("Create() error = %v, want ErrCategoryNotFound", err)
+	}
+}
+
 func TestGetReturnsNotFoundForOtherOwner(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: uuid.New()}}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	_, err := service.Get(context.Background(), ownerID, 1)
 	if !errors.Is(err, entity.ErrItemForbidden) {
@@ -76,7 +90,7 @@ func TestGetReturnsNotFoundForOtherOwner(t *testing.T) {
 
 func TestGetReturnsNotFoundWhenMissing(t *testing.T) {
 	repo := &fakeRepo{getErr: repository.ErrNotFound}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	_, err := service.Get(context.Background(), ownerID, 1)
 	if !errors.Is(err, entity.ErrItemNotFound) {
@@ -86,7 +100,7 @@ func TestGetReturnsNotFoundWhenMissing(t *testing.T) {
 
 func TestListNormalizesPagination(t *testing.T) {
 	repo := &fakeRepo{}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	if _, _, err := service.List(context.Background(), ownerID, 0, 0); err != nil {
 		t.Fatalf("List() error = %v", err)
@@ -105,7 +119,7 @@ func TestListNormalizesPagination(t *testing.T) {
 
 func TestUpdateRejectsArchivedItem(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	title := "new title"
 	_, err := service.Update(context.Background(), ownerID, 1, itemservice.UpdateInput{Title: &title})
@@ -115,8 +129,11 @@ func TestUpdateRejectsArchivedItem(t *testing.T) {
 }
 
 func TestUpdateRejectsHardReservation(t *testing.T) {
-	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service, _ := newItemService(repo, &fakeReservations{reserved: true})
+	repo := &fakeRepo{
+		item:           &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive},
+		hasReservation: true,
+	}
+	service, _ := newItemService(repo)
 
 	title := "new title"
 	_, err := service.Update(context.Background(), ownerID, 1, itemservice.UpdateInput{Title: &title})
@@ -133,7 +150,7 @@ func TestUpdateTextRegeneratesEmbedding(t *testing.T) {
 		Description: "Старая",
 		Status:      entity.ItemStatusActive,
 	}}
-	service, embeddings := newItemService(repo, &fakeReservations{})
+	service, embeddings := newItemService(repo)
 
 	title := "Белая кружка"
 	description := "Керамическая, 350 мл"
@@ -154,7 +171,7 @@ func TestUpdateTextRegeneratesEmbedding(t *testing.T) {
 
 func TestArchiveRejectsAlreadyArchivedItem(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	if err := service.Archive(context.Background(), ownerID, 1); !errors.Is(err, entity.ErrItemArchived) {
 		t.Fatalf("Archive() error = %v, want ErrItemArchived", err)
@@ -163,7 +180,7 @@ func TestArchiveRejectsAlreadyArchivedItem(t *testing.T) {
 
 func TestArchiveUpdatesStatus(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	if err := service.Archive(context.Background(), ownerID, 1); err != nil {
 		t.Fatalf("Archive() error = %v", err)
@@ -175,7 +192,7 @@ func TestArchiveUpdatesStatus(t *testing.T) {
 
 func TestUploadImageRejectsUnsupportedContentType(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "application/pdf")
 	if !errors.Is(err, entity.ErrInvalidImageType) {
@@ -185,7 +202,7 @@ func TestUploadImageRejectsUnsupportedContentType(t *testing.T) {
 
 func TestUploadImageRejectsOversizedFile(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 6<<20, "image/jpeg")
 	if !errors.Is(err, entity.ErrImageTooLarge) {
@@ -195,7 +212,7 @@ func TestUploadImageRejectsOversizedFile(t *testing.T) {
 
 func TestUploadImageRejectsArchivedItem(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "image/jpeg")
 	if !errors.Is(err, entity.ErrItemArchived) {
@@ -205,7 +222,7 @@ func TestUploadImageRejectsArchivedItem(t *testing.T) {
 
 func TestUploadImageSavesURLAndReturnsUpdatedItem(t *testing.T) {
 	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
-	service, _ := newItemService(repo, &fakeReservations{})
+	service, _ := newItemService(repo)
 
 	updated, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "image/png")
 	if err != nil {
@@ -220,13 +237,15 @@ func TestUploadImageSavesURLAndReturnsUpdatedItem(t *testing.T) {
 }
 
 type fakeRepo struct {
-	item         *entity.Item
-	getErr       error
-	created      *entity.Item
-	listPage     int
-	listPageSize int
-	statusSet    entity.ItemStatus
-	imageURLSet  string
+	item           *entity.Item
+	getErr         error
+	created        *entity.Item
+	categoryExists bool
+	listPage       int
+	listPageSize   int
+	statusSet      entity.ItemStatus
+	imageURLSet    string
+	hasReservation bool
 }
 
 func (r *fakeRepo) Create(_ context.Context, item *entity.Item) error {
@@ -263,6 +282,10 @@ func (r *fakeRepo) UpdateStatus(_ context.Context, _ int64, status entity.ItemSt
 	return nil
 }
 
+func (r *fakeRepo) CategoryExists(_ context.Context, _ int64) (bool, error) {
+	return r.categoryExists, nil
+}
+
 func (r *fakeRepo) UpdateImageURL(_ context.Context, _ int64, url string) error {
 	if r.item == nil {
 		return repository.ErrNotFound
@@ -271,12 +294,8 @@ func (r *fakeRepo) UpdateImageURL(_ context.Context, _ int64, url string) error 
 	return nil
 }
 
-type fakeReservations struct {
-	reserved bool
-}
-
-func (f *fakeReservations) HasActiveHardReservation(_ context.Context, _ int64) (bool, error) {
-	return f.reserved, nil
+func (r *fakeRepo) HasActiveHardReservation(_ context.Context, _ int64) (bool, error) {
+	return r.hasReservation, nil
 }
 
 type fakeEmbedding struct {

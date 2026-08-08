@@ -455,7 +455,7 @@ func (r *Postgres) Propose(
 		return entity.ErrChainNotCandidate
 	}
 
-		if _, err := tx.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		UPDATE exchange_offers
 		SET status = 'IN_PROPOSAL', updated_at = NOW()
 		WHERE id = ANY($1::bigint[])

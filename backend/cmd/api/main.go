@@ -23,7 +23,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/codestore"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/reservation"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/storage"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
 	chainRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/chain"
@@ -38,6 +37,8 @@ import (
 	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
+
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 func main() {
@@ -100,11 +101,10 @@ func main() {
 	transactionManager := database.NewTransactionManager(pool)
 	chainRepository := chainRepo.NewRepository(pool)
 
-	ranker := matching.NewChainScoreCalculator(matching.NewRankerConfig())
+	scoreRanker := ranker.NewChainScoreCalculator(ranker.NewRankerConfig())
 	chainSvc := chainservice.NewService(chainRepository, transactionManager)
-	chainSvc = chainSvc.WithScorer(chainScorerAdapter{ranker: ranker})
-	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).WithRanker(ranker)
-
+	chainSvc = chainSvc.WithScorer(scoreRanker)
+	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).WithRanker(scoreRanker)
 	// Выбор embed-провайдера конфигом: tei | stub.
 	var embedClient embedding.Client
 	switch cfg.EmbeddingProvider {
@@ -137,7 +137,7 @@ func main() {
 	}
 
 	itemRepository := itemRepo.NewRepository(pool)
-	itemSvc := itemService.NewService(itemRepository, reservation.NewLivingOfferChecker(pool), embedClient, imageStorage)
+	itemSvc := itemService.NewService(itemRepository, embedClient, imageStorage)
 	itemH := itemHandler.NewHandler(itemSvc)
 	chainH := chainHandler.NewHandler(chainSvc)
 
@@ -178,24 +178,4 @@ func main() {
 	}
 
 	logger.Info("exited cleanly")
-}
-
-// chainScorerAdapter приводит chain.ScoreRefresher к matching.Ranker.
-type chainScorerAdapter struct {
-	ranker *matching.ChainScoreCalculator
-}
-
-func (a chainScorerAdapter) Score(s chainservice.ChainScoreState) (float64, error) {
-	state := matching.ChainState{
-		Count:                   s.Count,
-		Stage:                   matching.ChainStateStatus(s.Stage),
-		EdgeCosines:             s.EdgeCosines,
-		ParticipantReliability:  s.Reliability,
-		ParticipantClusterSizes: s.ClusterSizes,
-		ApprovedVotes:           s.ApprovedVotes,
-	}
-	if s.Event == chainservice.ScoreEventDecline {
-		return a.ranker.ScoreForDecline(state)
-	}
-	return a.ranker.ScoreForRespond(state)
 }

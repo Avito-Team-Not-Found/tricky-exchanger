@@ -1,4 +1,4 @@
-package matching
+package ranker
 
 import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
