@@ -88,8 +88,8 @@ func main() {
 	clusterSvc := clusterservice.NewService(
 		clusterRepository,
 		candidateSearch,
-		cfg.MatchingTopK,
-		cfg.MatchingThreshold,
+		cfg.ClusterTopK,
+		cfg.ClusterThreshold,
 	)
 	cycleFinder := matching.NewCycleFinder(
 		candidateSearch,
@@ -100,7 +100,8 @@ func main() {
 	transactionManager := database.NewTransactionManager(pool)
 	chainRepository := chainRepo.NewRepository(pool)
 	chainSvc := chainservice.NewService(chainRepository, transactionManager)
-	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc)
+	ranker := matching.NewChainScoreCalculator(matching.NewRankerConfig())
+	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).WithRanker(ranker)
 
 	// Выбор embed-провайдера конфигом: tei | stub.
 	var embedClient embedding.Client
