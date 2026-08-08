@@ -27,6 +27,8 @@ var (
 	ErrChainNotFound                = errors.New("цепочка не найдена")
 	ErrChainRepositoryNotConfigured = errors.New("репозиторий цепочек не настроен")
 	ErrInvalidChainDraft            = errors.New("некорректный черновик цепочки")
+	ErrInvalidChainState            = errors.New("invalid chain state: Count must be >= 2 and ApprovedVotes must be in [0, Count]")
+	ErrScoreNotConfigured           = errors.New("ranker не подключён: вызовите MatchingFacade.WithRanker(...)")
 
 	ErrInvalidVoteTarget  = errors.New("target request must belong to the next chain position")
 	ErrChainVoteForbidden = errors.New("the source request does not belong to the current user")

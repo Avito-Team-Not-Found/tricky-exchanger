@@ -98,7 +98,8 @@ func TestCycleFinderReturnsEmptyWhenCycleIsMissing(t *testing.T) {
 	}
 }
 
-func TestCycleFinderKeepsOnlyBestDrafts(t *testing.T) {
+// он возвращает ВСЕ уникальные цепочки. Здесь два разных цикла: через 102 и через 103.
+func TestCycleFinderReturnsAllUniqueDrafts(t *testing.T) {
 	loader := &fakeFrontierLoader{
 		outgoing: map[int64][]entity.CandidateEdge{
 			1: {
@@ -111,14 +112,24 @@ func TestCycleFinderKeepsOnlyBestDrafts(t *testing.T) {
 			edge(3, 103, 1, 101, 0.9),
 		},
 	}
-	finder := matching.NewCycleFinder(loader, 20, 1, 0.5)
+	finder := matching.NewCycleFinder(loader, 20, 10, 0.5)
 
 	drafts, err := finder.Find(context.Background(), nil, 1)
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
-	if len(drafts) != 1 || drafts[0].Participants[1].ClusterID != 103 {
-		t.Fatalf("drafts = %#v, want best cycle through cluster 103", drafts)
+	if len(drafts) != 2 {
+		t.Fatalf("draft count = %d, want all 2 unique cycles", len(drafts))
+	}
+	secondClusters := make(map[int64]bool)
+	for _, draft := range drafts {
+		if len(draft.Participants) != 2 {
+			t.Fatalf("cycle = %#v, want 2 participants", draft.Participants)
+		}
+		secondClusters[draft.Participants[1].ClusterID] = true
+	}
+	if !secondClusters[102] || !secondClusters[103] {
+		t.Fatalf("cycles through clusters = %v, want both 102 and 103", secondClusters)
 	}
 }
 

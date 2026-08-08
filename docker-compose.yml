@@ -91,6 +91,7 @@ services:
       MATCHING_THRESHOLD: ${MATCHING_THRESHOLD:-0.5}
       VECTOR_METRIC: ${VECTOR_METRIC:-cosine}
       MINIO_ENDPOINT: minio:9000
+      MINIO_PUBLIC_ENDPOINT: localhost:${MINIO_PORT:-9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-tricky_minio}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-tricky_minio_secret}
       MINIO_BUCKET: ${MINIO_BUCKET:-items}
@@ -105,7 +106,11 @@ services:
     restart: on-failure
 
   tei:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    # На x86_64 используется официальный тег cpu-1.9. На Apple Silicon (arm64) его нет
+    # (нет multi-arch манифеста и версионного arm64-тега — см. issue #900 в репозитории
+    # huggingface/text-embeddings-inference), поэтому там нужно переопределить в своём
+    # .env: TEI_IMAGE=ghcr.io/huggingface/text-embeddings-inference:cpu-arm64-latest
+    image: ${TEI_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:cpu-1.9}
     container_name: tricky-exchanger-tei
     command: ["--model-id", "intfloat/multilingual-e5-small", "--huggingface-hub-cache", "/data"]
     volumes:
