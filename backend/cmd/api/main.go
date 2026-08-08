@@ -137,7 +137,7 @@ func main() {
 	}
 
 	itemRepository := itemRepo.NewRepository(pool)
-	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker(), embedClient, imageStorage)
+	itemSvc := itemService.NewService(itemRepository, reservation.NewLivingOfferChecker(pool), embedClient, imageStorage)
 	itemH := itemHandler.NewHandler(itemSvc)
 	chainH := chainHandler.NewHandler(chainSvc)
 
