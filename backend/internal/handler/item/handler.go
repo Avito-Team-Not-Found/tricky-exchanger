@@ -40,14 +40,15 @@ type updateItemRequest struct {
 }
 
 type itemResponse struct {
-	ID          int64  `json:"id"`
-	OwnerUserID string `json:"ownerUserId"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	CategoryID  *int64 `json:"categoryId"`
-	Status      string `json:"status"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          int64   `json:"id"`
+	OwnerUserID string  `json:"ownerUserId"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	CategoryID  *int64  `json:"categoryId"`
+	ImageURL    *string `json:"imageUrl"`
+	Status      string  `json:"status"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
 }
 
 type listItemsResponse struct {
@@ -187,6 +188,52 @@ func (h *Handler) Archive(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// UploadImage принимает multipart-форму с полем "image" и сохраняет фото товара
+// в объектном хранилище. Допустимые типы: jpeg/png/webp, максимальный размер — 5 МиБ.
+func (h *Handler) UploadImage(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	itemID, ok := pathID(c)
+	if !ok {
+		return
+	}
+
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		api.SendError(c, http.StatusUnprocessableEntity, "image file is required")
+		return
+	}
+
+	if fileHeader.Size > maxImageUploadSize {
+		api.SendError(c, http.StatusUnprocessableEntity, entity.ErrImageTooLarge.Error())
+		return
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		api.SendError(c, http.StatusUnprocessableEntity, "unable to read image file")
+		return
+	}
+	defer file.Close()
+
+	contentType := fileHeader.Header.Get("Content-Type")
+
+	updated, err := h.service.UploadImage(c.Request.Context(), userID, itemID, file, fileHeader.Size, contentType)
+	if err != nil {
+		writeItemError(c, err)
+		return
+	}
+
+	api.SendOk(c, http.StatusOK, newItemResponse(updated))
+}
+
+// maxImageUploadSize — тот же лимит, что и в service/item, продублирован здесь,
+// чтобы отклонять слишком большие файлы ещё до чтения их в память.
+const maxImageUploadSize = 5 << 20
+
 func writeItemError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, entity.ErrItemNotFound), errors.Is(err, entity.ErrItemForbidden):
@@ -200,7 +247,9 @@ func writeItemError(c *gin.Context, err error) {
 		errors.Is(err, entity.ErrTitleTooLong),
 		errors.Is(err, entity.ErrDescriptionTooLong),
 		errors.Is(err, entity.ErrInvalidItemStatus),
-		errors.Is(err, entity.ErrCategoryNotFound):
+		errors.Is(err, entity.ErrCategoryNotFound),
+		errors.Is(err, entity.ErrInvalidImageType),
+		errors.Is(err, entity.ErrImageTooLarge):
 		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 	default:
 		api.SendError(c, http.StatusInternalServerError, "internal server error")
@@ -214,6 +263,7 @@ func newItemResponse(item *entity.Item) itemResponse {
 		Title:       item.Title,
 		Description: item.Description,
 		CategoryID:  item.CategoryID,
+		ImageURL:    item.ImageURL,
 		Status:      string(item.Status),
 		CreatedAt:   item.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:   item.UpdatedAt.UTC().Format(time.RFC3339),
