@@ -21,6 +21,6 @@ type ExchangeOfferRepository interface {
 // Интерфейс объявлен у потребителя, чтобы реализация matching не навязывала
 // свой контракт остальному приложению.
 type MatchingFacade interface {
-	RebuildForRequest(ctx context.Context, tx database.Tx, requestID int64) error
+	RebuildForRequest(ctx context.Context, tx database.Tx, requestID int64) ([]entity.ChainDraft, error)
 	RemoveRequest(ctx context.Context, tx database.Tx, requestID int64) error
 }
