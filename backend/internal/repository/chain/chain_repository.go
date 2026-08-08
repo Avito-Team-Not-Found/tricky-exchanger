@@ -40,9 +40,18 @@ const loadVisibleChainsQuery = `
 		LIMIT 1
 	) AS viewer ON true
 	WHERE c.status IN ('CANDIDATE', 'PROPOSED', 'FROZEN', 'IN_PROGRESS')
-	  AND ($2::bigint = 0 OR c.id = $2)
-	  AND ($3::bigint = 0 OR viewer.request_id = $3)
-	  AND ($2::bigint <> 0 OR c.status <> 'FROZEN')
+		AND ($2::bigint = 0 OR c.id = $2)
+		AND ($3::bigint = 0 OR viewer.request_id = $3)
+		AND ($2::bigint <> 0 OR c.status <> 'FROZEN')
+		AND NOT EXISTS (
+		SELECT 1
+		FROM cluster_members AS veto
+		JOIN votes AS vv
+			ON vv.chain_id = c.id
+			AND vv.request_id = veto.request_id
+		WHERE veto.cluster_id = viewer.cluster_id
+			AND vv.vote = 'approved'
+		)
 	ORDER BY c.created_at DESC, c.id DESC
 `
 
@@ -135,24 +144,60 @@ func saveCandidate(ctx context.Context, tx database.Tx, draft entity.ChainDraft)
 		return fmt.Errorf("insert candidate chain: %w", err)
 	}
 
-	query, arguments := participantsInsert(chainID, draft.Participants)
+	query, arguments := participantsInsert(chainID, draft)
 	if _, err := tx.Exec(ctx, query, arguments...); err != nil {
 		return fmt.Errorf("insert chain participants: %w", err)
 	}
 	return nil
 }
 
-func participantsInsert(chainID int64, participants []entity.ChainDraftParticipant) (string, []any) {
+func participantsInsert(chainID int64, draft entity.ChainDraft) (string, []any) {
+	participants := draft.Participants
 	values := make([]string, 0, len(participants))
-	arguments := make([]any, 0, len(participants)*4)
+	arguments := make([]any, 0, len(participants)*7)
 	for position, participant := range participants {
-		base := position*4 + 1
-		values = append(values, fmt.Sprintf("($%d, $%d, $%d, $%d)", base, base+1, base+2, base+3))
-		arguments = append(arguments, chainID, participant.ClusterID, participant.RequestID, position)
+		base := position*7 + 1
+		values = append(values, fmt.Sprintf(
+			"($%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			base, base+1, base+2, base+3, base+4, base+5, base+6,
+		))
+		arguments = append(arguments,
+			chainID,
+			participant.ClusterID,
+			participant.RequestID,
+			position,
+			edgeCosineAt(draft, position),
+			reliabilityAt(draft, position),
+			clusterSizeAt(draft, position),
+		)
 	}
 	return `
-		INSERT INTO chain_participants (chain_id, cluster_id, request_id, position)
+		INSERT INTO chain_participants (
+			chain_id, cluster_id, request_id, position,
+			edge_cosine, reliability, cluster_size
+		)
 		VALUES ` + strings.Join(values, ", "), arguments
+}
+
+func edgeCosineAt(draft entity.ChainDraft, position int) float64 {
+	if position < len(draft.EdgeCosines) {
+		return draft.EdgeCosines[position]
+	}
+	return 0
+}
+
+func reliabilityAt(draft entity.ChainDraft, position int) float64 {
+	if position < len(draft.ParticipantReliability) {
+		return draft.ParticipantReliability[position]
+	}
+	return 0.75
+}
+
+func clusterSizeAt(draft entity.ChainDraft, position int) int {
+	if position < len(draft.ClusterSizes) {
+		return draft.ClusterSizes[position]
+	}
+	return 1
 }
 
 func chainSignature(clusterIDs []int64) string {
@@ -372,8 +417,8 @@ func (r *Postgres) ListPendingVoteEdges(
 	return edges, nil
 }
 
-// Propose pins the concrete requests selected by DFS and changes the status
-// only while the locked chain is still a candidate.
+// Propose pins the concrete requests selected by DFS, locks them into
+// IN_PROPOSAL, and resets votes to pending while the chain is a candidate.
 func (r *Postgres) Propose(
 	ctx context.Context,
 	tx database.Tx,
@@ -409,6 +454,25 @@ func (r *Postgres) Propose(
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotCandidate
 	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers
+		SET status = 'IN_PROPOSAL', updated_at = NOW()
+		WHERE id = ANY($1::bigint[])
+		  AND status IN ('ACTIVE', 'IN_PROPOSAL')
+	`, requestIDsByPosition); err != nil {
+		return fmt.Errorf("lock proposed requests: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE votes
+		SET vote = 'pending', voted_at = NOW()
+		WHERE chain_id = $1
+		  AND vote <> 'pending'
+	`, chainID); err != nil {
+		return fmt.Errorf("reset votes to pending: %w", err)
+	}
+
 	return nil
 }
 
@@ -539,6 +603,95 @@ func (r *Postgres) loadViewerVotes(ctx context.Context, chains []entity.Chain) e
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate viewer votes: %w", err)
+	}
+	return nil
+}
+
+// MarkRequestInProposal переводит откликнувшуюся заявку в мягкую блокировку.
+func (r *Postgres) MarkRequestInProposal(ctx context.Context, tx database.Tx, requestID int64) error {
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers
+		SET status = 'IN_PROPOSAL', updated_at = NOW()
+		WHERE id = $1 AND status IN ('ACTIVE', 'IN_PROPOSAL')
+	`, requestID); err != nil {
+		return fmt.Errorf("mark request in proposal: %w", err)
+	}
+	return nil
+}
+
+// RestoreActiveIfNoPendingVotes возвращает заявку в ACTIVE, когда у неё не
+// осталось других pending-голосов как откликнувшейся.
+func (r *Postgres) RestoreActiveIfNoPendingVotes(ctx context.Context, tx database.Tx, requestID int64) error {
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers AS eo
+		SET status = 'ACTIVE', updated_at = NOW()
+		WHERE eo.id = $1
+		  AND eo.status = 'IN_PROPOSAL'
+		  AND NOT EXISTS (
+			SELECT 1 FROM votes AS v
+			WHERE v.request_id = eo.id AND v.vote = 'pending'
+		  )
+	`, requestID); err != nil {
+		return fmt.Errorf("restore request active: %w", err)
+	}
+	return nil
+}
+
+// LoadScoreFeatures возвращает сырые фичи score по позициям цепочки.
+func (r *Postgres) LoadScoreFeatures(
+	ctx context.Context, tx database.Tx, chainID int64,
+) ([]float64, []float64, []int, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT COALESCE(edge_cosine, 0), COALESCE(reliability, 0), COALESCE(cluster_size, 1)
+		FROM chain_participants
+		WHERE chain_id = $1
+		ORDER BY position
+	`, chainID)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("load score features: %w", err)
+	}
+	defer rows.Close()
+
+	var cosines []float64
+	var reliability []float64
+	var sizes []int
+	for rows.Next() {
+		var c, rel float64
+		var size int
+		if err := rows.Scan(&c, &rel, &size); err != nil {
+			return nil, nil, nil, fmt.Errorf("scan score feature: %w", err)
+		}
+		cosines = append(cosines, c)
+		reliability = append(reliability, rel)
+		sizes = append(sizes, size)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, fmt.Errorf("iterate score features: %w", err)
+	}
+	return cosines, reliability, sizes, nil
+}
+
+// CountPendingVoters возвращает число откликнувшихся участников цепочки.
+func (r *Postgres) CountPendingVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error) {
+	var count int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT request_id)
+		FROM votes
+		WHERE chain_id = $1 AND vote = 'pending'
+	`, chainID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count pending voters: %w", err)
+	}
+	return count, nil
+}
+
+// UpdateScore актуализирует score цепочки, сохраняя оптимистичную блокировку.
+func (r *Postgres) UpdateScore(ctx context.Context, tx database.Tx, chainID int64, score float64) error {
+	if _, err := tx.Exec(ctx, `
+		UPDATE chains
+		SET score = $2, version = version + 1, updated_at = NOW()
+		WHERE id = $1
+	`, chainID, score); err != nil {
+		return fmt.Errorf("update chain score: %w", err)
 	}
 	return nil
 }

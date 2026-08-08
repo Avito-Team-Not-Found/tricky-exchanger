@@ -6,6 +6,8 @@ import (
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 const (
@@ -17,11 +19,25 @@ const (
 type Service struct {
 	repository   Repository
 	transactions database.TransactionManager
+	scorer       ranker.Ranker
+	notifier     Notifier
 }
 
 // NewService создаёт сервис цепочек.
 func NewService(repository Repository, transactions database.TransactionManager) *Service {
 	return &Service{repository: repository, transactions: transactions}
+}
+
+// WithScorer подключает пересчёт score при откликах/отзывах.
+func (s *Service) WithScorer(scorer ranker.Ranker) *Service {
+	s.scorer = scorer
+	return s
+}
+
+// WithNotifier подключает отправку уведомлений о событиях цепочки.
+func (s *Service) WithNotifier(notifier Notifier) *Service {
+	s.notifier = notifier
+	return s
 }
 
 // VoteInput identifies one directed response inside a candidate chain.
@@ -126,6 +142,10 @@ func (s *Service) Vote(ctx context.Context, userID string, chainID int64, input 
 			return err
 		}
 		result.VotedAt = votedAt
+
+		if err := s.repository.MarkRequestInProposal(ctx, tx, input.RequestID); err != nil {
+			return err
+		}
 		result.ChainStatus = status
 
 		edges, err := s.repository.ListPendingVoteEdges(ctx, tx, chainID)
@@ -134,16 +154,21 @@ func (s *Service) Vote(ctx context.Context, userID string, chainID int64, input 
 		}
 		cycle := findPendingCycle(length, edges)
 		if len(cycle) == 0 {
-			return nil
+			return s.refreshScore(ctx, tx, chainID, entity.ChainStatusCandidate, ranker.EventRespond)
 		}
 		if err := s.repository.Propose(ctx, tx, chainID, cycle); err != nil {
 			return err
 		}
 		result.ChainStatus = entity.ChainStatusProposed
-		return nil
+		return s.refreshScore(ctx, tx, chainID, entity.ChainStatusCandidate, ranker.EventRespond)
 	})
 	if err != nil {
 		return entity.ChainVote{}, err
+	}
+	if result.ChainStatus == entity.ChainStatusProposed && s.notifier != nil {
+		if chain, loadErr := s.repository.Get(ctx, userID, chainID); loadErr == nil {
+			_ = s.notifier.NotifyChainProposed(ctx, chainID, chain.Participants)
+		}
 	}
 	return result, nil
 }
@@ -171,7 +196,13 @@ func (s *Service) WithdrawVote(ctx context.Context, userID string, chainID int64
 		); err != nil {
 			return err
 		}
-		return s.repository.DeletePendingVote(ctx, tx, chainID, input.RequestID, input.TargetRequestID)
+		if err := s.repository.DeletePendingVote(ctx, tx, chainID, input.RequestID, input.TargetRequestID); err != nil {
+			return err
+		}
+		if err := s.repository.RestoreActiveIfNoPendingVotes(ctx, tx, input.RequestID); err != nil {
+			return err
+		}
+		return s.refreshScore(ctx, tx, chainID, entity.ChainStatusCandidate, ranker.EventDecline)
 	})
 }
 
@@ -265,5 +296,77 @@ func normalizeDraft(draft entity.ChainDraft) (entity.ChainDraft, error) {
 	participants := make([]entity.ChainDraftParticipant, 0, length)
 	participants = append(participants, draft.Participants[minimumPosition:]...)
 	participants = append(participants, draft.Participants[:minimumPosition]...)
-	return entity.ChainDraft{Participants: participants, Score: draft.Score}, nil
+	return entity.ChainDraft{
+		Participants:           participants,
+		Score:                  draft.Score,
+		ClusterSizes:           rotRightInt(draft.ClusterSizes, minimumPosition),
+		EdgeCosines:            rotRightFloat(draft.EdgeCosines, minimumPosition),
+		ParticipantReliability: rotRightFloat(draft.ParticipantReliability, minimumPosition),
+	}, nil
+}
+
+func (s *Service) refreshScore(ctx context.Context, tx database.Tx, chainID int64, stage entity.ChainStatus, event ranker.StateEvent) error {
+	if s.scorer == nil {
+		return nil
+	}
+	cosines, reliability, sizes, err := s.repository.LoadScoreFeatures(ctx, tx, chainID)
+	if err != nil {
+		return err
+	}
+	approved, err := s.repository.CountPendingVoters(ctx, tx, chainID)
+	if err != nil {
+		return err
+	}
+	score, err := s.scorer.Score(ranker.ChainState{
+		Count:                   len(cosines),
+		Stage:                   scoreStage(stage),
+		Event:                   event,
+		EdgeCosines:             cosines,
+		ParticipantReliability:  reliability,
+		ParticipantClusterSizes: sizes,
+		ApprovedVotes:           approved,
+	})
+	if err != nil {
+		return err
+	}
+	return s.repository.UpdateScore(ctx, tx, chainID, score)
+}
+
+func rotRightInt(values []int, n int) []int {
+	if len(values) == 0 {
+		return values
+	}
+	n = n % len(values)
+	rotated := make([]int, 0, len(values))
+	rotated = append(rotated, values[n:]...)
+	rotated = append(rotated, values[:n]...)
+	return rotated
+}
+
+func rotRightFloat(values []float64, n int) []float64 {
+	if len(values) == 0 {
+		return values
+	}
+	n = n % len(values)
+	rotated := make([]float64, 0, len(values))
+	rotated = append(rotated, values[n:]...)
+	rotated = append(rotated, values[:n]...)
+	return rotated
+}
+
+func scoreStage(status entity.ChainStatus) ranker.ChainStateStatus {
+	switch status {
+	case entity.ChainStatusProposed:
+		return ranker.ChainStateProposed
+	case entity.ChainStatusFrozen:
+		return ranker.ChainStateFrozen
+	case entity.ChainStatusInProgress:
+		return ranker.ChainStateInProgress
+	case entity.ChainStatusCompleted:
+		return ranker.ChainStateCompleted
+	case entity.ChainStatusBroken:
+		return ranker.ChainStateBroken
+	default:
+		return ranker.ChainStateCandidate
+	}
 }

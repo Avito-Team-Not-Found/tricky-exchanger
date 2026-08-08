@@ -8,13 +8,14 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 func TestFacadeSynchronizesAndRemovesClusterMembership(t *testing.T) {
 	clusters := &fakeClusters{}
 	cycles := &fakeCycles{clusters: clusters}
 	chains := &fakeChains{cycles: cycles}
-	ranker := matching.NewChainScoreCalculator(matching.NewRankerConfig())
+	ranker := ranker.NewChainScoreCalculator(ranker.NewRankerConfig())
 	facade := matching.NewFacade(clusters, cycles, chains).WithRanker(ranker)
 
 	drafts, err := facade.RebuildForRequest(context.Background(), nil, 11)

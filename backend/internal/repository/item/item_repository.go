@@ -50,7 +50,7 @@ func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 // проверку прав доступа выполняет вызывающий слой (service).
 func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) {
 	const q = `
-		SELECT id, owner_user_id, title, description, COALESCE(category, ''), image_url, status, created_at, updated_at
+		SELECT id, owner_user_id, title, description, category, image_url, status, created_at, updated_at
 		FROM items
 		WHERE id = $1
 	`
@@ -70,7 +70,7 @@ func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) 
 // и общее количество товаров, отсортированные по дате создания (новые сверху).
 func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pageSize int) ([]*entity.Item, int, error) {
 	const q = `
-		SELECT id, owner_user_id, title, description, COALESCE(category, ''), image_url, status, created_at, updated_at,
+		SELECT id, owner_user_id, title, description, category, image_url, status, created_at, updated_at,
 		       count(*) OVER() AS total
 		FROM items
 		WHERE owner_user_id = $1
@@ -174,6 +174,38 @@ func (r *Postgres) UpdateImageURL(ctx context.Context, id int64, url string) err
 	}
 
 	return nil
+}
+
+// CategoryExists проверяет, что категория с указанным ID существует в справочнике.
+func (r *Postgres) CategoryExists(ctx context.Context, categoryID int64) (bool, error) {
+	const q = `SELECT EXISTS (SELECT 1 FROM categories WHERE id = $1)`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, q, categoryID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check category exists: %w", err)
+	}
+
+	return exists, nil
+}
+
+// HasActiveHardReservation сообщает, есть ли у товара «живая» заявка в статусах
+// мягкой/жёсткой блокировки (IN_PROPOSAL / LOCKED). Такой товар нельзя
+// редактировать, архивировать или менять ему фото.
+func (r *Postgres) HasActiveHardReservation(ctx context.Context, itemID int64) (bool, error) {
+	const q = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM exchange_offers
+			WHERE offered_item_id = $1
+			  AND status IN ('LOCKED', 'IN_PROPOSAL')
+		)
+	`
+
+	var exists bool
+	if err := r.pool.QueryRow(ctx, q, itemID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check living offer on item: %w", err)
+	}
+	return exists, nil
 }
 
 type rowScanner interface {
