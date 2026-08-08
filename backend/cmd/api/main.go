@@ -24,6 +24,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/reservation"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/storage"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
 	chainRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/chain"
 	clusterRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/cluster"
@@ -87,8 +88,8 @@ func main() {
 	clusterSvc := clusterservice.NewService(
 		clusterRepository,
 		candidateSearch,
-		cfg.ClusterTopK,
-		cfg.ClusterThreshold,
+		cfg.MatchingTopK,
+		cfg.MatchingThreshold,
 	)
 	cycleFinder := matching.NewCycleFinder(
 		candidateSearch,
@@ -120,8 +121,19 @@ func main() {
 	)
 	exchangeOfferH := exchangeOfferHandler.NewHandler(exchangeOfferSvc)
 
+	imageStorage, err := storage.New(ctx, storage.Config{
+		Endpoint:  cfg.MinIOEndpoint,
+		AccessKey: cfg.MinIOAccessKey,
+		SecretKey: cfg.MinIOSecretKey,
+		Bucket:    cfg.MinIOBucket,
+		UseSSL:    cfg.MinIOUseSSL,
+	})
+	if err != nil {
+		logger.Fatalf("minio storage init error: %v", err)
+	}
+
 	itemRepository := itemRepo.NewRepository(pool)
-	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker(), embedClient)
+	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker(), embedClient, imageStorage)
 	itemH := itemHandler.NewHandler(itemSvc)
 	chainH := chainHandler.NewHandler(chainSvc)
 

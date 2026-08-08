@@ -3,6 +3,8 @@ package item_test
 import (
 	"context"
 	"errors"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +19,7 @@ var ownerID = uuid.MustParse("11111111-1111-1111-1111-111111111111")
 
 func newItemService(repo *fakeRepo, reservations *fakeReservations) (*itemservice.Service, *fakeEmbedding) {
 	embeddings := &fakeEmbedding{vector: []float32{0.1, 0.2}}
-	return itemservice.NewService(repo, reservations, embeddings), embeddings
+	return itemservice.NewService(repo, reservations, embeddings, &fakeStorage{}), embeddings
 }
 
 func TestCreateTrimsAndPersistsActiveItem(t *testing.T) {
@@ -185,6 +187,52 @@ func TestArchiveUpdatesStatus(t *testing.T) {
 	}
 }
 
+func TestUploadImageRejectsUnsupportedContentType(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
+	service, _ := newItemService(repo, &fakeReservations{})
+
+	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "application/pdf")
+	if !errors.Is(err, entity.ErrInvalidImageType) {
+		t.Fatalf("UploadImage() error = %v, want ErrInvalidImageType", err)
+	}
+}
+
+func TestUploadImageRejectsOversizedFile(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
+	service, _ := newItemService(repo, &fakeReservations{})
+
+	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 6<<20, "image/jpeg")
+	if !errors.Is(err, entity.ErrImageTooLarge) {
+		t.Fatalf("UploadImage() error = %v, want ErrImageTooLarge", err)
+	}
+}
+
+func TestUploadImageRejectsArchivedItem(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusArchived}}
+	service, _ := newItemService(repo, &fakeReservations{})
+
+	_, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "image/jpeg")
+	if !errors.Is(err, entity.ErrItemArchived) {
+		t.Fatalf("UploadImage() error = %v, want ErrItemArchived", err)
+	}
+}
+
+func TestUploadImageSavesURLAndReturnsUpdatedItem(t *testing.T) {
+	repo := &fakeRepo{item: &entity.Item{ID: 1, OwnerUserID: ownerID, Status: entity.ItemStatusActive}}
+	service, _ := newItemService(repo, &fakeReservations{})
+
+	updated, err := service.UploadImage(context.Background(), ownerID, 1, strings.NewReader("data"), 4, "image/png")
+	if err != nil {
+		t.Fatalf("UploadImage() error = %v", err)
+	}
+	if updated.ImageURL == nil || *updated.ImageURL == "" {
+		t.Fatalf("UploadImage() did not set ImageURL: %#v", updated)
+	}
+	if repo.imageURLSet != *updated.ImageURL {
+		t.Fatalf("repository.UpdateImageURL called with %q, want %q", repo.imageURLSet, *updated.ImageURL)
+	}
+}
+
 type fakeRepo struct {
 	item           *entity.Item
 	getErr         error
@@ -193,6 +241,7 @@ type fakeRepo struct {
 	listPage       int
 	listPageSize   int
 	statusSet      entity.ItemStatus
+	imageURLSet    string
 }
 
 func (r *fakeRepo) Create(_ context.Context, item *entity.Item) error {
@@ -233,6 +282,14 @@ func (r *fakeRepo) CategoryExists(_ context.Context, _ int64) (bool, error) {
 	return r.categoryExists, nil
 }
 
+func (r *fakeRepo) UpdateImageURL(_ context.Context, _ int64, url string) error {
+	if r.item == nil {
+		return repository.ErrNotFound
+	}
+	r.imageURLSet = url
+	return nil
+}
+
 type fakeReservations struct {
 	reserved bool
 }
@@ -249,4 +306,15 @@ type fakeEmbedding struct {
 func (e *fakeEmbedding) Embed(_ context.Context, prompt string) ([]float32, error) {
 	e.prompt = prompt
 	return e.vector, nil
+}
+
+type fakeStorage struct {
+	uploadErr error
+}
+
+func (f *fakeStorage) Upload(_ context.Context, objectName string, _ io.Reader, _ int64, _ string) (string, error) {
+	if f.uploadErr != nil {
+		return "", f.uploadErr
+	}
+	return "http://minio.local/items/" + objectName, nil
 }

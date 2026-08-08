@@ -2,6 +2,7 @@ package item_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,7 +50,7 @@ func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
 	if service.listOwnerID != ownerID {
 		t.Fatalf("list owner ID = %s, want %s", service.listOwnerID, ownerID)
 	}
-	const want = `{"items":[{"id":1,"ownerUserId":"11111111-1111-1111-1111-111111111111","title":"PlayStation 5","description":"","categoryId":null,"status":"ACTIVE","createdAt":"2026-08-07T09:00:00Z","updatedAt":"2026-08-07T09:00:00Z"}],"page":1,"pageSize":20,"total":1}`
+	const want = `{"items":[{"id":1,"ownerUserId":"11111111-1111-1111-1111-111111111111","title":"PlayStation 5","description":"","categoryId":null,"imageUrl":null,"status":"ACTIVE","createdAt":"2026-08-07T09:00:00Z","updatedAt":"2026-08-07T09:00:00Z"}],"page":1,"pageSize":20,"total":1}`
 	if got := recorder.Body.String(); got != want {
 		t.Fatalf("body = %s, want %s", got, want)
 	}
@@ -146,4 +147,8 @@ func (s *handlerFakeService) Update(_ context.Context, _ uuid.UUID, _ int64, _ i
 func (s *handlerFakeService) Archive(_ context.Context, _ uuid.UUID, itemID int64) error {
 	s.archivedID = itemID
 	return nil
+}
+
+func (s *handlerFakeService) UploadImage(_ context.Context, _ uuid.UUID, _ int64, _ io.Reader, _ int64, _ string) (*entity.Item, error) {
+	return &entity.Item{}, nil
 }

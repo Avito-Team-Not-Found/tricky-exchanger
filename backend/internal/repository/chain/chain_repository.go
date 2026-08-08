@@ -18,6 +18,44 @@ type Postgres struct {
 	pool *pgxpool.Pool
 }
 
+const loadVisibleChainsQuery = `
+	SELECT c.id, c.status, COALESCE(c.score, 0), c.length,
+	       c.freeze_deadline_at, c.invalid_reason, c.version,
+	       c.created_at, c.updated_at,
+	       viewer.request_id, viewer.position
+	FROM chains AS c
+	JOIN LATERAL (
+		SELECT member.request_id, cp.position, COALESCE(cp.cluster_id, 0) AS cluster_id
+		FROM chain_participants AS cp
+		JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
+		JOIN exchange_offers AS eo ON eo.id = member.request_id
+		WHERE cp.chain_id = c.id
+		  AND eo.user_id = $1
+		  AND eo.status = 'ACTIVE'
+		ORDER BY cp.position
+		LIMIT 1
+	) AS viewer ON true
+	WHERE c.status IN ('CANDIDATE', 'PROPOSED', 'FROZEN', 'IN_PROGRESS')
+	  AND ($2::bigint = 0 OR c.id = $2)
+	  AND ($3::bigint = 0 OR viewer.request_id = $3)
+	  AND (
+		c.status <> 'CANDIDATE'
+		OR NOT EXISTS (
+			SELECT 1
+			FROM votes AS v
+			JOIN chains AS approved_chain ON approved_chain.id = v.chain_id
+			JOIN cluster_members AS approved_member ON approved_member.request_id = v.request_id
+			JOIN chain_participants AS approved_participant
+			  ON approved_participant.chain_id = v.chain_id
+			 AND approved_participant.cluster_id = approved_member.cluster_id
+			WHERE v.vote = 'approved'
+			  AND approved_chain.status NOT IN ('BROKEN', 'COMPLETED')
+			  AND approved_participant.cluster_id = viewer.cluster_id
+		)
+	  )
+	ORDER BY c.created_at DESC, c.id DESC
+`
+
 // NewRepository создаёт репозиторий цепочек.
 func NewRepository(pool *pgxpool.Pool) *Postgres {
 	return &Postgres{pool: pool}
@@ -158,45 +196,7 @@ func (r *Postgres) Get(ctx context.Context, userID string, chainID int64) (entit
 }
 
 func (r *Postgres) loadVisibleChains(ctx context.Context, userID string, chainID, offerID int64) ([]entity.Chain, error) {
-	const query = `
-		SELECT c.id, c.status, COALESCE(c.score, 0), c.length,
-		       c.freeze_deadline_at, c.invalid_reason, c.version,
-		       c.created_at, c.updated_at,
-		       viewer.request_id, viewer.position
-		FROM chains AS c
-		JOIN LATERAL (
-			SELECT member.request_id, cp.position, COALESCE(cp.cluster_id, 0) AS cluster_id
-			FROM chain_participants AS cp
-			JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
-			JOIN exchange_offers AS eo ON eo.id = member.request_id
-			WHERE cp.chain_id = c.id
-			  AND eo.user_id = $1
-			  AND eo.status = 'ACTIVE'
-			ORDER BY cp.position
-			LIMIT 1
-		) AS viewer ON true
-		WHERE c.status IN ('CANDIDATE', 'PROPOSED', 'FROZEN', 'IN_PROGRESS')
-		  AND ($2::bigint = 0 OR c.id = $2)
-		  AND ($3::bigint = 0 OR viewer.request_id = $3)
-		  AND (
-			c.status <> 'CANDIDATE'
-			OR NOT EXISTS (
-				SELECT 1
-				FROM votes AS v
-				JOIN chains AS approved_chain ON approved_chain.id = v.chain_id
-				JOIN cluster_members AS approved_member ON approved_member.request_id = v.request_id
-				JOIN chain_participants AS approved_participant
-				  ON approved_participant.chain_id = v.chain_id
-				 AND approved_participant.cluster_id = approved_member.cluster_id
-				WHERE v.vote = 'approved'
-				  AND approved_chain.status NOT IN ('BROKEN', 'COMPLETED')
-				  AND approved_participant.cluster_id = viewer.cluster_id
-			)
-		  )
-		ORDER BY c.created_at DESC, c.id DESC
-	`
-
-	rows, err := r.pool.Query(ctx, query, userID, chainID, offerID)
+	rows, err := r.pool.Query(ctx, loadVisibleChainsQuery, userID, chainID, offerID)
 	if err != nil {
 		return nil, fmt.Errorf("list visible chains: %w", err)
 	}

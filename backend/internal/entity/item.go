@@ -16,7 +16,6 @@ const (
 )
 
 // Item — товар, который пользователь может предложить в заявке на обмен.
-// Фото (image_url) сознательно не входит в эту версию — добавляется отдельной фичей.
 type Item struct {
 	ID          int64
 	OwnerUserID uuid.UUID
@@ -24,7 +23,9 @@ type Item struct {
 	Description string
 	CategoryID  *int64
 	Embedding   []float32
-	Status      ItemStatus
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// ImageURL — публичный URL фото в объектном хранилище (MinIO), nil пока фото не загружено.
+	ImageURL  *string
+	Status    ItemStatus
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
