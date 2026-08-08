@@ -134,7 +134,7 @@ const querySimilarOffers = `
 		WHERE eo.status = 'ACTIVE'
 		  AND i.status = 'ACTIVE'
 		  AND eo.id <> $3
-		  AND i.category_id IS NOT DISTINCT FROM $4::bigint
+		  AND COALESCE(i.category, '') IS NOT DISTINCT FROM COALESCE($4, '')
 		  AND i.embedding IS NOT NULL
 		  AND eo.want_embedding IS NOT NULL
 		ORDER BY i.embedding <=> $1::vector
@@ -260,12 +260,12 @@ func (s *Search) FindSimilarOffers(
 	ctx context.Context,
 	offer string,
 	want string,
-	categoryID *int64,
+	category string,
 	excludeOfferID int64,
 	threshold float64,
 	k int,
 ) ([]entity.Candidate, error) {
-	rows, err := s.pool.Query(ctx, querySimilarOffers, offer, want, excludeOfferID, categoryID, threshold, k)
+	rows, err := s.pool.Query(ctx, querySimilarOffers, offer, want, excludeOfferID, category, threshold, k)
 	if err != nil {
 		return nil, fmt.Errorf("search similar offers: %w", err)
 	}
