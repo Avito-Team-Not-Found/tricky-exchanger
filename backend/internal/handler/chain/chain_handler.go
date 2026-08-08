@@ -11,6 +11,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/api"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
+	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
 )
 
 // Handler обрабатывает чтение доступных пользователю цепочек.
@@ -41,14 +42,15 @@ type chainResponse struct {
 }
 
 type chainParticipantResponse struct {
-	ClusterID              int64  `json:"clusterId"`
-	RequestID              int64  `json:"requestId"`
-	Position               int    `json:"position"`
-	IsCurrentUser          bool   `json:"isCurrentUser"`
-	OfferedItemID          int64  `json:"offeredItemId"`
-	OfferedItemTitle       string `json:"offeredItemTitle"`
-	OfferedItemDescription string `json:"offeredItemDescription"`
-	WantedDescription      string `json:"wantedDescription"`
+	ClusterID              int64             `json:"clusterId"`
+	RequestID              int64             `json:"requestId"`
+	Position               int               `json:"position"`
+	IsCurrentUser          bool              `json:"isCurrentUser"`
+	OfferedItemID          int64             `json:"offeredItemId"`
+	OfferedItemTitle       string            `json:"offeredItemTitle"`
+	OfferedItemDescription string            `json:"offeredItemDescription"`
+	WantedDescription      string            `json:"wantedDescription"`
+	Vote                   *entity.VoteValue `json:"vote,omitempty"`
 }
 
 type exchangeOptionsResponse struct {
@@ -64,12 +66,27 @@ type exchangeOptionsResponse struct {
 }
 
 type exchangeOptionResponse struct {
-	ClusterID         int64  `json:"clusterId"`
-	RequestID         int64  `json:"requestId"`
-	ItemID            int64  `json:"itemId"`
-	Title             string `json:"title"`
-	Description       string `json:"description"`
-	WantedDescription string `json:"wantedDescription"`
+	ClusterID         int64             `json:"clusterId"`
+	RequestID         int64             `json:"requestId"`
+	ItemID            int64             `json:"itemId"`
+	Title             string            `json:"title"`
+	Description       string            `json:"description"`
+	WantedDescription string            `json:"wantedDescription"`
+	Vote              *entity.VoteValue `json:"vote,omitempty"`
+}
+
+type voteRequest struct {
+	RequestID       int64 `json:"requestId" binding:"required"`
+	TargetRequestID int64 `json:"targetRequestId" binding:"required"`
+}
+
+type voteResponse struct {
+	ChainID         int64              `json:"chainId"`
+	RequestID       int64              `json:"requestId"`
+	TargetRequestID int64              `json:"targetRequestId"`
+	Vote            entity.VoteValue   `json:"vote"`
+	VotedAt         string             `json:"votedAt"`
+	ChainStatus     entity.ChainStatus `json:"chainStatus"`
 }
 
 // List возвращает актуальные цепочки аутентифицированного участника.
@@ -147,6 +164,102 @@ func (h *Handler) Get(c *gin.Context) {
 	api.SendOk(c, http.StatusOK, newChainResponse(chain, userID))
 }
 
+// Vote records the authenticated participant's response to one concrete item
+// in the next position of a candidate chain.
+func (h *Handler) Vote(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+
+	var body voteRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		api.SendError(c, http.StatusUnprocessableEntity, "invalid request body")
+		return
+	}
+
+	vote, err := h.service.Vote(c.Request.Context(), userID, chainID, chainservice.VoteInput{
+		RequestID:       body.RequestID,
+		TargetRequestID: body.TargetRequestID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, entity.ErrChainNotFound):
+			api.SendError(c, http.StatusNotFound, err.Error())
+		case errors.Is(err, entity.ErrChainVoteForbidden):
+			api.SendError(c, http.StatusForbidden, err.Error())
+		case errors.Is(err, entity.ErrChainNotCandidate):
+			api.SendError(c, http.StatusConflict, err.Error())
+		case errors.Is(err, entity.ErrInvalidVoteTarget):
+			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
+		default:
+			api.SendError(c, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	api.SendOk(c, http.StatusOK, voteResponse{
+		ChainID:         vote.ChainID,
+		RequestID:       vote.RequestID,
+		TargetRequestID: vote.TargetRequestID,
+		Vote:            vote.Vote,
+		VotedAt:         vote.VotedAt.UTC().Format(time.RFC3339),
+		ChainStatus:     vote.ChainStatus,
+	})
+}
+
+// WithdrawVote cancels a primary response before the chain enters PROPOSED.
+func (h *Handler) WithdrawVote(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+	requestID, err := strconv.ParseInt(c.Query("requestId"), 10, 64)
+	if err != nil || requestID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "requestId must be a positive integer")
+		return
+	}
+	targetRequestID, err := strconv.ParseInt(c.Query("targetRequestId"), 10, 64)
+	if err != nil || targetRequestID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "targetRequestId must be a positive integer")
+		return
+	}
+
+	err = h.service.WithdrawVote(c.Request.Context(), userID, chainID, chainservice.VoteInput{
+		RequestID:       requestID,
+		TargetRequestID: targetRequestID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, entity.ErrChainNotFound):
+			api.SendError(c, http.StatusNotFound, err.Error())
+		case errors.Is(err, entity.ErrChainVoteForbidden):
+			api.SendError(c, http.StatusForbidden, err.Error())
+		case errors.Is(err, entity.ErrChainNotCandidate):
+			api.SendError(c, http.StatusConflict, err.Error())
+		case errors.Is(err, entity.ErrInvalidVoteTarget):
+			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
+		default:
+			api.SendError(c, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 func newChainResponse(chain entity.Chain, userID string) chainResponse {
 	response := chainResponse{
 		ID:                   chain.ID,
@@ -168,7 +281,7 @@ func newChainResponse(chain entity.Chain, userID string) chainResponse {
 		response.FreezeDeadlineAt = &value
 	}
 	for _, participant := range chain.Participants {
-		response.Participants = append(response.Participants, chainParticipantResponse{
+		participantResponse := chainParticipantResponse{
 			ClusterID:              participant.ClusterID,
 			RequestID:              participant.RequestID,
 			Position:               participant.Position,
@@ -177,7 +290,11 @@ func newChainResponse(chain entity.Chain, userID string) chainResponse {
 			OfferedItemTitle:       participant.OfferedItemTitle,
 			OfferedItemDescription: participant.OfferedItemDescription,
 			WantedDescription:      participant.WantedDescription,
-		})
+		}
+		if participant.Position == response.ReceivesFromPosition {
+			participantResponse.Vote = participant.Vote
+		}
+		response.Participants = append(response.Participants, participantResponse)
 	}
 	return response
 }
@@ -208,6 +325,7 @@ func newExchangeOptionsResponse(chain entity.Chain) exchangeOptionsResponse {
 			response.CurrentOffer = option
 		}
 		if participant.Position == receivesFromPosition {
+			option.Vote = participant.Vote
 			response.ReceiveOptions = append(response.ReceiveOptions, option)
 		}
 	}

@@ -16,6 +16,7 @@ import (
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	chainService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
 	exchangeOfferService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 )
@@ -82,6 +83,14 @@ func (stubChainService) ListForOffer(_ context.Context, _ string, _ int64) ([]en
 
 func (stubChainService) Get(_ context.Context, _ string, _ int64) (entity.Chain, error) {
 	return entity.Chain{}, entity.ErrChainNotFound
+}
+
+func (stubChainService) Vote(_ context.Context, _ string, _ int64, _ chainService.VoteInput) (entity.ChainVote, error) {
+	return entity.ChainVote{}, nil
+}
+
+func (stubChainService) WithdrawVote(_ context.Context, _ string, _ int64, _ chainService.VoteInput) error {
+	return nil
 }
 
 type stubExchangeOfferService struct{}

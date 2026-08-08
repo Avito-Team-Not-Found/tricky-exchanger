@@ -28,6 +28,10 @@ var (
 	ErrChainRepositoryNotConfigured = errors.New("репозиторий цепочек не настроен")
 	ErrInvalidChainDraft            = errors.New("некорректный черновик цепочки")
 
+	ErrInvalidVoteTarget  = errors.New("target request must belong to the next chain position")
+	ErrChainVoteForbidden = errors.New("the source request does not belong to the current user")
+	ErrChainNotCandidate  = errors.New("chain no longer accepts candidate responses")
+
 	ErrItemNotFound           = errors.New("item not found")
 	ErrItemForbidden          = errors.New("item belongs to another user")
 	ErrItemArchived           = errors.New("item is archived and cannot be modified")
