@@ -14,17 +14,21 @@ func TestFacadeSynchronizesAndRemovesClusterMembership(t *testing.T) {
 	clusters := &fakeClusters{}
 	cycles := &fakeCycles{clusters: clusters}
 	chains := &fakeChains{cycles: cycles}
-	facade := matching.NewFacade(clusters, cycles, chains)
+	ranker := matching.NewChainScoreCalculator(matching.NewRankerConfig())
+	facade := matching.NewFacade(clusters, cycles, chains).WithRanker(ranker)
 
 	drafts, err := facade.RebuildForRequest(context.Background(), nil, 11)
 	if err != nil {
 		t.Fatalf("RebuildForRequest() error = %v", err)
 	}
-	if len(drafts) != 1 || drafts[0].Score != 0.9 {
-		t.Fatalf("RebuildForRequest() drafts = %#v", drafts)
+	// Score считает Ranker один раз из фич драфта (дл. 2, рёбер/размеров нет):
+	// Reliability=0.75 -> wR * 0.75 = 0.20*0.75 = 0.15 (шкала [0,1]).
+	const wantScore = 0.15
+	if len(drafts) != 1 || drafts[0].Score != wantScore {
+		t.Fatalf("RebuildForRequest() drafts = %#v, want score %v", drafts, wantScore)
 	}
-	if len(chains.saved) != 1 || chains.saved[0].Score != 0.9 {
-		t.Fatalf("saved drafts = %#v", chains.saved)
+	if len(chains.saved) != 1 || chains.saved[0].Score != wantScore {
+		t.Fatalf("saved drafts = %#v, want score %v", chains.saved, wantScore)
 	}
 	if err := facade.RemoveRequest(context.Background(), nil, 11); err != nil {
 		t.Fatalf("RemoveRequest() error = %v", err)
@@ -92,7 +96,14 @@ func (c *fakeCycles) Find(_ context.Context, _ database.Tx, requestID int64) ([]
 		return nil, errors.New("cycle search started before cluster synchronization")
 	}
 	c.searchedID = requestID
-	return []entity.ChainDraft{{Score: 0.9}}, nil
+	// Драфт с 2 участниками, чтобы ChainState.Count >= 2 (иначе Ranker вернёт
+	// ErrInvalidChainState). Score вычисляет уже сам фасад через Ranker.
+	return []entity.ChainDraft{{
+		Participants: []entity.ChainDraftParticipant{
+			{ClusterID: 101, RequestID: 11},
+			{ClusterID: 102, RequestID: 12},
+		},
+	}}, nil
 }
 
 func (c *fakeClusters) Synchronize(_ context.Context, _ database.Tx, offerID int64) error {
