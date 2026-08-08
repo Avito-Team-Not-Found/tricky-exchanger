@@ -2,10 +2,13 @@ package chain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
@@ -30,6 +33,7 @@ const loadVisibleChainsQuery = `
 		JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
 		JOIN exchange_offers AS eo ON eo.id = member.request_id
 		WHERE cp.chain_id = c.id
+		  AND (c.status = 'CANDIDATE' OR member.request_id = cp.request_id)
 		  AND eo.user_id = $1
 		  AND eo.status = 'ACTIVE'
 		ORDER BY cp.position
@@ -38,22 +42,41 @@ const loadVisibleChainsQuery = `
 	WHERE c.status IN ('CANDIDATE', 'PROPOSED', 'FROZEN', 'IN_PROGRESS')
 	  AND ($2::bigint = 0 OR c.id = $2)
 	  AND ($3::bigint = 0 OR viewer.request_id = $3)
-	  AND (
-		c.status <> 'CANDIDATE'
-		OR NOT EXISTS (
-			SELECT 1
-			FROM votes AS v
-			JOIN chains AS approved_chain ON approved_chain.id = v.chain_id
-			JOIN cluster_members AS approved_member ON approved_member.request_id = v.request_id
-			JOIN chain_participants AS approved_participant
-			  ON approved_participant.chain_id = v.chain_id
-			 AND approved_participant.cluster_id = approved_member.cluster_id
-			WHERE v.vote = 'approved'
-			  AND approved_chain.status NOT IN ('BROKEN', 'COMPLETED')
-			  AND approved_participant.cluster_id = viewer.cluster_id
-		)
-	  )
+	  AND ($2::bigint <> 0 OR c.status <> 'FROZEN')
 	ORDER BY c.created_at DESC, c.id DESC
+`
+
+const validateVoteSourceQuery = `
+	SELECT cp.position
+	FROM exchange_offers AS source
+	JOIN cluster_members AS member ON member.request_id = source.id
+	JOIN chain_participants AS cp ON cp.cluster_id = member.cluster_id
+	WHERE cp.chain_id = $1
+	  AND source.id = $2
+	  AND source.user_id = $3
+	  AND source.status = 'ACTIVE'
+`
+
+const validateVoteTargetQuery = `
+	SELECT cp.position
+	FROM exchange_offers AS target
+	JOIN cluster_members AS member ON member.request_id = target.id
+	JOIN chain_participants AS cp ON cp.cluster_id = member.cluster_id
+	WHERE cp.chain_id = $1
+	  AND target.id = $2
+	  AND target.status = 'ACTIVE'
+`
+
+const listPendingVoteEdgesQuery = `
+	SELECT vote.request_id, vote.target_request_id, source_participant.position
+	FROM votes AS vote
+	JOIN cluster_members AS source_member ON source_member.request_id = vote.request_id
+	JOIN chain_participants AS source_participant
+	  ON source_participant.chain_id = vote.chain_id
+	 AND source_participant.cluster_id = source_member.cluster_id
+	WHERE vote.chain_id = $1
+	  AND vote.vote = 'pending'
+	ORDER BY source_participant.position, vote.request_id, vote.target_request_id
 `
 
 // NewRepository создаёт репозиторий цепочек.
@@ -195,6 +218,200 @@ func (r *Postgres) Get(ctx context.Context, userID string, chainID int64) (entit
 	return chains[0], nil
 }
 
+// LockForVote serializes all responses for one chain and returns its current state.
+func (r *Postgres) LockForVote(
+	ctx context.Context,
+	tx database.Tx,
+	chainID int64,
+) (entity.ChainStatus, int, error) {
+	var status entity.ChainStatus
+	var length int
+	err := tx.QueryRow(ctx, `
+		SELECT status, length
+		FROM chains
+		WHERE id = $1
+		FOR UPDATE
+	`, chainID).Scan(&status, &length)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", 0, entity.ErrChainNotFound
+	}
+	if err != nil {
+		return "", 0, fmt.Errorf("lock chain for vote: %w", err)
+	}
+	return status, length, nil
+}
+
+// ValidateVoteParticipants verifies ownership and the directed edge between
+// adjacent chain positions while the chain row is locked by the caller.
+func (r *Postgres) ValidateVoteParticipants(
+	ctx context.Context,
+	tx database.Tx,
+	userID string,
+	chainID, requestID, targetRequestID int64,
+	chainLength int,
+) error {
+	var sourcePosition int
+	err := tx.QueryRow(ctx, validateVoteSourceQuery, chainID, requestID, userID).Scan(&sourcePosition)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.ErrChainVoteForbidden
+	}
+	if err != nil {
+		return fmt.Errorf("validate vote source: %w", err)
+	}
+
+	var targetPosition int
+	err = tx.QueryRow(ctx, validateVoteTargetQuery, chainID, targetRequestID).Scan(&targetPosition)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.ErrInvalidVoteTarget
+	}
+	if err != nil {
+		return fmt.Errorf("validate vote target: %w", err)
+	}
+	if chainLength <= 0 || targetPosition != (sourcePosition+1)%chainLength {
+		return entity.ErrInvalidVoteTarget
+	}
+	return nil
+}
+
+// GetVote returns an existing response only when the source request belongs to
+// the authenticated user. It is used to make retries idempotent after proposal.
+func (r *Postgres) GetVote(
+	ctx context.Context,
+	tx database.Tx,
+	userID string,
+	chainID, requestID, targetRequestID int64,
+) (entity.ChainVote, error) {
+	vote := entity.ChainVote{
+		ChainID:         chainID,
+		RequestID:       requestID,
+		TargetRequestID: targetRequestID,
+	}
+	err := tx.QueryRow(ctx, `
+		SELECT vote.vote, vote.voted_at
+		FROM votes AS vote
+		JOIN exchange_offers AS source ON source.id = vote.request_id
+		WHERE vote.chain_id = $1
+		  AND vote.request_id = $2
+		  AND vote.target_request_id = $3
+		  AND source.user_id = $4
+	`, chainID, requestID, targetRequestID, userID).Scan(&vote.Vote, &vote.VotedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.ChainVote{}, entity.ErrChainVoteForbidden
+	}
+	if err != nil {
+		return entity.ChainVote{}, fmt.Errorf("get chain vote: %w", err)
+	}
+	return vote, nil
+}
+
+// UpsertPendingVote records a candidate response without creating duplicates.
+func (r *Postgres) UpsertPendingVote(
+	ctx context.Context,
+	tx database.Tx,
+	chainID, requestID, targetRequestID int64,
+) (time.Time, error) {
+	var votedAt time.Time
+	err := tx.QueryRow(ctx, `
+		INSERT INTO votes (chain_id, request_id, target_request_id, vote, voted_at)
+		VALUES ($1, $2, $3, 'pending', NOW())
+		ON CONFLICT ON CONSTRAINT votes_chain_request_target_key
+		DO UPDATE SET
+			vote = 'pending',
+			voted_at = votes.voted_at
+		RETURNING voted_at
+	`, chainID, requestID, targetRequestID).Scan(&votedAt)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("upsert chain vote: %w", err)
+	}
+	return votedAt, nil
+}
+
+// DeletePendingVote withdraws only a candidate-stage response. A missing row
+// is not an error, which makes retries idempotent.
+func (r *Postgres) DeletePendingVote(
+	ctx context.Context,
+	tx database.Tx,
+	chainID, requestID, targetRequestID int64,
+) error {
+	_, err := tx.Exec(ctx, `
+		DELETE FROM votes
+		WHERE chain_id = $1
+		  AND request_id = $2
+		  AND target_request_id = $3
+		  AND vote = 'pending'
+	`, chainID, requestID, targetRequestID)
+	if err != nil {
+		return fmt.Errorf("delete pending chain vote: %w", err)
+	}
+	return nil
+}
+
+// ListPendingVoteEdges returns candidate responses for the service's local DFS.
+func (r *Postgres) ListPendingVoteEdges(
+	ctx context.Context,
+	tx database.Tx,
+	chainID int64,
+) ([]entity.VoteEdge, error) {
+	rows, err := tx.Query(ctx, listPendingVoteEdgesQuery, chainID)
+	if err != nil {
+		return nil, fmt.Errorf("list pending vote edges: %w", err)
+	}
+	defer rows.Close()
+
+	edges := make([]entity.VoteEdge, 0)
+	for rows.Next() {
+		var edge entity.VoteEdge
+		if err := rows.Scan(&edge.RequestID, &edge.TargetRequestID, &edge.Position); err != nil {
+			return nil, fmt.Errorf("scan pending vote edge: %w", err)
+		}
+		edges = append(edges, edge)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pending vote edges: %w", err)
+	}
+	return edges, nil
+}
+
+// Propose pins the concrete requests selected by DFS and changes the status
+// only while the locked chain is still a candidate.
+func (r *Postgres) Propose(
+	ctx context.Context,
+	tx database.Tx,
+	chainID int64,
+	requestIDsByPosition []int64,
+) error {
+	for position, requestID := range requestIDsByPosition {
+		result, err := tx.Exec(ctx, `
+			UPDATE chain_participants
+			SET request_id = $3
+			WHERE chain_id = $1
+			  AND position = $2
+		`, chainID, position, requestID)
+		if err != nil {
+			return fmt.Errorf("pin chain participant at position %d: %w", position, err)
+		}
+		if result.RowsAffected() != 1 {
+			return fmt.Errorf("pin chain participant at position %d: %w", position, entity.ErrInvalidVoteTarget)
+		}
+	}
+
+	result, err := tx.Exec(ctx, `
+		UPDATE chains
+		SET status = 'PROPOSED',
+		    version = version + 1,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND status = 'CANDIDATE'
+	`, chainID)
+	if err != nil {
+		return fmt.Errorf("propose chain: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return entity.ErrChainNotCandidate
+	}
+	return nil
+}
+
 func (r *Postgres) loadVisibleChains(ctx context.Context, userID string, chainID, offerID int64) ([]entity.Chain, error) {
 	rows, err := r.pool.Query(ctx, loadVisibleChainsQuery, userID, chainID, offerID)
 	if err != nil {
@@ -242,10 +459,12 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 		       eo.user_id, eo.offered_item_id, i.title, COALESCE(i.description, ''),
 		       COALESCE(eo.wanted_description, ''), cp.created_at
 		FROM chain_participants AS cp
+		JOIN chains AS c ON c.id = cp.chain_id
 		JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
 		JOIN exchange_offers AS eo ON eo.id = member.request_id AND eo.status = 'ACTIVE'
 		JOIN items AS i ON i.id = eo.offered_item_id
 		WHERE cp.chain_id = ANY($1::bigint[])
+		  AND (c.status = 'CANDIDATE' OR member.request_id = cp.request_id)
 		ORDER BY cp.chain_id, cp.position, member.request_id
 	`, chainIDs)
 	if err != nil {
@@ -276,6 +495,48 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("iterate chain participants: %w", err)
+	}
+	rows.Close()
+	return r.loadViewerVotes(ctx, chains)
+}
+
+func (r *Postgres) loadViewerVotes(ctx context.Context, chains []entity.Chain) error {
+	chainIDs := make([]int64, len(chains))
+	byID := make(map[int64]*entity.Chain, len(chains))
+	for i := range chains {
+		chainIDs[i] = chains[i].ID
+		byID[chains[i].ID] = &chains[i]
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT chain_id, request_id, target_request_id, vote
+		FROM votes
+		WHERE chain_id = ANY($1::bigint[])
+	`, chainIDs)
+	if err != nil {
+		return fmt.Errorf("load viewer votes: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var chainID, requestID, targetRequestID int64
+		var vote entity.VoteValue
+		if err := rows.Scan(&chainID, &requestID, &targetRequestID, &vote); err != nil {
+			return fmt.Errorf("scan viewer vote: %w", err)
+		}
+		chain := byID[chainID]
+		if chain == nil || chain.CurrentRequestID != requestID {
+			continue
+		}
+		for i := range chain.Participants {
+			if chain.Participants[i].RequestID == targetRequestID {
+				chain.Participants[i].Vote = &vote
+				break
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate viewer votes: %w", err)
 	}
 	return nil
 }

@@ -81,6 +81,8 @@ func New(
 		{
 			chains.GET("", chainH.List)
 			chains.GET("/:id", chainH.Get)
+			chains.PUT("/:id/votes", chainH.Vote)
+			chains.DELETE("/:id/votes", chainH.WithdrawVote)
 		}
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен
