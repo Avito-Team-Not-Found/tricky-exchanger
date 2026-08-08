@@ -1,4 +1,3 @@
-import { LogoutOutlined } from '@ant-design/icons';
 import { Avatar, Button } from 'antd';
 import { useNavigate } from 'react-router';
 
@@ -38,13 +37,7 @@ export function ProfilePage() {
       <Button className="profile__password" block onClick={() => navigate('/profile/password')}>
         Сменить пароль
       </Button>
-      <Button
-        className="profile__logout"
-        type="primary"
-        danger
-        icon={<LogoutOutlined />}
-        onClick={handleLogout}
-      >
+      <Button className="profile__logout" type="primary" danger block onClick={handleLogout}>
         Выйти
       </Button>
     </div>
