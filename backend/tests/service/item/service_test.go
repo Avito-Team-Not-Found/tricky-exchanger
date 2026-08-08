@@ -64,17 +64,19 @@ func TestCreateRejectsEmptyTitle(t *testing.T) {
 	}
 }
 
-func TestCreateRejectsUnknownCategory(t *testing.T) {
-	repo := &fakeRepo{categoryExists: false}
+func TestCreatePersistsCategory(t *testing.T) {
+	repo := &fakeRepo{}
 	service, _ := newItemService(repo)
 
-	categoryID := int64(999)
-	_, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
-		Title:      "Item",
-		CategoryID: &categoryID,
+	created, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
+		Title:    "Item",
+		Category: "electronics",
 	})
-	if !errors.Is(err, entity.ErrCategoryNotFound) {
-		t.Fatalf("Create() error = %v, want ErrCategoryNotFound", err)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if created.Category != "electronics" {
+		t.Fatalf("Create() Category = %q, want %q", created.Category, "electronics")
 	}
 }
 
