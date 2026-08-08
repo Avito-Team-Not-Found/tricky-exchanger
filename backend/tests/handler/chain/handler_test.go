@@ -16,6 +16,8 @@ import (
 	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
 )
 
+
+
 func TestGetReturnsOrderedExchangePositions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
@@ -139,7 +141,12 @@ type fakeService struct {
 	vote          entity.ChainVote
 	voteInput     chainservice.VoteInput
 	withdrawInput chainservice.VoteInput
+	confirmStatus entity.ChainStatus
 	err           error
+}
+
+func (s *fakeService) Confirm(_ context.Context, _ string, _ int64) (entity.ChainStatus, error) {
+	return s.confirmStatus, s.err
 }
 
 func (s *fakeService) List(_ context.Context, _ string) ([]entity.Chain, error) {

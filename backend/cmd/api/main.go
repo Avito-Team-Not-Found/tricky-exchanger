@@ -104,7 +104,10 @@ func main() {
 	scoreRanker := ranker.NewChainScoreCalculator(ranker.NewRankerConfig())
 	chainSvc := chainservice.NewService(chainRepository, transactionManager)
 	chainSvc = chainSvc.WithScorer(scoreRanker)
+
 	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).WithRanker(scoreRanker)
+	freezer := chainservice.NewFreezeService(chainRepository, matchingFacade)
+	chainSvc = chainSvc.WithFreezer(freezer)
 	// Выбор embed-провайдера конфигом: tei | stub.
 	var embedClient embedding.Client
 	switch cfg.EmbeddingProvider {

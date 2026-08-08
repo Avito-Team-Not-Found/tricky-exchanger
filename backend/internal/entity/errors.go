@@ -34,6 +34,10 @@ var (
 	ErrChainVoteForbidden = errors.New("the source request does not belong to the current user")
 	ErrChainNotCandidate  = errors.New("chain no longer accepts candidate responses")
 
+	ErrChainNotProposed         = errors.New("цепочка больше не принимает подтверждения")
+	ErrChainNotFrozen           = errors.New("цепочка ещё не заморожена")
+	ErrRequestInTwoFrozenChains = errors.New("запрос не может состоять в двух замороженных цепочках")
+
 	ErrItemNotFound           = errors.New("item not found")
 	ErrItemForbidden          = errors.New("item belongs to another user")
 	ErrItemArchived           = errors.New("item is archived and cannot be modified")

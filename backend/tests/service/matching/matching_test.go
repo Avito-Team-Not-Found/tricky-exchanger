@@ -91,6 +91,18 @@ func (c *fakeChains) SaveCandidates(_ context.Context, _ database.Tx, drafts []e
 	c.saved = append(c.saved, drafts...)
 	return nil
 }
+func (c *fakeChains) ListChainsContainingRequest(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
+	return nil, nil
+}
+func (c *fakeChains) LoadChainRequestIDs(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
+	return nil, nil
+}
+func (c *fakeChains) DeleteRequestParticipation(_ context.Context, _ database.Tx, _ int64) error {
+	return nil
+}
+func (c *fakeChains) DeleteChain(_ context.Context, _ database.Tx, _ int64) error {
+	return nil
+}
 
 func (c *fakeCycles) Find(_ context.Context, _ database.Tx, requestID int64) ([]entity.ChainDraft, error) {
 	if c.clusters != nil && c.clusters.synchronizedID != requestID {

@@ -21,6 +21,12 @@ type Service struct {
 	transactions database.TransactionManager
 	scorer       ranker.Ranker
 	notifier     Notifier
+	freezer      *FreezeService
+}
+
+func (s *Service) WithFreezer(freezer *FreezeService) *Service {
+	s.freezer = freezer
+	return s
 }
 
 // NewService создаёт сервис цепочек.
@@ -375,4 +381,102 @@ func scoreStage(status entity.ChainStatus) ranker.ChainStateStatus {
 	default:
 		return ranker.ChainStateCandidate
 	}
+}
+
+
+// Confirm фиксирует подтверждение участника (раунд 2): его запрос переходит
+// в LOCKED, участник больше не может откликаться по нему в других цепочках.
+// Когда все подтвердили — цепочка атомарно замораживается.
+func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (entity.ChainStatus, error) {
+	if s.repository == nil || s.transactions == nil {
+		return entity.ChainStatus(""), entity.ErrChainRepositoryNotConfigured
+	}
+	if chainID <= 0 {
+		return entity.ChainStatus(""), entity.ErrInvalidVoteTarget
+	}
+
+	var resultStatus entity.ChainStatus
+	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		status, length, err := s.repository.LockForVote(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+
+		// Идемпотентный возврат: если цепочка уже заморожена — успех.
+		if status != entity.ChainStatusProposed {
+			if status == entity.ChainStatusFrozen {
+				resultStatus = status
+				return nil
+			}
+			return entity.ErrChainNotProposed
+		}
+
+		requestID, targetID, err := s.repository.FindParticipantEdge(ctx, tx, chainID, userID)
+		if err != nil {
+			return err
+		}
+
+		if err := s.repository.ConfirmParticipant(ctx, tx, chainID, requestID, targetID); err != nil {
+			return err
+		}
+		if err := s.repository.MarkRequestLocked(ctx, tx, requestID); err != nil {
+			return err
+		}
+
+		approved, err := s.repository.CountApprovedVoters(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+
+		if approved < length {
+			resultStatus = entity.ChainStatusProposed
+			return s.refreshScore(ctx, tx, chainID, entity.ChainStatusProposed, ranker.EventConfirm)
+		}
+
+		// Все подтвердили — замораживаем в той же транзакции.
+		if s.freezer == nil {
+			return entity.ErrChainRepositoryNotConfigured
+		}
+		if err := s.freezer.Freeze(ctx, tx, chainID); err != nil {
+			return err
+		}
+		resultStatus = entity.ChainStatusFrozen
+		return s.refreshScore(ctx, tx, chainID, entity.ChainStatusFrozen, ranker.EventConfirm)
+	})
+	if err != nil {
+		return entity.ChainStatus(""), err
+	}
+	return resultStatus, nil
+}
+
+// ListChainsContainingRequest возвращает цепочки, где участвует заявка.
+func (s *Service) ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error) {
+	if s.repository == nil {
+		return nil, entity.ErrChainRepositoryNotConfigured
+	}
+	return s.repository.ListChainsContainingRequest(ctx, tx, requestID)
+}
+
+// DeleteRequestParticipation удаляет участие заявки в цепочках и её голоса.
+func (s *Service) DeleteRequestParticipation(ctx context.Context, tx database.Tx, requestID int64) error {
+	if s.repository == nil {
+		return entity.ErrChainRepositoryNotConfigured
+	}
+	return s.repository.DeleteRequestParticipation(ctx, tx, requestID)
+}
+
+// DeleteChain удаляет цепочку целиком каскадом.
+func (s *Service) DeleteChain(ctx context.Context, tx database.Tx, chainID int64) error {
+	if s.repository == nil {
+		return entity.ErrChainRepositoryNotConfigured
+	}
+	return s.repository.DeleteChain(ctx, tx, chainID)
+}
+
+// LoadChainRequestIDs возвращает заявки участников цепочки.
+func (s *Service) LoadChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	if s.repository == nil {
+		return nil, entity.ErrChainRepositoryNotConfigured
+	}
+	return s.repository.LoadChainRequestIDs(ctx, tx, chainID)
 }

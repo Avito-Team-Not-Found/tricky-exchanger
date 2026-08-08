@@ -366,3 +366,36 @@ func currentUserID(c *gin.Context) (string, bool) {
 	}
 	return userID.String(), true
 }
+
+// Confirm фиксирует подтверждение участия в PROPOSED-цепочке (раунд 2).
+func (h *Handler) Confirm(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+
+	status, err := h.service.Confirm(c.Request.Context(), userID, chainID)
+	if err != nil {
+		switch {
+		case errors.Is(err, entity.ErrChainNotFound):
+			api.SendError(c, http.StatusNotFound, err.Error())
+		case errors.Is(err, entity.ErrChainNotProposed):
+			api.SendError(c, http.StatusConflict, err.Error())
+		case errors.Is(err, entity.ErrRequestInTwoFrozenChains):
+			api.SendError(c, http.StatusConflict, err.Error())
+		case errors.Is(err, entity.ErrChainVoteForbidden):
+			api.SendError(c, http.StatusForbidden, err.Error())
+		default:
+			api.SendError(c, http.StatusInternalServerError, "internal server error")
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "status": status})
+}

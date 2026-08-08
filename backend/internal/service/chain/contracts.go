@@ -26,6 +26,23 @@ type Repository interface {
 	LoadScoreFeatures(ctx context.Context, tx database.Tx, chainID int64) (cosines []float64, reliability []float64, sizes []int, err error)
 	CountPendingVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error)
 	UpdateScore(ctx context.Context, tx database.Tx, chainID int64, score float64) error
+	ConfirmParticipant(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error
+	CountApprovedVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error)
+	MarkRequestLocked(ctx context.Context, tx database.Tx, requestID int64) error
+	FreezeChain(ctx context.Context, tx database.Tx, chainID int64, deadline time.Time) error
+	LockRequestsInChain(ctx context.Context, tx database.Tx, chainID int64) error
+	MarkItemsUnavailable(ctx context.Context, tx database.Tx, chainID int64) error
+	LoadChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
+	LoadRequestLiveChainStatus(ctx context.Context, tx database.Tx, requestID int64) (entity.ChainStatus, error)
+	FindParticipantEdge(ctx context.Context, tx database.Tx, chainID int64, userID string) (requestID, targetRequestID int64, err error)
+
+	// Жизненный цикл цепочек (пересборка/удаление) под властью matcher.
+	ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error)
+	DeleteRequestParticipation(ctx context.Context, tx database.Tx, requestID int64) error
+	DeleteChain(ctx context.Context, tx database.Tx, chainID int64) error
+	// ReleaseCompetitorsFromOtherChains вычёркивает участников замороженной chainID
+	// из конкурирующих цепочек и возвращает их chainID для пересборки матчером.
+	ReleaseCompetitorsFromOtherChains(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
 }
 
 // Notifier отправляет пользовательские уведомления о событиях цепочки

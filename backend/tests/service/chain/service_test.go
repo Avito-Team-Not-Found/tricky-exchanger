@@ -95,17 +95,27 @@ func TestSaveCandidatesAllowsOneClusterInDifferentChains(t *testing.T) {
 }
 
 type fakeRepository struct {
-	saved          []entity.ChainDraft
-	status         entity.ChainStatus
-	length         int
-	edges          []entity.VoteEdge
-	existingVote   entity.ChainVote
-	proposed       []int64
-	upsertCalls    int
-	deleteCalls    int
-	markInProposal int
-	restoredActive int
-	validationErr  error
+	saved             []entity.ChainDraft
+	status            entity.ChainStatus
+	length            int
+	edges             []entity.VoteEdge
+	existingVote      entity.ChainVote
+	proposed          []int64
+	upsertCalls       int
+	deleteCalls       int
+	markInProposal    int
+	restoredActive    int
+	validationErr     error
+	approvedCount     int
+	lockRequestCalls  int
+	freezeCalled      bool
+	lockAllInChain    int
+	itemsUnavailable  int
+	removedFromOthers int
+	requestIDs        []int64
+	requestStatus     entity.ChainStatus
+	edgeRequestID     int64
+	edgeTargetID      int64
 }
 
 func (r *fakeRepository) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
@@ -182,11 +192,70 @@ func (r *fakeRepository) UpdateScore(_ context.Context, _ database.Tx, _ int64, 
 	return nil
 }
 
+// --- методы, добавленные для Scrum-32 (подтверждение/заморозка) ---
+
+func (r *fakeRepository) ConfirmParticipant(_ context.Context, _ database.Tx, _, _, _ int64) error {
+	return nil
+}
+
+func (r *fakeRepository) CountApprovedVoters(_ context.Context, _ database.Tx, _ int64) (int, error) {
+	return r.approvedCount, nil
+}
+
+func (r *fakeRepository) MarkRequestLocked(_ context.Context, _ database.Tx, _ int64) error {
+	r.lockRequestCalls++
+	return nil
+}
+
+func (r *fakeRepository) FreezeChain(_ context.Context, _ database.Tx, _ int64, _ time.Time) error {
+	r.freezeCalled = true
+	return nil
+}
+
+func (r *fakeRepository) LockRequestsInChain(_ context.Context, _ database.Tx, _ int64) error {
+	r.lockAllInChain++
+	return nil
+}
+
+func (r *fakeRepository) MarkItemsUnavailable(_ context.Context, _ database.Tx, _ int64) error {
+	r.itemsUnavailable++
+	return nil
+}
+
+
+
+func (r *fakeRepository) LoadChainRequestIDs(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
+	return r.requestIDs, nil
+}
+
+func (r *fakeRepository) LoadRequestLiveChainStatus(_ context.Context, _ database.Tx, _ int64) (entity.ChainStatus, error) {
+	return r.requestStatus, nil
+}
+
+func (r *fakeRepository) FindParticipantEdge(_ context.Context, _ database.Tx, _ int64, _ string) (int64, int64, error) {
+	return r.edgeRequestID, r.edgeTargetID, nil
+}
+
 type fakeTransactionManager struct{}
 
 func (fakeTransactionManager) WithinTransaction(_ context.Context, fn func(database.Tx) error) error {
 	return fn(nil)
 }
+
+func (r *fakeRepository) ListChainsContainingRequest(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
+	return nil, nil
+}
+func (r *fakeRepository) DeleteRequestParticipation(_ context.Context, _ database.Tx, _ int64) error {
+	return nil
+}
+func (r *fakeRepository) DeleteChain(_ context.Context, _ database.Tx, _ int64) error {
+	return nil
+}
+func (r *fakeRepository) ReleaseCompetitorsFromOtherChains(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
+	return nil, nil
+} 
+
+// --- тесты раунда 1 (Vote / WithdrawVote) ---
 
 func TestVoteProposesOnlyClosedPendingCycle(t *testing.T) {
 	repository := &fakeRepository{
