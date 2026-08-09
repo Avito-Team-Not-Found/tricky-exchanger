@@ -27,6 +27,10 @@ type Repository interface {
 	CountPendingVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error)
 	UpdateScore(ctx context.Context, tx database.Tx, chainID int64, score float64) error
 	ConfirmParticipant(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error
+	MarkParticipantThinking(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error
+	DeclineParticipant(ctx context.Context, tx database.Tx, chainID, requestID int64, fastReplacementEligible bool) (bool, entity.ChainStatus, error)
+	ListReplacementOptions(ctx context.Context, userID string, chainID int64) ([]entity.ReplacementOption, error)
+	SelectReplacement(ctx context.Context, tx database.Tx, userID string, chainID, replacementRequestID int64) error
 	CountApprovedVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error)
 	MarkRequestLocked(ctx context.Context, tx database.Tx, requestID int64) error
 	FreezeChain(ctx context.Context, tx database.Tx, chainID int64, deadline time.Time) error

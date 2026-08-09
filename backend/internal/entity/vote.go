@@ -8,6 +8,7 @@ type VoteValue string
 const (
 	VotePending  VoteValue = "pending"
 	VoteApproved VoteValue = "approved"
+	VoteThinking VoteValue = "thinking"
 	VoteRejected VoteValue = "rejected"
 )
 

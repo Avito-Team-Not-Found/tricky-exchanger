@@ -712,6 +712,232 @@ func (r *Postgres) ConfirmParticipant(ctx context.Context, tx database.Tx, chain
 	return nil
 }
 
+// MarkParticipantThinking records an explicit decision to wait until the
+// confirmation deadline. It is distinct from pending, which means no decision.
+func (r *Postgres) MarkParticipantThinking(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO votes (chain_id, request_id, target_request_id, vote, voted_at)
+		VALUES ($1, $2, $3, 'thinking', NOW())
+		ON CONFLICT ON CONSTRAINT votes_chain_request_target_key
+		DO UPDATE SET vote = 'thinking', voted_at = NOW()
+	`, chainID, requestID, targetRequestID)
+	if err != nil {
+		return fmt.Errorf("mark participant thinking: %w", err)
+	}
+	return nil
+}
+
+// DeclineParticipant removes the participant's confirmation and releases its
+// request. A replacement is allowed only when every other participant has
+// confirmed. Otherwise the proposal is rolled back to CANDIDATE.
+func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chainID, requestID int64, fastReplacementEligible bool) (bool, entity.ChainStatus, error) {
+	var openReplacements int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(*) FROM chain_participants cp
+		JOIN exchange_offers eo ON eo.id = cp.request_id
+		WHERE cp.chain_id = $1 AND cp.request_id <> $2 AND eo.status = 'ACTIVE'
+		  AND NOT EXISTS (SELECT 1 FROM votes v WHERE v.chain_id = cp.chain_id AND v.request_id = cp.request_id)
+	`, chainID, requestID).Scan(&openReplacements); err != nil {
+		return false, "", fmt.Errorf("count open replacements: %w", err)
+	}
+	if openReplacements > 0 {
+		if _, err := tx.Exec(ctx, `
+			UPDATE exchange_offers SET status = 'ACTIVE', updated_at = NOW()
+			WHERE id IN (SELECT request_id FROM chain_participants WHERE chain_id = $1)
+		`, chainID); err != nil {
+			return false, "", fmt.Errorf("release aborted proposal requests: %w", err)
+		}
+		if err := r.DeleteChain(ctx, tx, chainID); err != nil {
+			return false, "", err
+		}
+		return false, entity.ChainStatusBroken, nil
+	}
+
+	var clusterID int64
+	if err := tx.QueryRow(ctx, `
+		SELECT cluster_id FROM chain_participants
+		WHERE chain_id = $1 AND request_id = $2
+	`, chainID, requestID).Scan(&clusterID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, "", entity.ErrChainVoteForbidden
+		}
+		return false, "", fmt.Errorf("load declined participant cluster: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1 AND request_id = $2`, chainID, requestID); err != nil {
+		return false, "", fmt.Errorf("delete declined participant vote: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE exchange_offers SET status = 'ACTIVE', updated_at = NOW() WHERE id = $1`, requestID); err != nil {
+		return false, "", fmt.Errorf("release declined request: %w", err)
+	}
+
+	var replacementAvailable bool
+	if fastReplacementEligible {
+		if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM cluster_members candidate_member
+			JOIN exchange_offers candidate ON candidate.id = candidate_member.request_id
+			JOIN chain_participants declined ON declined.chain_id = $3 AND declined.request_id = $2
+			JOIN chains c ON c.id = declined.chain_id
+			WHERE candidate_member.cluster_id = $1 AND candidate.id <> $2
+			  AND candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+		)
+		`, clusterID, requestID, chainID).Scan(&replacementAvailable); err != nil {
+			return false, "", fmt.Errorf("check fast replacement: %w", err)
+		}
+	}
+	if replacementAvailable {
+		return true, entity.ChainStatusProposed, nil
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers AS eo
+		SET status = 'ACTIVE', updated_at = NOW()
+		WHERE eo.id IN (SELECT request_id FROM chain_participants WHERE chain_id = $1)
+		  AND eo.status IN ('IN_PROPOSAL', 'LOCKED')
+	`, chainID); err != nil {
+		return false, "", fmt.Errorf("rollback proposed requests: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE votes
+		SET vote = 'pending', voted_at = NOW()
+		WHERE chain_id = $1 AND vote IN ('approved', 'thinking')
+	`, chainID); err != nil {
+		return false, "", fmt.Errorf("reset proposal confirmations: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE chains SET status = 'CANDIDATE', version = version + 1, updated_at = NOW()
+		WHERE id = $1 AND status = 'PROPOSED'
+	`, chainID); err != nil {
+		return false, "", fmt.Errorf("rollback proposed chain: %w", err)
+	}
+	return false, entity.ChainStatusCandidate, nil
+}
+
+// ListReplacementOptions returns active requests from the declined position's
+// cluster. Only the previous participant, whose receive option disappeared,
+// may list them.
+func (r *Postgres) ListReplacementOptions(ctx context.Context, userID string, chainID int64) ([]entity.ReplacementOption, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH vacancy AS (
+			SELECT cp.position, cp.cluster_id, cp.request_id, c.length
+			FROM chain_participants AS cp
+			JOIN chains AS c ON c.id = cp.chain_id
+			JOIN exchange_offers AS selected ON selected.id = cp.request_id
+			WHERE cp.chain_id = $1 AND c.status = 'PROPOSED'
+			  AND selected.status = 'ACTIVE'
+			  AND NOT EXISTS (SELECT 1 FROM votes v WHERE v.chain_id = cp.chain_id AND v.request_id = cp.request_id)
+			LIMIT 1
+		), actor AS (
+			SELECT cp.request_id
+			FROM chain_participants cp
+			JOIN exchange_offers eo ON eo.id = cp.request_id
+			CROSS JOIN vacancy v
+			WHERE cp.chain_id = $1 AND cp.position = (v.position - 1 + v.length) % v.length
+			  AND eo.user_id = $2
+		)
+		SELECT candidate.id, candidate.offered_item_id, item.title, COALESCE(item.description, ''),
+		       COALESCE(candidate.wanted_description, ''), item.image_url,
+		       COALESCE(position.reliability, 0.75), candidate.updated_at
+		FROM vacancy v
+		JOIN actor ON true
+		JOIN cluster_members member ON member.cluster_id = v.cluster_id AND member.request_id <> v.request_id
+		JOIN exchange_offers candidate ON candidate.id = member.request_id
+		JOIN items item ON item.id = candidate.offered_item_id
+		JOIN chain_participants position ON position.chain_id = $1 AND position.position = v.position
+		WHERE candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+		  AND NOT EXISTS (
+			  SELECT 1 FROM chain_participants current
+			  WHERE current.chain_id = $1 AND current.request_id = candidate.id
+		  )
+		ORDER BY COALESCE(position.reliability, 0.75) DESC, candidate.updated_at, candidate.id
+	`, chainID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list replacement options: %w", err)
+	}
+	defer rows.Close()
+	options := make([]entity.ReplacementOption, 0)
+	for rows.Next() {
+		var option entity.ReplacementOption
+		if err := rows.Scan(&option.RequestID, &option.OfferedItemID, &option.Title, &option.Description,
+			&option.WantedDescription, &option.ImageURL, &option.Reliability, &option.RespondedAt); err != nil {
+			return nil, fmt.Errorf("scan replacement option: %w", err)
+		}
+		options = append(options, option)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate replacement options: %w", err)
+	}
+	return options, nil
+}
+
+// SelectReplacement atomically pins an alternative request and transfers the
+// previous participant's approved edge to it. The replacement does not receive
+// a vote automatically: its owner must explicitly confirm or think.
+func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID string, chainID, replacementRequestID int64) error {
+	var position, length int
+	var oldRequestID, actorRequestID, nextRequestID int64
+	err := tx.QueryRow(ctx, `
+		SELECT vacancy.position, c.length, vacancy.request_id, actor.request_id, next_cp.request_id
+		FROM chains c
+		JOIN chain_participants vacancy ON vacancy.chain_id = c.id
+		JOIN exchange_offers old_request ON old_request.id = vacancy.request_id
+		JOIN chain_participants actor ON actor.chain_id = c.id
+		JOIN exchange_offers actor_offer ON actor_offer.id = actor.request_id AND actor_offer.user_id = $2
+		JOIN chain_participants next_cp ON next_cp.chain_id = c.id
+		WHERE c.id = $1 AND c.status = 'PROPOSED'
+		  AND old_request.status = 'ACTIVE'
+		  AND actor.position = (vacancy.position - 1 + c.length) % c.length
+		  AND next_cp.position = (vacancy.position + 1) % c.length
+		LIMIT 1
+	`, chainID, userID).Scan(&position, &length, &oldRequestID, &actorRequestID, &nextRequestID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.ErrChainVoteForbidden
+	}
+	if err != nil {
+		return fmt.Errorf("load replacement context: %w", err)
+	}
+	_ = length
+
+	var valid bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM cluster_members candidate_member
+			JOIN cluster_members old_member ON old_member.cluster_id = candidate_member.cluster_id
+			JOIN exchange_offers candidate ON candidate.id = candidate_member.request_id
+			WHERE old_member.request_id = $2 AND candidate.id = $3
+			  AND candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+			  AND NOT EXISTS (
+				  SELECT 1 FROM chain_participants current
+				  WHERE current.chain_id = $1 AND current.request_id = candidate.id
+			  )
+		)
+	`, chainID, oldRequestID, replacementRequestID).Scan(&valid); err != nil {
+		return fmt.Errorf("validate replacement request: %w", err)
+	}
+	if !valid {
+		return entity.ErrInvalidVoteTarget
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1 AND request_id = $2`, chainID, actorRequestID); err != nil {
+		return fmt.Errorf("remove previous replacement edge: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO votes (chain_id, request_id, target_request_id, vote, voted_at)
+		VALUES ($1, $2, $3, 'approved', NOW())
+	`, chainID, actorRequestID, replacementRequestID); err != nil {
+		return fmt.Errorf("transfer approved replacement edge: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE chain_participants SET request_id = $3 WHERE chain_id = $1 AND position = $2`, chainID, position, replacementRequestID); err != nil {
+		return fmt.Errorf("pin replacement participant: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE exchange_offers SET status = 'IN_PROPOSAL', updated_at = NOW() WHERE id = $1`, replacementRequestID); err != nil {
+		return fmt.Errorf("lock replacement request: %w", err)
+	}
+	return nil
+}
+
 // CountApprovedVoters возвращает число участников цепочки, подтвердивших участие.
 func (r *Postgres) CountApprovedVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error) {
 	var count int
@@ -872,23 +1098,21 @@ func (r *Postgres) LoadRequestLiveChainStatus(ctx context.Context, tx database.T
 	return status, nil
 }
 
-// FindParticipantEdge находит голос (request→target) участника в цепочке по userID.
+// FindParticipantEdge finds the structural edge (request→target) owned by a
+// participant. The edge exists even before a replacement user has voted.
 func (r *Postgres) FindParticipantEdge(ctx context.Context, tx database.Tx, chainID int64, userID string) (int64, int64, error) {
 	var requestID, targetID int64
 	err := tx.QueryRow(ctx, `
-		SELECT vote.request_id, vote.target_request_id
-		FROM votes AS vote
-		JOIN exchange_offers AS source ON source.id = vote.request_id
-		JOIN chain_participants AS source_participant
-		  ON source_participant.chain_id = vote.chain_id
-		 AND source_participant.request_id = vote.request_id
+		SELECT source_participant.request_id, target_participant.request_id
+		FROM chain_participants AS source_participant
+		JOIN chains AS chain ON chain.id = source_participant.chain_id
+		JOIN exchange_offers AS source ON source.id = source_participant.request_id
 		JOIN chain_participants AS target_participant
-		  ON target_participant.chain_id = vote.chain_id
-		 AND target_participant.request_id = vote.target_request_id
-		WHERE vote.chain_id = $1
+		  ON target_participant.chain_id = source_participant.chain_id
+		 AND target_participant.position = (source_participant.position + 1) % chain.length
+		WHERE source_participant.chain_id = $1
 		  AND source.user_id = $2
-		  AND vote.vote IN ('pending', 'approved')
-		ORDER BY source.id
+		ORDER BY source_participant.position
 		LIMIT 1
 	`, chainID, userID).Scan(&requestID, &targetID)
 	if errors.Is(err, pgx.ErrNoRows) {

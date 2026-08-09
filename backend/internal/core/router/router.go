@@ -84,6 +84,10 @@ func New(
 			chains.PUT("/:id/votes", chainH.Vote)
 			chains.DELETE("/:id/votes", chainH.WithdrawVote)
 			chains.POST("/:id/confirm", chainH.Confirm)
+			chains.POST("/:id/think", chainH.Think)
+			chains.POST("/:id/decline", chainH.Decline)
+			chains.GET("/:id/replacements", chainH.ListReplacements)
+			chains.PUT("/:id/replacement", chainH.SelectReplacement)
 
 		}
 

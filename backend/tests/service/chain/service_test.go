@@ -96,35 +96,40 @@ func TestSaveCandidatesAllowsOneClusterInDifferentChains(t *testing.T) {
 }
 
 type fakeRepository struct {
-	saved              []entity.ChainDraft
-	status             entity.ChainStatus
-	length             int
-	edges              []entity.VoteEdge
-	existingVote       entity.ChainVote
-	proposed           []int64
-	upsertCalls        int
-	deleteCalls        int
-	markInProposal     int
-	restoredActive     int
-	validationErr      error
-	approvedCount      int
-	lockRequestCalls   int
-	freezeCalled       bool
-	lockAllInChain     int
-	itemsUnavailable   int
-	removedFromOthers  int
-	requestIDs         []int64
-	requestStatus      entity.ChainStatus
-	edgeRequestID      int64
-	edgeTargetID       int64
-	edgeErr            error
-	requestLocks       int
-	pendingCountCalls  int
-	approvedCountCalls int
-	confirmedRequestID int64
-	confirmedTargetID  int64
-	affectedChains     []int64
-	releasedRequests   []int64
+	saved                   []entity.ChainDraft
+	status                  entity.ChainStatus
+	length                  int
+	edges                   []entity.VoteEdge
+	existingVote            entity.ChainVote
+	proposed                []int64
+	upsertCalls             int
+	deleteCalls             int
+	markInProposal          int
+	restoredActive          int
+	validationErr           error
+	approvedCount           int
+	lockRequestCalls        int
+	freezeCalled            bool
+	lockAllInChain          int
+	itemsUnavailable        int
+	removedFromOthers       int
+	requestIDs              []int64
+	requestStatus           entity.ChainStatus
+	edgeRequestID           int64
+	edgeTargetID            int64
+	edgeErr                 error
+	requestLocks            int
+	pendingCountCalls       int
+	approvedCountCalls      int
+	confirmedRequestID      int64
+	confirmedTargetID       int64
+	affectedChains          []int64
+	releasedRequests        []int64
+	thinkingCalls           int
+	declineAvailable        bool
+	declinedRequestID       int64
+	fastReplacementEligible bool
+	selectedRequestID       int64
 }
 
 func (r *fakeRepository) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
@@ -210,6 +215,29 @@ func (r *fakeRepository) ConfirmParticipant(_ context.Context, _ database.Tx, _,
 	return nil
 }
 
+func (r *fakeRepository) MarkParticipantThinking(_ context.Context, _ database.Tx, _, _, _ int64) error {
+	r.thinkingCalls++
+	return nil
+}
+
+func (r *fakeRepository) DeclineParticipant(_ context.Context, _ database.Tx, _ int64, requestID int64, fastReplacementEligible bool) (bool, entity.ChainStatus, error) {
+	r.declinedRequestID = requestID
+	r.fastReplacementEligible = fastReplacementEligible
+	if r.declineAvailable && fastReplacementEligible {
+		return true, entity.ChainStatusProposed, nil
+	}
+	return false, entity.ChainStatusCandidate, nil
+}
+
+func (r *fakeRepository) ListReplacementOptions(_ context.Context, _ string, _ int64) ([]entity.ReplacementOption, error) {
+	return nil, nil
+}
+
+func (r *fakeRepository) SelectReplacement(_ context.Context, _ database.Tx, _ string, _, requestID int64) error {
+	r.selectedRequestID = requestID
+	return nil
+}
+
 func (r *fakeRepository) CountApprovedVoters(_ context.Context, _ database.Tx, _ int64) (int, error) {
 	r.approvedCountCalls++
 	return r.approvedCount, nil
@@ -273,6 +301,78 @@ func (r *fakeRepository) ReleaseCompetitorsFromOtherChains(_ context.Context, _ 
 
 func (r *fakeRepository) ReleaseUnselectedFromChain(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
 	return r.releasedRequests, nil
+}
+
+func TestThinkRecordsExplicitDecision(t *testing.T) {
+	repository := &fakeRepository{status: entity.ChainStatusProposed, length: 3, edgeRequestID: 10, edgeTargetID: 20}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	if err := service.Think(context.Background(), "user-1", 7); err != nil {
+		t.Fatalf("Think() error = %v", err)
+	}
+	if repository.thinkingCalls != 1 {
+		t.Fatalf("thinking calls = %d, want 1", repository.thinkingCalls)
+	}
+}
+
+func TestDeclineKeepsProposalWhenReplacementExists(t *testing.T) {
+	repository := &fakeRepository{
+		status: entity.ChainStatusProposed, length: 3,
+		edgeRequestID: 10, edgeTargetID: 20, declineAvailable: true, approvedCount: 2,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	available, status, err := service.Decline(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Decline() error = %v", err)
+	}
+	if !available || status != entity.ChainStatusProposed || repository.declinedRequestID != 10 || !repository.fastReplacementEligible {
+		t.Fatalf("Decline() = available %v, status %s, request %d", available, status, repository.declinedRequestID)
+	}
+}
+
+func TestDeclineRollsBackBeforeOtherParticipantsConfirm(t *testing.T) {
+	repository := &fakeRepository{
+		status: entity.ChainStatusProposed, length: 5, approvedCount: 1,
+		edgeRequestID: 10, edgeTargetID: 20, declineAvailable: true,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	available, status, err := service.Decline(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Decline() error = %v", err)
+	}
+	if available || status != entity.ChainStatusCandidate || repository.fastReplacementEligible {
+		t.Fatalf("Decline() = available %v, status %s, fast replacement %v", available, status, repository.fastReplacementEligible)
+	}
+}
+
+func TestDeclineRollsBackWhenReplacementMissing(t *testing.T) {
+	repository := &fakeRepository{
+		status: entity.ChainStatusProposed, length: 2,
+		edgeRequestID: 10, edgeTargetID: 20,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	available, status, err := service.Decline(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Decline() error = %v", err)
+	}
+	if available || status != entity.ChainStatusCandidate {
+		t.Fatalf("Decline() = available %v, status %s", available, status)
+	}
+}
+
+func TestSelectReplacementPinsRequestedCandidate(t *testing.T) {
+	repository := &fakeRepository{status: entity.ChainStatusProposed, length: 3}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	if err := service.SelectReplacement(context.Background(), "user-1", 7, 99); err != nil {
+		t.Fatalf("SelectReplacement() error = %v", err)
+	}
+	if repository.selectedRequestID != 99 {
+		t.Fatalf("selected request = %d, want 99", repository.selectedRequestID)
+	}
 }
 
 type fakeRebuilder struct {

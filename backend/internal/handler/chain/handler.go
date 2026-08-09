@@ -99,6 +99,21 @@ type voteResponse struct {
 	ChainStatus     entity.ChainStatus `json:"chainStatus"`
 }
 
+type selectReplacementRequest struct {
+	RequestID int64 `json:"requestId" validate:"required,gt=0"`
+}
+
+type replacementResponse struct {
+	RequestID         int64   `json:"requestId"`
+	OfferedItemID     int64   `json:"offeredItemId"`
+	Title             string  `json:"title"`
+	Description       string  `json:"description"`
+	WantedDescription string  `json:"wantedDescription"`
+	ImageURL          *string `json:"imageUrl,omitempty"`
+	Reliability       float64 `json:"reliability"`
+	RespondedAt       string  `json:"respondedAt"`
+}
+
 // List возвращает актуальные цепочки аутентифицированного участника.
 func (h *Handler) List(c *gin.Context) {
 	userID, ok := currentUserID(c)
@@ -398,4 +413,109 @@ func (h *Handler) Confirm(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "status": status})
+}
+
+// Think records an explicit decision to wait before confirming a proposal.
+func (h *Handler) Think(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+	if err := h.service.Think(c.Request.Context(), userID, chainID); err != nil {
+		handleProposalDecisionError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "vote": entity.VoteThinking})
+}
+
+// Decline withdraws from a proposal and reports whether fast replacement is available.
+func (h *Handler) Decline(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+	replacementAvailable, status, err := h.service.Decline(c.Request.Context(), userID, chainID)
+	if err != nil {
+		handleProposalDecisionError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"chainId": chainID, "status": status, "replacementAvailable": replacementAvailable,
+	})
+}
+
+func (h *Handler) ListReplacements(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+	options, err := h.service.ListReplacements(c.Request.Context(), userID, chainID)
+	if err != nil {
+		handleProposalDecisionError(c, err)
+		return
+	}
+	response := make([]replacementResponse, 0, len(options))
+	for _, option := range options {
+		response = append(response, replacementResponse{
+			RequestID: option.RequestID, OfferedItemID: option.OfferedItemID,
+			Title: option.Title, Description: option.Description,
+			WantedDescription: option.WantedDescription, ImageURL: option.ImageURL,
+			Reliability: option.Reliability, RespondedAt: option.RespondedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *Handler) SelectReplacement(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+	var body selectReplacementRequest
+	if err := validator.BindJSON(&body, c.Request); err != nil {
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	if err := h.service.SelectReplacement(c.Request.Context(), userID, chainID, body.RequestID); err != nil {
+		if errors.Is(err, entity.ErrInvalidVoteTarget) {
+			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		handleProposalDecisionError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "requestId": body.RequestID, "status": entity.ChainStatusProposed})
+}
+
+func handleProposalDecisionError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, entity.ErrChainNotFound):
+		api.SendError(c, http.StatusNotFound, err.Error())
+	case errors.Is(err, entity.ErrChainNotProposed):
+		api.SendError(c, http.StatusConflict, err.Error())
+	case errors.Is(err, entity.ErrChainVoteForbidden):
+		api.SendError(c, http.StatusForbidden, err.Error())
+	default:
+		api.SendError(c, http.StatusInternalServerError, "internal server error")
+	}
 }

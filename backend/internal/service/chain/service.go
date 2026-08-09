@@ -463,6 +463,98 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 	return resultStatus, nil
 }
 
+// Think marks an explicit decision to postpone confirmation. Pending remains
+// reserved for a participant who has not made a round-two decision yet.
+func (s *Service) Think(ctx context.Context, userID string, chainID int64) error {
+	if s.repository == nil || s.transactions == nil {
+		return entity.ErrChainRepositoryNotConfigured
+	}
+	if chainID <= 0 {
+		return entity.ErrInvalidVoteTarget
+	}
+	return s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		status, _, err := s.repository.LockForVote(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if status != entity.ChainStatusProposed {
+			return entity.ErrChainNotProposed
+		}
+		requestID, targetID, err := s.repository.FindParticipantEdge(ctx, tx, chainID, userID)
+		if err != nil {
+			return err
+		}
+		return s.repository.MarkParticipantThinking(ctx, tx, chainID, requestID, targetID)
+	})
+}
+
+// Decline releases the participant's request. Fast replacement is allowed only
+// when all other participants have already confirmed. An earlier refusal rolls
+// the proposal back to CANDIDATE and resets confirmations to pending.
+func (s *Service) Decline(ctx context.Context, userID string, chainID int64) (bool, entity.ChainStatus, error) {
+	if s.repository == nil || s.transactions == nil {
+		return false, "", entity.ErrChainRepositoryNotConfigured
+	}
+	if chainID <= 0 {
+		return false, "", entity.ErrInvalidVoteTarget
+	}
+	var replacementAvailable bool
+	resultStatus := entity.ChainStatusCandidate
+	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		status, chainLength, err := s.repository.LockForVote(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if status != entity.ChainStatusProposed {
+			return entity.ErrChainNotProposed
+		}
+		requestID, _, err := s.repository.FindParticipantEdge(ctx, tx, chainID, userID)
+		if err != nil {
+			return err
+		}
+		approved, err := s.repository.CountApprovedVoters(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		fastReplacementEligible := approved == chainLength-1
+		replacementAvailable, resultStatus, err = s.repository.DeclineParticipant(ctx, tx, chainID, requestID, fastReplacementEligible)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return replacementAvailable, resultStatus, err
+}
+
+func (s *Service) ListReplacements(ctx context.Context, userID string, chainID int64) ([]entity.ReplacementOption, error) {
+	if s.repository == nil {
+		return nil, entity.ErrChainRepositoryNotConfigured
+	}
+	if chainID <= 0 {
+		return nil, entity.ErrInvalidVoteTarget
+	}
+	return s.repository.ListReplacementOptions(ctx, userID, chainID)
+}
+
+func (s *Service) SelectReplacement(ctx context.Context, userID string, chainID, replacementRequestID int64) error {
+	if s.repository == nil || s.transactions == nil {
+		return entity.ErrChainRepositoryNotConfigured
+	}
+	if chainID <= 0 || replacementRequestID <= 0 {
+		return entity.ErrInvalidVoteTarget
+	}
+	return s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		status, _, err := s.repository.LockForVote(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if status != entity.ChainStatusProposed {
+			return entity.ErrChainNotProposed
+		}
+		return s.repository.SelectReplacement(ctx, tx, userID, chainID, replacementRequestID)
+	})
+}
+
 // ListChainsContainingRequest возвращает цепочки, где участвует заявка.
 func (s *Service) ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error) {
 	if s.repository == nil {

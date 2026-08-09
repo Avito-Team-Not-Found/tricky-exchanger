@@ -151,6 +151,18 @@ func (s *fakeService) Confirm(_ context.Context, userID string, chainID int64) (
 	return s.confirmStatus, s.err
 }
 
+func (s *fakeService) Think(_ context.Context, _ string, _ int64) error { return s.err }
+
+func (s *fakeService) Decline(_ context.Context, _ string, _ int64) (bool, entity.ChainStatus, error) {
+	return false, entity.ChainStatusCandidate, s.err
+}
+
+func (s *fakeService) ListReplacements(_ context.Context, _ string, _ int64) ([]entity.ReplacementOption, error) {
+	return nil, s.err
+}
+
+func (s *fakeService) SelectReplacement(_ context.Context, _ string, _, _ int64) error { return s.err }
+
 func (s *fakeService) List(_ context.Context, _ string) ([]entity.Chain, error) {
 	return []entity.Chain{s.chain}, s.err
 }

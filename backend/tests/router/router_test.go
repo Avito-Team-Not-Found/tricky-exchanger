@@ -145,6 +145,18 @@ func (stubChainService) Confirm(_ context.Context, _ string, _ int64) (entity.Ch
 	return entity.ChainStatusProposed, nil
 }
 
+func (stubChainService) Think(_ context.Context, _ string, _ int64) error { return nil }
+
+func (stubChainService) Decline(_ context.Context, _ string, _ int64) (bool, entity.ChainStatus, error) {
+	return false, entity.ChainStatusCandidate, nil
+}
+
+func (stubChainService) ListReplacements(_ context.Context, _ string, _ int64) ([]entity.ReplacementOption, error) {
+	return nil, nil
+}
+
+func (stubChainService) SelectReplacement(_ context.Context, _ string, _, _ int64) error { return nil }
+
 func TestPingHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
