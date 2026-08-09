@@ -176,8 +176,8 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // статус отклика — пилюля с глифом, чтобы он читался не только по цвету (макет 4.8)
-    expect(screen.getByText('⏳ Отклик отправлен')).toBeInTheDocument();
+    // статус отклика — пилюля с подписью текстом, чтобы он читался не только по цвету (макет 4.8)
+    expect(screen.getByText('Ожидаем')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Отозвать отклик' }));
     await user.click(await screen.findByRole('button', { name: 'Да, отозвать' }));
@@ -196,7 +196,7 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    expect(screen.getByText('⏳ Отклик отправлен')).toBeInTheDocument();
+    expect(screen.getByText('Ожидаем')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
   });

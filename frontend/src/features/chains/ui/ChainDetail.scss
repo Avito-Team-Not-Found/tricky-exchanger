@@ -1,3 +1,11 @@
+// контейнер схемы: растягивается на всю высоту экрана, чтобы кнопка действия прижалась к низу (макет 4.8)
+.chain-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--spacing-lg);
+}
+
 .chain-detail__participants {
   display: flex;
   flex-direction: column;
@@ -7,7 +15,8 @@
   list-style: none;
 }
 
-// пилюля «Цепочка собрана» над списком при PROPOSED и дальше (SOFT-LOCK §8)
+// пилюля «Цепочка собрана» над списком при PROPOSED и дальше (SOFT-LOCK §8);
+// align-self: flex-start не даёт бейджу растянуться на всю ширину колонки
 .chain-detail__ready {
   display: inline-flex;
   align-items: center;
@@ -22,9 +31,9 @@
   white-space: nowrap;
 }
 
-// действие второго раунда внизу экрана (SOFT-LOCK §8)
+// действие второго раунда внизу экрана (SOFT-LOCK §8); margin-top: auto прижимает к низу
 .chain-detail__action {
-  margin-top: var(--spacing-md);
+  margin-top: auto;
 }
 
 // строка звена: подложка и рамка только у текущего пользователя (макет 4.8)
@@ -138,11 +147,13 @@
   white-space: nowrap;
 }
 
-// статус отклика — пилюля с 15%-й заливкой тона и текстом того же цвета (макет 4.8)
+// статус отклика — пилюля с 15%-й заливкой тона и текстом того же цвета (макет 4.8);
+// margin-left: auto прижимает её к правому краю строки
 .chain-detail__response {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
+  margin-left: auto;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-full);
   font-size: var(--font-size-caption);
@@ -176,11 +187,11 @@
 }
 
 @media (min-width: 768px) {
-  // на широком экране строка звена читается одной строкой: кто — слева, что предлагает — справа
+  // на широком экране строка звена читается одной строкой: имя участника и сразу за ним —
+  // что он отдаёт/хочет, без пустоты между ними
   .chain-detail__participant {
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
     gap: var(--spacing-lg);
   }
 
@@ -189,7 +200,7 @@
   }
 
   .chain-detail__item {
-    justify-content: flex-end;
+    flex: 1;
     flex-wrap: nowrap;
     min-width: 0;
   }

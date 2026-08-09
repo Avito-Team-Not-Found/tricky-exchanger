@@ -37,7 +37,7 @@ export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: C
   const hardLocked = isHardLocked(chain.status);
 
   return (
-    <>
+    <div className="chain-detail">
       {assembled ? <p className="chain-detail__ready">Цепочка собрана</p> : null}
       <ul className="chain-detail__participants">
         {links.map((link) => (
@@ -77,7 +77,7 @@ export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: C
           Перейти к сделке
         </Button>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -185,7 +185,8 @@ function ChainLinkItem({
       </div>
       {voteMeta ? (
         <span className={`chain-detail__response chain-detail__response--${voteMeta.tone}`}>
-          {voteMeta.glyph} {voteMeta.label}
+          {voteMeta.glyph ? `${voteMeta.glyph} ` : ''}
+          {voteMeta.label}
         </span>
       ) : null}
       {showAction ? (
