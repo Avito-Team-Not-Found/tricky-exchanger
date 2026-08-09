@@ -1,4 +1,5 @@
 export {
+  bestChainId,
   chainLinks,
   myParticipant,
   receivesItem,
@@ -15,4 +16,4 @@ export {
 } from './model';
 export { participantAlias, type ParticipantAlias } from './alias';
 export { fetchChain, fetchExchangeOptions, voteForRequest, withdrawVote } from './api';
-export { useChain, useExchangeOptions } from './hooks';
+export { useChain, useExchangeOptions, useIsBestChain } from './hooks';
