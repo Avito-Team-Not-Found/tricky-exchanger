@@ -106,14 +106,14 @@ describe('useRequestForm', () => {
       await result.current.handleSubmit({
         offeredItemId: 1,
         wantedDescription: 'Ноутбук',
-        wantedCategory: 'Электроника',
+        wantedCategory: 'Ноутбуки',
       });
     });
 
     expect(mockedCreateRequest).toHaveBeenCalledWith({
       offeredItemId: 1,
       wantedDescription: 'Ноутбук',
-      wantedCategory: 'Электроника',
+      wantedCategory: 'Ноутбуки',
     });
     expect(result.current.result?.request.id).toBe(2);
     expect(result.current.result?.matching.createdCandidateChains).toBe(0);

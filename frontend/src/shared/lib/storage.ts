@@ -1,5 +1,6 @@
 const TOKEN_KEY = 'tricky_exchanger_token';
 const USER_KEY = 'tricky_exchanger_user';
+const THEME_KEY = 'tricky_exchanger_theme';
 
 export const tokenStorage = {
   get(): string | null {
@@ -10,6 +11,18 @@ export const tokenStorage = {
   },
   remove(): void {
     localStorage.removeItem(TOKEN_KEY);
+  },
+};
+
+// ключ читает и инлайн-скрипт в index.html (до первого кадра) — менять значение нужно в обоих местах
+export const themeStorage = {
+  key: THEME_KEY,
+  get(): 'light' | 'dark' | null {
+    const raw = localStorage.getItem(THEME_KEY);
+    return raw === 'light' || raw === 'dark' ? raw : null;
+  },
+  set(mode: 'light' | 'dark'): void {
+    localStorage.setItem(THEME_KEY, mode);
   },
 };
 
