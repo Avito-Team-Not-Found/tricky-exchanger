@@ -1,13 +1,26 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { fetchChain, fetchExchangeOptions } from './api';
+import { fetchChain, fetchExchangeOptions, fetchReplacements } from './api';
 import { bestChainId, type Chain } from './model';
 
-export function useChain(chainId?: number) {
+// refetchInterval можно задать функцией от самой цепочки: опрос обычно нужно включать по её
+// статусу (экран замены ждёт ответа кандидата, пока цепочка PROPOSED), а до первого ответа
+// статуса ещё нет — снаружи это выражается только через хранение копии данных в state.
+export function useChain(
+  chainId?: number,
+  options: {
+    refetchInterval?: number | false | ((chain: Chain | undefined) => number | false);
+  } = {},
+) {
+  const { refetchInterval } = options;
   return useQuery({
     queryKey: ['chains', chainId],
     queryFn: () => fetchChain(chainId as number),
     enabled: Boolean(chainId),
+    refetchInterval:
+      typeof refetchInterval === 'function'
+        ? (query) => refetchInterval(query.state.data)
+        : refetchInterval,
   });
 }
 
@@ -29,4 +42,14 @@ export function useIsBestChain(chain?: Chain): { isBest: boolean; isLoading: boo
     isBest: chain ? bestChainId(data ?? []) === chain.id : false,
     isLoading,
   };
+}
+
+// Ключ намеренно вложен в ['chains'], чтобы инвалидация по префиксу (useChainVote,
+// useReplacementSelection) задевала и пул замен: список кандидатов протухающий (TZ §1).
+export function useReplacements(chainId?: number, options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: ['chains', chainId, 'replacements'],
+    queryFn: () => fetchReplacements(chainId as number),
+    enabled: Boolean(chainId) && options.enabled !== false,
+  });
 }

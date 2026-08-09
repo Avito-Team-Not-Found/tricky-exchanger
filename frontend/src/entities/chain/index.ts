@@ -9,11 +9,22 @@ export {
   type ChainParticipant,
   type ChainStatus,
   type ChainVoteResult,
+  type DeclineResult,
   type ExchangeOption,
   type ExchangeOptions,
+  type ReplacementOption,
+  type SelectReplacementResult,
   type VotePayload,
   type VoteValue,
 } from './model';
 export { participantAlias, type ParticipantAlias } from './alias';
-export { fetchChain, fetchExchangeOptions, voteForRequest, withdrawVote } from './api';
-export { useChain, useExchangeOptions, useIsBestChain } from './hooks';
+export {
+  declineChain,
+  fetchChain,
+  fetchExchangeOptions,
+  fetchReplacements,
+  selectReplacement,
+  voteForRequest,
+  withdrawVote,
+} from './api';
+export { useChain, useExchangeOptions, useIsBestChain, useReplacements } from './hooks';

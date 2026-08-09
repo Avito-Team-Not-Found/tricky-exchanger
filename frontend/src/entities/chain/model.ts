@@ -76,6 +76,32 @@ export interface ChainVoteResult {
   chainStatus: ChainStatus;
 }
 
+// Кандидат на замену выбывшего участника: заявка из того же псевдокластера, уже отфильтрованная
+// и отсортированная сервером (TZ §3.1). Список не собирается на клиенте ни из каких других источников.
+export interface ReplacementOption {
+  requestId: number;
+  offeredItemId: number;
+  title: string;
+  description: string;
+  wantedDescription: string;
+  // фото может отсутствовать вовсе (omitempty) — поле опционально, а не только null
+  imageUrl?: string | null;
+  reliability: number;
+  respondedAt: string;
+}
+
+export interface SelectReplacementResult {
+  chainId: number;
+  requestId: number;
+  status: ChainStatus;
+}
+
+export interface DeclineResult {
+  chainId: number;
+  status: ChainStatus;
+  replacementAvailable: boolean;
+}
+
 export interface ChainLink {
   position: number;
   candidates: ChainParticipant[];
