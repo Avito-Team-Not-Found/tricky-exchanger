@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  confirmChain,
   useExchangeOptions,
   voteForRequest,
   withdrawVote,
@@ -26,6 +27,7 @@ vi.mock('@entities/chain', async (importOriginal) => {
     useExchangeOptions: vi.fn(),
     voteForRequest: vi.fn(),
     withdrawVote: vi.fn(),
+    confirmChain: vi.fn(),
   };
 });
 
@@ -44,6 +46,7 @@ const mockedUseRequest = vi.mocked(useRequest);
 const mockedUseItems = vi.mocked(useItems);
 const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
+const mockedConfirm = vi.mocked(confirmChain);
 
 // отдаваемый товар заявки (offeredItemId: 1) — деталь заявки его не отдаёт,
 // ChainListPage берёт его из кеша товаров
@@ -203,6 +206,81 @@ describe('ChainListPage', () => {
     expect(screen.getAllByText('Цепочка собрана')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
+  });
+
+  // на собранной цепочке место кнопки отклика занимает подтверждение второго раунда (SOFT-LOCK §5.1)
+  it('confirms participation of a PROPOSED chain through the decision modal', async () => {
+    mockedConfirm.mockResolvedValue({ chainId: 1, status: 'PROPOSED' });
+    const user = userEvent.setup();
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(queryOk([makeOptions({ status: 'PROPOSED' })]));
+
+    renderWithProviders(<ChainListPage />);
+
+    await user.click(screen.getAllByRole('button', { name: 'Требуются действия' })[0]);
+    expect(await screen.findByText('Все участники найдены')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Да' }));
+    await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
+  });
+
+  // сделка по одной из цепочек заморожена: баннер, зелёная кнопка на замороженной карточке,
+  // остальные варианты приглушены и недоступны, правка запроса заблокирована (SOFT-LOCK §5.4/§5.5)
+  it('locks the request once one of its chains is frozen', async () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(
+      queryOk([
+        makeOptions({
+          chainId: 1,
+          status: 'FROZEN',
+          receiveOptions: [
+            {
+              clusterId: 2,
+              requestId: 202,
+              itemId: 2,
+              title: 'Фотоаппарат',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+        makeOptions({
+          chainId: 2,
+          receiveOptions: [
+            {
+              clusterId: 3,
+              requestId: 204,
+              itemId: 4,
+              title: 'Книга',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+      ]),
+    );
+
+    renderWithProviders(<ChainListPage />);
+
+    expect(
+      screen.getByText(
+        'Сделка по одной из цепочек уже согласована. Остальные варианты недоступны.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
+    expect(
+      screen.getByText('🔒 Товар жёстко заблокирован: изменить или удалить заявку нельзя'),
+    ).toBeInTheDocument();
+
+    const dimmedCard = screen
+      .getAllByRole('article')
+      .find((card) => card.textContent?.includes('Книга'));
+    expect(dimmedCard).toHaveAttribute('aria-disabled', 'true');
+    expect(dimmedCard).toContainElement(screen.getByRole('button', { name: 'Откликнуться' }));
+    expect(screen.getByRole('button', { name: 'Откликнуться' })).toBeDisabled();
+
+    const editButton = screen.getByRole('button', { name: 'Заявка заблокирована сделкой' });
+    expect(editButton).toBeDisabled();
   });
 
   it('shows the empty state when there are no exchange options', () => {

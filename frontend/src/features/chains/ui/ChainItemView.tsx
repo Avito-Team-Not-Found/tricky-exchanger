@@ -1,6 +1,6 @@
-import { Button } from 'antd';
+import { theme, Button } from 'antd';
 
-import { receivesItem, type Chain } from '@entities/chain';
+import { HARD_LOCK_MESSAGE, isHardLocked, receivesItem, type Chain } from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
 
@@ -9,15 +9,26 @@ import './ChainItemView.scss';
 interface ChainItemViewProps {
   chain: Chain;
   onOpenParticipants: () => void;
+  onConfirm: () => void;
+  onProceed: () => void;
 }
 
 // Экран цепочки (макет 4.7): товар, который пользователь получит в обмене, его описание
 // и переход к схеме участников (макет 4.8). Пока цепочка CANDIDATE, получаемое звено — пул
 // кандидатов: товар однозначен только когда кандидат один (собранная цепочка, §3.1).
-export function ChainItemView({ chain, onOpenParticipants }: ChainItemViewProps) {
+// На PROPOSED внизу — «Требуются действия», на FROZEN/IN_PROGRESS — плашка блокировки
+// и «Перейти к сделке» (SOFT-LOCK §7).
+export function ChainItemView({
+  chain,
+  onOpenParticipants,
+  onConfirm,
+  onProceed,
+}: ChainItemViewProps) {
+  const { token } = theme.useToken();
   const received = receivesItem(chain);
   const single = received.length === 1 ? received[0] : null;
   const isAssembled = chain.status !== 'CANDIDATE';
+  const hardLocked = isHardLocked(chain.status);
 
   return (
     <div className="chain-item">
@@ -50,6 +61,8 @@ export function ChainItemView({ chain, onOpenParticipants }: ChainItemViewProps)
         </div>
       </div>
 
+      {hardLocked ? <p className="chain-item__lock">{HARD_LOCK_MESSAGE}</p> : null}
+
       {single?.offeredItemDescription ? (
         <section className="chain-item__section">
           <h3 className="chain-item__section-title">Описание</h3>
@@ -57,9 +70,36 @@ export function ChainItemView({ chain, onOpenParticipants }: ChainItemViewProps)
         </section>
       ) : null}
 
-      <Button className="chain-item__details" size="large" block onClick={onOpenParticipants}>
-        Посмотреть всю цепочку
-      </Button>
+      <div className="chain-item__actions">
+        <Button className="chain-item__details" size="large" block onClick={onOpenParticipants}>
+          Посмотреть всю цепочку
+        </Button>
+        {chain.status === 'PROPOSED' ? (
+          <Button
+            className="chain-item__action"
+            type="primary"
+            size="large"
+            block
+            onClick={onConfirm}
+          >
+            Требуются действия
+          </Button>
+        ) : hardLocked ? (
+          <Button
+            className="chain-item__action"
+            size="large"
+            block
+            style={{
+              backgroundColor: token.colorSuccess,
+              borderColor: token.colorSuccess,
+              color: '#FFFFFF',
+            }}
+            onClick={onProceed}
+          >
+            Перейти к сделке
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

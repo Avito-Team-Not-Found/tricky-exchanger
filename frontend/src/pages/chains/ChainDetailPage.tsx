@@ -1,7 +1,7 @@
 import { Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainItemView } from '@features/chains';
+import { ChainItemView, useChainConfirm } from '@features/chains';
 
 import { receivesItem, useChain } from '@entities/chain';
 
@@ -18,6 +18,7 @@ export function ChainDetailPage() {
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading, isError, refetch } = useChain(chainId);
+  const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
 
   const received = chain ? receivesItem(chain) : [];
   const single = received.length === 1 ? received[0] : null;
@@ -42,6 +43,8 @@ export function ChainDetailPage() {
           <ChainItemView
             chain={chain}
             onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
+            onConfirm={() => openConfirm(chain.id)}
+            onProceed={() => navigate(`/chains/${chain.id}`)}
           />
         )}
       </div>

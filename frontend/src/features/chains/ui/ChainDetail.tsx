@@ -1,7 +1,8 @@
-import { Button } from 'antd';
+import { theme, Button } from 'antd';
 
 import {
   chainLinks,
+  isHardLocked,
   myParticipant,
   participantAlias,
   VOTE_META,
@@ -18,31 +19,65 @@ interface ChainDetailProps {
   chain: Chain;
   isVoting: boolean;
   onVote: (candidate: ChainParticipant, active: boolean) => void;
+  onConfirm: () => void;
+  onProceed: () => void;
 }
 
 // Схема цепочки (макет 4.8): строки по звеньям кольца. Внутри звена один кандидат показывается
 // карточкой товара, несколько — свёрнутым списком «N вариантов» (§3.1); отклик доступен только
 // на кандидатах позиции receivesFromPosition — за них голосует текущий пользователь, и только
-// пока цепочка ещё CANDIDATE (у собранной отклики уже не меняются, PROJECT.md §4.5).
-export function ChainDetail({ chain, isVoting, onVote }: ChainDetailProps) {
+// пока цепочка ещё CANDIDATE (у собранной отклики уже не меняются, PROJECT.md §4.5). На PROPOSED
+// и дальше над списком — пилюля «Цепочка собрана», внизу — действие второго раунда (SOFT-LOCK §8).
+export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: ChainDetailProps) {
+  const { token } = theme.useToken();
   const links = chainLinks(chain);
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
+  const assembled = chain.status !== 'CANDIDATE';
+  const hardLocked = isHardLocked(chain.status);
 
   return (
-    <ul className="chain-detail__participants">
-      {links.map((link) => (
-        <ChainLinkRow
-          key={link.position}
-          link={link}
-          isMine={me?.position === link.position}
-          isReceiveLink={link.position === chain.receivesFromPosition}
-          canVote={canVote}
-          isVoting={isVoting}
-          onVote={onVote}
-        />
-      ))}
-    </ul>
+    <>
+      {assembled ? <p className="chain-detail__ready">Цепочка собрана</p> : null}
+      <ul className="chain-detail__participants">
+        {links.map((link) => (
+          <ChainLinkRow
+            key={link.position}
+            link={link}
+            isMine={me?.position === link.position}
+            isReceiveLink={link.position === chain.receivesFromPosition}
+            canVote={canVote}
+            isVoting={isVoting}
+            onVote={onVote}
+          />
+        ))}
+      </ul>
+      {chain.status === 'PROPOSED' ? (
+        <Button
+          className="chain-detail__action"
+          type="primary"
+          size="large"
+          block
+          onClick={onConfirm}
+        >
+          Требуются действия
+        </Button>
+      ) : hardLocked ? (
+        <Button
+          className="chain-detail__action"
+          size="large"
+          block
+          style={{
+            backgroundColor: token.colorSuccess,
+            borderColor: token.colorSuccess,
+            color: '#FFFFFF',
+          }}
+          onClick={onProceed}
+        >
+          Перейти к сделке
+        </Button>
+      ) : null}
+    </>
   );
 }
 

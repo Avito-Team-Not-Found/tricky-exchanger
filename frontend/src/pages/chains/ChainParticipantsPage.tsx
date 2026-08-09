@@ -1,7 +1,7 @@
 import { Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainDetail, useChainVote } from '@features/chains';
+import { ChainDetail, useChainConfirm, useChainVote } from '@features/chains';
 
 import { useChain } from '@entities/chain';
 
@@ -19,6 +19,7 @@ export function ChainParticipantsPage() {
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading, isError, refetch } = useChain(chainId);
   const { confirmVote, isVoting } = useChainVote(refetch);
+  const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
 
   return (
     <div className="chain-detail-page">
@@ -43,6 +44,8 @@ export function ChainParticipantsPage() {
                 active,
               )
             }
+            onConfirm={() => openConfirm(chain.id)}
+            onProceed={() => navigate(`/chains/${chain.id}`)}
           />
         )}
       </div>

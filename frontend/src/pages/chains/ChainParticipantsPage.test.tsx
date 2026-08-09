@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  confirmChain,
   useChain,
   voteForRequest,
   withdrawVote,
@@ -20,12 +21,19 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, useChain: vi.fn(), voteForRequest: vi.fn(), withdrawVote: vi.fn() };
+  return {
+    ...actual,
+    useChain: vi.fn(),
+    voteForRequest: vi.fn(),
+    withdrawVote: vi.fn(),
+    confirmChain: vi.fn(),
+  };
 });
 
 const mockedUseChain = vi.mocked(useChain);
 const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
+const mockedConfirm = vi.mocked(confirmChain);
 
 const MY_CANDIDATE: ChainParticipant = {
   clusterId: 1,
@@ -191,6 +199,37 @@ describe('ChainParticipantsPage', () => {
     expect(screen.getByText('⏳ Отклик отправлен')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
+  });
+
+  // на собранной цепочке над списком — пилюля, внизу — подтверждение второго раунда (SOFT-LOCK §8)
+  it('shows the assembled pill and a confirm action on a PROPOSED chain', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeInTheDocument();
+  });
+
+  it('confirms participation from the participants screen', async () => {
+    mockedConfirm.mockResolvedValue({ chainId: 1, status: 'PROPOSED' });
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Требуются действия' }));
+    await user.click(await screen.findByRole('button', { name: 'Да' }));
+
+    await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
+  });
+
+  it('shows the proceed action on a frozen chain', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
   });
 
   it('shows an error state with retry when the chain fails to load', async () => {

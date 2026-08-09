@@ -1,6 +1,11 @@
-import { Button } from 'antd';
+import { theme, Button } from 'antd';
 
-import { type ExchangeOption, type ExchangeOptions } from '@entities/chain';
+import {
+  HARD_LOCK_MESSAGE,
+  isHardLocked,
+  type ExchangeOption,
+  type ExchangeOptions,
+} from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
 
@@ -10,20 +15,41 @@ interface ChainCardProps {
   options: ExchangeOptions;
   option: ExchangeOption;
   isVoting: boolean;
+  locked?: boolean;
   onOpen: () => void;
   onVote: (active: boolean) => void;
+  onConfirm: (chainId: number) => void;
 }
 
 // Карточка варианта обмена (макет 4.6): один конкретный получаемый товар из пула кандидатов
-// следующего звена. Действие — «Откликнуться» / «Отозвать отклик» по option.vote; отозвать можно
-// только pending-отклик (DELETE их снимает лишь у кандидатной цепочки, PROJECT.md §4.5), у
-// собранной цепочки действие скрыто, место бейджа занимает пилюля «Цепочка собрана».
-export function ChainCard({ options, option, isVoting, onOpen, onVote }: ChainCardProps) {
+// следующего звена. На кандидатной цепочке действие — «Откликнуться» / «Отозвать отклик» по
+// option.vote; на PROPOSED — «Требуются действия» (подтверждение второго раунда), на
+// FROZEN/IN_PROGRESS — «Перейти к сделке» и плашка жёсткой блокировки (SOFT-LOCK §5.1–5.5).
+export function ChainCard({
+  options,
+  option,
+  isVoting,
+  locked,
+  onOpen,
+  onVote,
+  onConfirm,
+}: ChainCardProps) {
+  const { token } = theme.useToken();
   const canVote = options.status === 'CANDIDATE';
   const canAct = canVote && (!option.vote || option.vote === 'pending');
+  const needsAction = options.status === 'PROPOSED';
+  const hardLocked = isHardLocked(options.status);
+
+  const className = [
+    'chain-card',
+    needsAction || hardLocked ? 'chain-card--highlight' : '',
+    locked ? 'chain-card--dimmed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <article className="chain-card" onClick={onOpen}>
+    <article className={className} onClick={onOpen} aria-disabled={locked || undefined}>
       <div className="chain-card__photo">
         {option.imageUrl ? (
           <img className="chain-card__photo-img" src={option.imageUrl} alt={option.title} />
@@ -48,6 +74,8 @@ export function ChainCard({ options, option, isVoting, onOpen, onVote }: ChainCa
         )}
       </div>
 
+      {hardLocked ? <p className="chain-card__lock">{HARD_LOCK_MESSAGE}</p> : null}
+
       {canAct ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
           {option.vote === 'pending' ? (
@@ -57,6 +85,7 @@ export function ChainCard({ options, option, isVoting, onOpen, onVote }: ChainCa
               danger
               block
               loading={isVoting}
+              disabled={locked}
               onClick={() => onVote(false)}
             >
               Отозвать отклик
@@ -67,11 +96,39 @@ export function ChainCard({ options, option, isVoting, onOpen, onVote }: ChainCa
               type="primary"
               block
               loading={isVoting}
+              disabled={locked}
               onClick={() => onVote(true)}
             >
               Откликнуться
             </Button>
           )}
+        </div>
+      ) : needsAction ? (
+        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
+          <Button
+            className="chain-card__action"
+            type="primary"
+            block
+            disabled={locked}
+            onClick={() => onConfirm(options.chainId)}
+          >
+            Требуются действия
+          </Button>
+        </div>
+      ) : hardLocked ? (
+        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
+          <Button
+            className="chain-card__action"
+            block
+            style={{
+              backgroundColor: token.colorSuccess,
+              borderColor: token.colorSuccess,
+              color: '#FFFFFF',
+            }}
+            onClick={onOpen}
+          >
+            Перейти к сделке
+          </Button>
         </div>
       ) : null}
     </article>

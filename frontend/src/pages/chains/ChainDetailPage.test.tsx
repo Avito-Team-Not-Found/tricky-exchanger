@@ -1,8 +1,8 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useChain, type Chain } from '@entities/chain';
+import { confirmChain, useChain, type Chain } from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -14,10 +14,11 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, useChain: vi.fn() };
+  return { ...actual, useChain: vi.fn(), confirmChain: vi.fn() };
 });
 
 const mockedUseChain = vi.mocked(useChain);
+const mockedConfirm = vi.mocked(confirmChain);
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
   return {
@@ -96,6 +97,32 @@ describe('ChainDetailPage', () => {
     renderWithProviders(<ChainDetailPage />);
 
     expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeInTheDocument();
+  });
+
+  it('confirms participation from the chain item view', async () => {
+    mockedConfirm.mockResolvedValue({ chainId: 1, status: 'FROZEN' });
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Требуются действия' }));
+    await user.click(await screen.findByRole('button', { name: 'Да' }));
+
+    await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
+  });
+
+  it('shows the hard lock plaque and the proceed button on a frozen chain', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(
+      screen.getByText('🔒 Товар жёстко заблокирован: изменить или удалить заявку нельзя'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
   // пул кандидатов может быть больше длины цепочки (§3.1): счётчик участников берём из length,

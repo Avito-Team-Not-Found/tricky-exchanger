@@ -2,9 +2,9 @@ import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { useChainVote, ChainCard } from '@features/chains';
+import { useChainConfirm, useChainVote, ChainCard } from '@features/chains';
 
-import { useExchangeOptions } from '@entities/chain';
+import { isHardLocked, useExchangeOptions } from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems } from '@entities/item';
 
@@ -13,7 +13,8 @@ import { EmptyState, ErrorState } from '@shared/ui';
 import './ChainListPage.scss';
 
 // Варианты обмена по заявке (PROJECT.md §2.6, макет 4.6): пул кандидатов следующего звена,
-// на каждого можно откликнуться или отозвать отклик.
+// на каждого можно откликнуться или отозвать отклик. Как только по одной из цепочек сделка
+// заморожена — остальные варианты недоступны, кнопка правки запроса заблокирована (SOFT-LOCK §5.4/§5.5).
 export function ChainListPage() {
   const { requestId: requestIdParam } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
@@ -22,9 +23,11 @@ export function ChainListPage() {
   const optionsQuery = useExchangeOptions(requestId);
   const itemsQuery = useItems();
   const { confirmVote, isVoting } = useChainVote();
+  const { openConfirm } = useChainConfirm();
 
   const request = requestQuery.data;
   const options = optionsQuery.data ?? [];
+  const hasFrozen = options.some((entry) => isHardLocked(entry.status));
   // деталь заявки не отдаёт снимок отдаваемого товара — берём его из кеша товаров
   const offeredItem = itemsQuery.data?.items.find((item) => item.id === request?.offeredItemId);
 
@@ -79,10 +82,18 @@ export function ChainListPage() {
               className="chain-list-page__edit"
               type="text"
               icon={<EditOutlined aria-hidden />}
-              aria-label="Редактировать запрос"
+              aria-label={hasFrozen ? 'Заявка заблокирована сделкой' : 'Редактировать запрос'}
+              title={hasFrozen ? 'Заявка заблокирована сделкой' : undefined}
+              disabled={hasFrozen}
               onClick={() => navigate(`/exchange-requests/${requestId}/edit`)}
             />
           </div>
+        ) : null}
+
+        {hasFrozen ? (
+          <p className="chain-list-page__banner" role="status">
+            Сделка по одной из цепочек уже согласована. Остальные варианты недоступны.
+          </p>
         ) : null}
 
         {receiveOptions.length === 0 ? (
@@ -98,7 +109,9 @@ export function ChainListPage() {
                 options={entry}
                 option={option}
                 isVoting={isVoting}
+                locked={hasFrozen && !isHardLocked(entry.status)}
                 onOpen={() => navigate(`/chains/${entry.chainId}`)}
+                onConfirm={(chainId) => openConfirm(chainId)}
                 onVote={(active) =>
                   confirmVote(
                     {
