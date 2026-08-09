@@ -12,7 +12,7 @@ import (
 func TestSynchronizeCreatesClusterWhenCandidateIsMissing(t *testing.T) {
 	repository := &fakeRepository{}
 	searcher := &fakeSearcher{}
-	service := clusterservice.NewService(repository, searcher, 50, 0.8)
+	service := clusterservice.NewService(repository, searcher, 50, 0.8, 0.05)
 
 	if err := service.Synchronize(context.Background(), nil, 10); err != nil {
 		t.Fatalf("Synchronize() error = %v", err)
@@ -33,7 +33,7 @@ func TestSynchronizeRefreshesOldClusterAndUsesCandidate(t *testing.T) {
 	candidateID := int64(5)
 	repository := &fakeRepository{oldClusterID: &oldClusterID, candidateID: &candidateID}
 	searcher := &fakeSearcher{candidates: []entity.Candidate{{RequestID: 42}}}
-	service := clusterservice.NewService(repository, searcher, 50, 0.8)
+	service := clusterservice.NewService(repository, searcher, 50, 0.8, 0.05)
 
 	if err := service.Synchronize(context.Background(), nil, 10); err != nil {
 		t.Fatalf("Synchronize() error = %v", err)
@@ -47,8 +47,20 @@ func TestSynchronizeRefreshesOldClusterAndUsesCandidate(t *testing.T) {
 	if len(repository.candidateOfferIDs) != 1 || repository.candidateOfferIDs[0] != 42 {
 		t.Fatalf("candidate IDs = %v, want [42]", repository.candidateOfferIDs)
 	}
-	if searcher.excludeOfferID != 10 || searcher.topK != 50 || searcher.threshold != 0.8 {
-		t.Fatalf("search args = exclude %d, topK %d, threshold %v", searcher.excludeOfferID, searcher.topK, searcher.threshold)
+	if repository.threshold != 0.8 || repository.directionMargin != 0.05 {
+		t.Fatalf(
+			"repository args = threshold %v, margin %v",
+			repository.threshold, repository.directionMargin,
+		)
+	}
+	if repository.vectors.Category != "Телефоны" {
+		t.Fatalf("repository category = %q, want %q", repository.vectors.Category, "Телефоны")
+	}
+	if searcher.excludeOfferID != 10 || searcher.topK != 50 || searcher.threshold != 0.8 || searcher.directionMargin != 0.05 {
+		t.Fatalf(
+			"search args = exclude %d, topK %d, threshold %v, margin %v",
+			searcher.excludeOfferID, searcher.topK, searcher.threshold, searcher.directionMargin,
+		)
 	}
 	if searcher.category != "Телефоны" {
 		t.Fatalf("search category = %q, want %q", searcher.category, "Телефоны")
@@ -58,7 +70,7 @@ func TestSynchronizeRefreshesOldClusterAndUsesCandidate(t *testing.T) {
 func TestRemoveRefreshesOnlyExistingMembership(t *testing.T) {
 	clusterID := int64(3)
 	repository := &fakeRepository{oldClusterID: &clusterID}
-	service := clusterservice.NewService(repository, &fakeSearcher{}, 50, 0.8)
+	service := clusterservice.NewService(repository, &fakeSearcher{}, 50, 0.8, 0.05)
 
 	if err := service.Remove(context.Background(), nil, 10); err != nil {
 		t.Fatalf("Remove() error = %v", err)
@@ -77,6 +89,9 @@ type fakeRepository struct {
 	refreshed         int64
 	refreshedIDs      []int64
 	candidateOfferIDs []int64
+	vectors           clusterservice.OfferVectors
+	threshold         float64
+	directionMargin   float64
 }
 
 func (r *fakeRepository) LoadVectors(context.Context, database.Tx, int64) (clusterservice.OfferVectors, error) {
@@ -91,8 +106,18 @@ func (r *fakeRepository) DeleteMembership(context.Context, database.Tx, int64) (
 	return r.oldClusterID, nil
 }
 
-func (r *fakeRepository) FindClusterForCandidates(_ context.Context, _ database.Tx, offerIDs []int64) (*int64, error) {
+func (r *fakeRepository) FindClusterForCandidates(
+	_ context.Context,
+	_ database.Tx,
+	offerIDs []int64,
+	vectors clusterservice.OfferVectors,
+	threshold float64,
+	directionMargin float64,
+) (*int64, error) {
 	r.candidateOfferIDs = append([]int64(nil), offerIDs...)
+	r.vectors = vectors
+	r.threshold = threshold
+	r.directionMargin = directionMargin
 	return r.candidateID, nil
 }
 
@@ -118,11 +143,12 @@ func (r *fakeRepository) ListActiveMembers(context.Context, int64) ([]entity.Exc
 }
 
 type fakeSearcher struct {
-	candidates     []entity.Candidate
-	category       string
-	excludeOfferID int64
-	topK           int
-	threshold      float64
+	candidates      []entity.Candidate
+	category        string
+	excludeOfferID  int64
+	topK            int
+	threshold       float64
+	directionMargin float64
 }
 
 func (s *fakeSearcher) FindSimilarOffers(
@@ -131,11 +157,13 @@ func (s *fakeSearcher) FindSimilarOffers(
 	category string,
 	excludeOfferID int64,
 	threshold float64,
+	directionMargin float64,
 	topK int,
 ) ([]entity.Candidate, error) {
 	s.category = category
 	s.excludeOfferID = excludeOfferID
 	s.threshold = threshold
+	s.directionMargin = directionMargin
 	s.topK = topK
 	return s.candidates, nil
 }

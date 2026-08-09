@@ -48,3 +48,16 @@ type ChainParticipant struct {
 	Vote                   *VoteValue
 	CreatedAt              time.Time
 }
+
+// ReplacementOption is an active request from the declined participant's
+// cluster that can be invited to replace it without rebuilding the cycle.
+type ReplacementOption struct {
+	RequestID         int64
+	OfferedItemID     int64
+	Title             string
+	Description       string
+	WantedDescription string
+	ImageURL          *string
+	Reliability       float64
+	RespondedAt       time.Time
+}

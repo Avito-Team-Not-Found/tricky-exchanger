@@ -15,4 +15,8 @@ type chainService interface {
 	Vote(ctx context.Context, userID string, chainID int64, input chainservice.VoteInput) (entity.ChainVote, error)
 	WithdrawVote(ctx context.Context, userID string, chainID int64, input chainservice.VoteInput) error
 	Confirm(ctx context.Context, userID string, chainID int64) (entity.ChainStatus, error)
+	Think(ctx context.Context, userID string, chainID int64) error
+	Decline(ctx context.Context, userID string, chainID int64) (bool, entity.ChainStatus, error)
+	ListReplacements(ctx context.Context, userID string, chainID int64) ([]entity.ReplacementOption, error)
+	SelectReplacement(ctx context.Context, userID string, chainID, replacementRequestID int64) error
 }

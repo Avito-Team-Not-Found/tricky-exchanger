@@ -71,9 +71,9 @@ func NewCycleFinder(loader FrontierLoader, outgoingK, capHint int, threshold flo
 	}
 }
 
-// WithQualityRules добавляет проверку качества уже собранного цикла.
-// Порог каждой стрелки остаётся в NewCycleFinder, а эти правила защищают от
-// циклов с низким средним качеством или слишком неравномерными направлениями.
+// WithQualityRules добавляет проверку качества уже собранного цикла. Порог
+// каждой стрелки остаётся в NewCycleFinder, а эти правила защищают от циклов с
+// низким средним качеством или слишком неравномерными направлениями обмена.
 func (f *CycleFinder) WithQualityRules(minAverage, maxScoreGap float64) *CycleFinder {
 	if minAverage > 0 && minAverage <= 1 {
 		f.minAverage = minAverage
