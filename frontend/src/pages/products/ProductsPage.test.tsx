@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useItems, type Item } from '@entities/item';
+import { useItemsPage, type Item } from '@entities/item';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -10,13 +10,29 @@ import { ProductsPage } from './ProductsPage';
 
 vi.mock('@entities/item', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/item')>();
-  return { ...actual, useItems: vi.fn() };
+  return { ...actual, useItemsPage: vi.fn() };
 });
 
-const mockedUseItems = vi.mocked(useItems);
+const mockedUseItemsPage = vi.mocked(useItemsPage);
 
-function queryOk(data: unknown) {
-  return { data, isPending: false, isError: false } as never;
+function pageQuery(
+  items: Item[],
+  total: number,
+  {
+    hasNextPage,
+    fetchNextPage,
+  }: { hasNextPage: boolean; fetchNextPage?: ReturnType<typeof vi.fn> },
+) {
+  return {
+    data: { pages: [{ items, total }], pageParams: [1] },
+    isPending: false,
+    isLoading: false,
+    isError: false,
+    hasNextPage,
+    fetchNextPage: fetchNextPage ?? vi.fn(),
+    isFetchingNextPage: false,
+    refetch: vi.fn(),
+  } as never;
 }
 
 const items = [
@@ -36,6 +52,14 @@ const items = [
     imageUrl: null,
     status: 'UNAVAILABLE',
   },
+  {
+    id: 3,
+    title: 'Старый стол',
+    description: 'Деревянный',
+    category: '',
+    imageUrl: null,
+    status: 'ARCHIVED',
+  },
 ] as unknown as Item[];
 
 describe('ProductsPage', () => {
@@ -44,7 +68,7 @@ describe('ProductsPage', () => {
   });
 
   it('shows the empty state with a CTA', () => {
-    mockedUseItems.mockReturnValue(queryOk({ items: [], total: 0 }));
+    mockedUseItemsPage.mockReturnValue(pageQuery([], 0, { hasNextPage: false }));
     const { container } = renderWithProviders(<ProductsPage />);
 
     const emptyState = container.querySelector('.empty-state') as HTMLElement;
@@ -54,9 +78,9 @@ describe('ProductsPage', () => {
 
   it('shows an error state with retry', () => {
     const refetch = vi.fn();
-    mockedUseItems.mockReturnValue({
+    mockedUseItemsPage.mockReturnValue({
       data: undefined,
-      isPending: false,
+      isLoading: false,
       isError: true,
       refetch,
     } as never);
@@ -67,9 +91,20 @@ describe('ProductsPage', () => {
     expect(refetch).toHaveBeenCalled();
   });
 
+  it('renders the loading skeleton while the first page is loading', () => {
+    mockedUseItemsPage.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    } as never);
+    const { container } = renderWithProviders(<ProductsPage />);
+
+    expect(container.querySelector('.ant-skeleton')).toBeInTheDocument();
+  });
+
   it('renders product cards with statuses and opens edit on tap', async () => {
     const user = userEvent.setup();
-    mockedUseItems.mockReturnValue(queryOk({ items, total: items.length }));
+    mockedUseItemsPage.mockReturnValue(pageQuery(items, items.length, { hasNextPage: false }));
     renderWithProviders(<ProductsPage />, {
       routes: [{ path: '/products/:itemId/edit', element: <div>edit screen</div> }],
     });
@@ -83,10 +118,48 @@ describe('ProductsPage', () => {
     expect(await screen.findByText('edit screen')).toBeInTheDocument();
   });
 
-  it('shows a note when the server holds more items than the page', () => {
-    mockedUseItems.mockReturnValue(queryOk({ items, total: 150 }));
+  it('loads the next page on «Показать ещё»', async () => {
+    const user = userEvent.setup();
+    const fetchNextPage = vi.fn();
+    mockedUseItemsPage.mockReturnValue(pageQuery(items, 150, { hasNextPage: true, fetchNextPage }));
     renderWithProviders(<ProductsPage />);
 
-    expect(screen.getByText(`Показаны первые ${items.length} из 150 товаров`)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Показать ещё/ }));
+
+    expect(fetchNextPage).toHaveBeenCalledOnce();
+  });
+
+  it('hides «Показать ещё» when all items are loaded', () => {
+    mockedUseItemsPage.mockReturnValue(pageQuery(items, items.length, { hasNextPage: false }));
+    renderWithProviders(<ProductsPage />);
+
+    expect(screen.queryByRole('button', { name: /Показать ещё/ })).not.toBeInTheDocument();
+  });
+
+  it('shows an archived card marked with its status', () => {
+    mockedUseItemsPage.mockReturnValue(pageQuery(items, items.length, { hasNextPage: false }));
+    renderWithProviders(<ProductsPage />);
+
+    expect(screen.getByText('Старый стол')).toBeInTheDocument();
+    expect(screen.getByText('В архиве')).toBeInTheDocument();
+  });
+
+  // при провале подгрузки следующей страницы useInfiniteQuery выставляет isError даже при
+  // наличии данных — сетку с уже загруженными карточками экраном ошибки не заменяем
+  it('keeps the grid when a later page load fails', () => {
+    mockedUseItemsPage.mockReturnValue({
+      data: { pages: [{ items, total: items.length }], pageParams: [1] },
+      isPending: false,
+      isLoading: false,
+      isError: true,
+      hasNextPage: false,
+      fetchNextPage: vi.fn(),
+      isFetchingNextPage: false,
+      refetch: vi.fn(),
+    } as never);
+    renderWithProviders(<ProductsPage />);
+
+    expect(screen.getByText('Кухонный комбайн')).toBeInTheDocument();
+    expect(screen.queryByText('Что-то пошло не так')).not.toBeInTheDocument();
   });
 });

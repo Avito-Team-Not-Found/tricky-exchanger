@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App as AntApp } from 'antd';
 import { AxiosError } from 'axios';
@@ -110,5 +110,41 @@ describe('RegisterForm', () => {
       await screen.findByText('Пользователь с таким email уже зарегистрирован'),
     ).toBeInTheDocument();
     expect(store.getState().user.token).toBeNull();
+  });
+
+  // короткий пароль отбивается на месте правилом поля (минимальная длина)
+  it('shows a password length error after a short password is typed', async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.type(screen.getByLabelText(/Имя/i), 'Новый Пользователь');
+    await user.type(screen.getByLabelText(/Email/i), 'new@example.com');
+    await user.type(screen.getByLabelText(/^Пароль$/), 'pass1');
+
+    expect(await screen.findByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument();
+  });
+
+  // сообщение показываем только пока поле в фокусе — уход из поля стирает ошибку (SCRUM-52)
+  it('clears the password and confirm errors when the fields lose focus', async () => {
+    const user = userEvent.setup();
+    setup();
+
+    const password = screen.getByLabelText(/^Пароль$/);
+    const confirm = screen.getByLabelText(/Повторите пароль/i);
+
+    await user.type(password, 'abc');
+    expect(await screen.findByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument();
+
+    password.blur();
+    await waitFor(() =>
+      expect(screen.queryByText('Пароль должен быть не короче 8 символов')).not.toBeInTheDocument(),
+    );
+
+    await user.type(password, 'password123');
+    await user.type(confirm, 'wrong');
+    expect(await screen.findByText('Пароли не совпадают')).toBeInTheDocument();
+
+    confirm.blur();
+    await waitFor(() => expect(screen.queryByText('Пароли не совпадают')).not.toBeInTheDocument());
   });
 });

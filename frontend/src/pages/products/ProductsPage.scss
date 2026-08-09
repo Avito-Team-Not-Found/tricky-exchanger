@@ -27,9 +27,8 @@
   gap: var(--spacing-md);
 }
 
-.products-page__limit-note {
-  font-size: var(--font-size-body-sm);
-  color: var(--color-text-secondary);
+.products-page__more {
+  margin-top: var(--spacing-sm);
 }
 
 @media (min-width: 768px) {

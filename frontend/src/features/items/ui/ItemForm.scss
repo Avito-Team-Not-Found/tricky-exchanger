@@ -91,7 +91,25 @@
   margin-top: var(--spacing-sm);
 }
 
-// заметный отступ между «Сохранить» и «Удалить товар»
+// архивный товар не редактируется — вместо кнопки сохранения блокирующая плашка
+// (состояние продублировано иконкой и текстом, а не только цветом, требование DESIGN.md)
+.item-form__archived {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+}
+
+.item-form__archived-icon {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+
+// заметный отступ между «Сохранить» и «В архив»
 .item-form__archive {
   margin-top: var(--spacing-md);
 }

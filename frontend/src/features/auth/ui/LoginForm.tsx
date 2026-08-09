@@ -2,7 +2,7 @@ import { LockOutlined, MailOutlined } from '@ant-design/icons';
 import { Button, Form, Input } from 'antd';
 import { Link } from 'react-router';
 
-import { EMAIL_PATTERN } from '@shared/lib/validation';
+import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH, VALIDATE_DEBOUNCE_MS } from '@shared/lib/validation';
 
 import { useLogin } from '../model/useLogin';
 
@@ -24,6 +24,7 @@ export function LoginForm() {
       <Form.Item
         label="Email"
         name="email"
+        validateDebounce={VALIDATE_DEBOUNCE_MS}
         rules={[
           { required: true, message: 'Введите email' },
           { pattern: EMAIL_PATTERN, message: 'Некорректный email' },
@@ -34,7 +35,11 @@ export function LoginForm() {
       <Form.Item
         label="Пароль"
         name="password"
-        rules={[{ required: true, message: 'Введите пароль' }]}
+        validateDebounce={VALIDATE_DEBOUNCE_MS}
+        rules={[
+          { required: true, message: 'Введите пароль' },
+          { min: PASSWORD_MIN_LENGTH, message: 'Пароль должен быть не короче 8 символов' },
+        ]}
       >
         <Input.Password
           prefix={<LockOutlined />}

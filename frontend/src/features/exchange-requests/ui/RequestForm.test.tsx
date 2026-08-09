@@ -56,6 +56,14 @@ const items = [
     imageUrl: 'bike.png',
     status: 'UNAVAILABLE',
   },
+  {
+    id: 3,
+    title: 'Старый стол',
+    description: 'Деревянный',
+    category: '',
+    imageUrl: null,
+    status: 'ARCHIVED',
+  },
 ] as unknown as Item[];
 
 const lockedRequest = {
@@ -71,8 +79,11 @@ const lockedRequest = {
 
 const liveRequest = { ...lockedRequest, status: 'ACTIVE' } as ExchangeRequest;
 
-async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Электроника') {
+// выпадашка из 37 опций виртуализирована — до нижних строк DOM не доходит, поэтому сначала
+// фильтруем поиском (showSearch включён), как это делает и живой пользователь
+async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Ноутбуки') {
   await user.click(screen.getByLabelText('Категория'));
+  await user.type(screen.getByLabelText('Категория'), name);
   await user.click(await screen.findByTitle(name));
 }
 
@@ -114,7 +125,7 @@ describe('RequestForm', () => {
     expect(mockedCreateRequest).toHaveBeenCalledWith({
       offeredItemId: 1,
       wantedDescription: 'Ноутбук',
-      wantedCategory: 'Электроника',
+      wantedCategory: 'Ноутбуки',
     });
   });
 
@@ -161,6 +172,16 @@ describe('RequestForm', () => {
     renderWithProviders(<RequestForm />);
 
     expect(screen.getByRole('img', { name: 'Велосипед' })).toHaveAttribute('src', 'bike.png');
+  });
+
+  // архивные появились в списке вместе с отменой клиентского фильтра — видны в пикере,
+  // но выбрать их нельзя (Radio disabled при status !== 'ACTIVE')
+  it('shows an archived item in the picker as disabled', () => {
+    renderWithProviders(<RequestForm />);
+
+    expect(screen.getByText('Старый стол')).toBeInTheDocument();
+    expect(screen.getByText('В архиве')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Старый стол/ })).toBeDisabled();
   });
 
   it('leads to item creation when the user has no items', async () => {

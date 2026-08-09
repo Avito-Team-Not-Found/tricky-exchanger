@@ -1,7 +1,7 @@
 import { LockOutlined, MailOutlined, UserOutlined } from '@ant-design/icons';
 import { Button, Form, Input } from 'antd';
 
-import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH } from '@shared/lib/validation';
+import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH, VALIDATE_DEBOUNCE_MS } from '@shared/lib/validation';
 
 import { useRegister } from '../model/useRegister';
 
@@ -30,6 +30,7 @@ export function RegisterForm() {
       <Form.Item
         label="Email"
         name="email"
+        validateDebounce={VALIDATE_DEBOUNCE_MS}
         rules={[
           { required: true, message: 'Введите email' },
           { pattern: EMAIL_PATTERN, message: 'Некорректный email' },
@@ -40,13 +41,19 @@ export function RegisterForm() {
       <Form.Item
         label="Пароль"
         name="password"
-        rules={[{ required: true, message: 'Введите пароль' }]}
-        extra={<span className="auth-form__hint">Минимум {PASSWORD_MIN_LENGTH} символов</span>}
+        rules={[
+          { required: true, message: 'Введите пароль' },
+          { min: PASSWORD_MIN_LENGTH, message: 'Пароль должен быть не короче 8 символов' },
+        ]}
       >
         <Input.Password
           prefix={<LockOutlined />}
           placeholder="Пароль"
           autoComplete="new-password"
+          // сообщение показываем только пока поле в фокусе — уход из поля стирает ошибку.
+          // Дебаунс тут не держим: его отложенная проверка сработала бы уже после blur
+          // и вернула бы стёртое сообщение (SCRUM-52)
+          onBlur={() => form.setFields([{ name: 'password', errors: [] }])}
         />
       </Form.Item>
       <Form.Item
@@ -69,6 +76,7 @@ export function RegisterForm() {
           prefix={<LockOutlined />}
           placeholder="Пароль ещё раз"
           autoComplete="new-password"
+          onBlur={() => form.setFields([{ name: 'confirm', errors: [] }])}
         />
       </Form.Item>
       <Button

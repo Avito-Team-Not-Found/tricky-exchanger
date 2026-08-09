@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSearchParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,18 +38,24 @@ const mockedCreateItem = vi.mocked(createItem);
 const mockedUpdateItem = vi.mocked(updateItem);
 const mockedArchiveItem = vi.mocked(archiveItem);
 
+// описание обязано быть не короче 50 символов — валидное значение для заполненных форм
+const LONG_DESCRIPTION = 'Работают как новые, отличное состояние, полный комплект документов';
+
 const existingItem = {
   id: 1,
   title: 'Кухонный комбайн',
-  description: 'Мощный',
-  category: 'Для дома и дачи',
+  description: LONG_DESCRIPTION,
+  category: 'Мебель и интерьер',
   imageUrl: 'data:image/png;base64,abc',
 } as unknown as Item;
 
 const photo = new File(['bytes'], 'photo.png', { type: 'image/png' });
 
-async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Личные вещи') {
+// выпадашка из 37 опций виртуализирована — до нижних строк DOM не доходит, поэтому сначала
+// фильтруем поиском (showSearch включён), как это делает и живой пользователь
+async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Велосипеды') {
   await user.click(screen.getByLabelText('Категория'));
+  await user.type(screen.getByLabelText('Категория'), name);
   await user.click(await screen.findByTitle(name));
 }
 
@@ -80,12 +86,25 @@ describe('ItemForm', () => {
 
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
-    await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    await user.type(screen.getByLabelText('Описание'), LONG_DESCRIPTION);
     // категория обязательна — без неё форма всё ещё не отправляется
     expect(submit).toBeDisabled();
 
     await pickCategory(user);
     expect(submit).toBeEnabled();
+  });
+
+  it('blocks saving a description shorter than 50 characters', async () => {
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<ItemForm />);
+
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
+    await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
+    await user.type(screen.getByLabelText('Описание'), 'x'.repeat(49));
+    await pickCategory(user);
+
+    expect(await screen.findByText('Пожалуйста, опишите товар подробнее')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Сохранить/ })).toBeDisabled();
   });
 
   it('creates an item on submit', async () => {
@@ -97,13 +116,13 @@ describe('ItemForm', () => {
 
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
-    await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    await user.type(screen.getByLabelText('Описание'), LONG_DESCRIPTION);
     await pickCategory(user);
     await user.click(screen.getByRole('button', { name: /Сохранить/ }));
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedCreateItem).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Смарт-часы', description: 'Работают как новые' }),
+      expect.objectContaining({ title: 'Смарт-часы', description: LONG_DESCRIPTION }),
       expect.any(File),
     );
   });
@@ -117,13 +136,13 @@ describe('ItemForm', () => {
 
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
-    await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    await user.type(screen.getByLabelText('Описание'), LONG_DESCRIPTION);
     await pickCategory(user);
     await user.click(screen.getByRole('button', { name: /Сохранить/ }));
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedCreateItem).toHaveBeenCalledWith(
-      expect.objectContaining({ category: 'Личные вещи' }),
+      expect.objectContaining({ category: 'Велосипеды' }),
       expect.any(File),
     );
   });
@@ -132,12 +151,10 @@ describe('ItemForm', () => {
   // категорию) — она обязана остаться выбранной, иначе сохранение молча уводит товар
   // в другой пул подбора
   it('keeps a category that is missing from the catalog', async () => {
-    mockedUseItem.mockReturnValue(
-      queryOk({ ...existingItem, category: 'Садовая техника' } as Item),
-    );
+    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, category: 'Антиквариат' } as Item));
     renderWithProviders(<ItemForm itemId={1} />);
 
-    expect(screen.getByTitle('Садовая техника')).toBeInTheDocument();
+    expect(screen.getByTitle('Антиквариат')).toBeInTheDocument();
   });
 
   // создание товара из формы запроса (PROJECT.md §2.4): фото не загрузилось — товар уже создан,
@@ -152,7 +169,7 @@ describe('ItemForm', () => {
 
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
-    await user.type(screen.getByLabelText('Описание'), 'Работают как новые');
+    await user.type(screen.getByLabelText('Описание'), LONG_DESCRIPTION);
     await pickCategory(user);
     await user.click(screen.getByRole('button', { name: /Сохранить/ }));
 
@@ -176,7 +193,7 @@ describe('ItemForm', () => {
     });
 
     expect(screen.getByLabelText('Название')).toHaveValue('Кухонный комбайн');
-    expect(screen.getByLabelText('Описание')).toHaveValue('Мощный');
+    expect(screen.getByLabelText('Описание')).toHaveValue(LONG_DESCRIPTION);
 
     await user.clear(screen.getByLabelText('Название'));
     await user.type(screen.getByLabelText('Название'), 'Комбайн Bosch');
@@ -187,7 +204,7 @@ describe('ItemForm', () => {
       1,
       expect.objectContaining({
         title: 'Комбайн Bosch',
-        description: 'Мощный',
+        description: LONG_DESCRIPTION,
       }),
       undefined,
     );
@@ -241,10 +258,27 @@ describe('ItemForm', () => {
       routes: [{ path: '/products', element: <div>products screen</div> }],
     });
 
-    await user.click(screen.getByRole('button', { name: /Удалить товар/ }));
-    await user.click(await screen.findByRole('button', { name: /Да, удалить/ }));
+    await user.click(screen.getByRole('button', { name: /В архив/ }));
+    const modal = (await screen.findByRole('dialog')) as HTMLElement;
+    expect(within(modal).getAllByText('Отправить в архив?').length).toBeGreaterThan(0);
+    await user.click(within(modal).getByRole('button', { name: 'В архив' }));
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedArchiveItem).toHaveBeenCalledWith(1);
+  });
+
+  // архивный товар сервер менять не даёт (422) — форма открывается только для чтения,
+  // вместо кнопки сохранения плашка «Товар в архиве» (SCRUM-52 §6.2)
+  it('shows an archived item as read-only without a save button', () => {
+    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, status: 'ARCHIVED' } as Item));
+    renderWithProviders(<ItemForm itemId={1} />);
+
+    expect(screen.getByText('Товар в архиве — редактирование недоступно')).toBeInTheDocument();
+    expect(screen.getByLabelText('Название')).toBeDisabled();
+    // фото-контролы не подхватывают disabled формы — прячем их, чтобы архивный товар
+    // нельзя было «отредактировать» удалением/сменой фото (SCRUM-52 §6.2)
+    expect(screen.queryByRole('button', { name: /Удалить фото/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Сохранить изменения/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /В архив/ })).not.toBeInTheDocument();
   });
 });

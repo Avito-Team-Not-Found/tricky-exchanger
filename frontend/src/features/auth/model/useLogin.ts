@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { App as AntApp, Form } from 'antd';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
-import { EMAIL_PATTERN } from '@shared/lib/validation';
+import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH } from '@shared/lib/validation';
 
 import { loginRequest } from '../api/authApi';
 
@@ -22,7 +22,9 @@ export function useLogin() {
   const password = Form.useWatch('password', form);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = EMAIL_PATTERN.test(email ?? '') && !!password;
+  // гейт кнопки повторяет правило поля формы: короткий пароль не уходит в молчаливый 401
+  const canSubmit =
+    EMAIL_PATTERN.test(email ?? '') && (password?.length ?? 0) >= PASSWORD_MIN_LENGTH;
 
   async function handleSubmit(values: LoginValues) {
     setSubmitting(true);

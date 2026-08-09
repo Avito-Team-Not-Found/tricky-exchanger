@@ -2,7 +2,8 @@ import { ArrowLeftOutlined, LockOutlined, MailOutlined } from '@ant-design/icons
 import { Button, Form, Input, Result } from 'antd';
 import { Link } from 'react-router';
 
-import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH } from '@shared/lib/validation';
+import { maskEmail } from '@shared/lib/maskEmail';
+import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH, VALIDATE_DEBOUNCE_MS } from '@shared/lib/validation';
 
 import { OTP_LENGTH, useRecoveryFlow } from '../model/useRecoveryFlow';
 
@@ -56,6 +57,7 @@ export function RecoveryFlow() {
           <Form.Item
             label="Email"
             name="email"
+            validateDebounce={VALIDATE_DEBOUNCE_MS}
             rules={[
               { required: true, message: 'Введите email' },
               { pattern: EMAIL_PATTERN, message: 'Некорректный email' },
@@ -89,7 +91,9 @@ export function RecoveryFlow() {
       <>
         {backButton}
         <h1 className="recovery-title">Введите код</h1>
-        <p className="recovery-description">Мы отправили 6-значный код на {state.email}</p>
+        <p className="recovery-description">
+          Мы отправили 6-значный код на {maskEmail(state.email)}
+        </p>
         <div className="recovery-otp">
           <Input.OTP
             size="large"
@@ -143,7 +147,11 @@ export function RecoveryFlow() {
           <Form.Item
             label="Новый пароль"
             name="password"
-            rules={[{ required: true, message: 'Введите пароль' }]}
+            validateDebounce={VALIDATE_DEBOUNCE_MS}
+            rules={[
+              { required: true, message: 'Введите пароль' },
+              { min: PASSWORD_MIN_LENGTH, message: 'Пароль должен быть не короче 8 символов' },
+            ]}
             extra={<span className="auth-form__hint">Минимум {PASSWORD_MIN_LENGTH} символов</span>}
           >
             <Input.Password

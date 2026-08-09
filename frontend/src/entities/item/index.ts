@@ -7,10 +7,11 @@ export {
 } from './model';
 export {
   ItemImageUploadError,
+  ITEMS_PAGE_SIZE,
   archiveItem,
   createItem,
   fetchItem,
   fetchItems,
   updateItem,
 } from './api';
-export { useItem, useItems } from './hooks';
+export { useItem, useItems, useItemsPage } from './hooks';

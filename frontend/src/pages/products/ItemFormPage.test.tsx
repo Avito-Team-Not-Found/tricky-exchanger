@@ -24,8 +24,8 @@ function queryOk(data: unknown) {
 const item = {
   id: 1,
   title: 'Комбайн',
-  description: 'Мощный',
-  category: 'Для дома и дачи',
+  description: 'Мощный, отличное состояние, полный комплект документов и гарантия',
+  category: 'Мебель и интерьер',
   imageUrl: 'data:image/png;base64,x',
   status: 'ACTIVE',
   createdAt: '',
