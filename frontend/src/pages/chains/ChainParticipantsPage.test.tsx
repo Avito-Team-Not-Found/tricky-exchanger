@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   useChain,
+  useIsBestChain,
   voteForRequest,
   withdrawVote,
   type Chain,
@@ -20,10 +21,17 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, useChain: vi.fn(), voteForRequest: vi.fn(), withdrawVote: vi.fn() };
+  return {
+    ...actual,
+    useChain: vi.fn(),
+    useIsBestChain: vi.fn(),
+    voteForRequest: vi.fn(),
+    withdrawVote: vi.fn(),
+  };
 });
 
 const mockedUseChain = vi.mocked(useChain);
+const mockedUseIsBestChain = vi.mocked(useIsBestChain);
 const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
 
@@ -71,6 +79,16 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainParticipantsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: false });
+  });
+
+  it('shows the best-chain badge above the links when the chain leads', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+    mockedUseIsBestChain.mockReturnValue({ isBest: true, isLoading: false });
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    expect(screen.getByText('Лучшая цепочка для этого товара')).toBeInTheDocument();
   });
 
   it('shows the chain as links with position aliases and candidate items', () => {

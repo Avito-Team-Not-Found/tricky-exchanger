@@ -4,11 +4,14 @@ import { type ExchangeOption, type ExchangeOptions } from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
 
+import { BestChainBadge } from './BestChainBadge';
+
 import './ChainCard.scss';
 
 interface ChainCardProps {
   options: ExchangeOptions;
   option: ExchangeOption;
+  isBest: boolean;
   isVoting: boolean;
   onOpen: () => void;
   onVote: (active: boolean) => void;
@@ -18,7 +21,7 @@ interface ChainCardProps {
 // следующего звена. Действие — «Откликнуться» / «Отозвать отклик» по option.vote; отозвать можно
 // только pending-отклик (DELETE их снимает лишь у кандидатной цепочки, PROJECT.md §4.5), у
 // собранной цепочки действие скрыто, место бейджа занимает пилюля «Цепочка собрана».
-export function ChainCard({ options, option, isVoting, onOpen, onVote }: ChainCardProps) {
+export function ChainCard({ options, option, isBest, isVoting, onOpen, onVote }: ChainCardProps) {
   const canVote = options.status === 'CANDIDATE';
   const canAct = canVote && (!option.vote || option.vote === 'pending');
 
@@ -33,6 +36,8 @@ export function ChainCard({ options, option, isVoting, onOpen, onVote }: ChainCa
           </div>
         )}
       </div>
+
+      {isBest ? <BestChainBadge /> : null}
 
       <p className="chain-card__title">{option.title}</p>
       <p className="chain-card__wanted">Хочет: {option.wantedDescription}</p>

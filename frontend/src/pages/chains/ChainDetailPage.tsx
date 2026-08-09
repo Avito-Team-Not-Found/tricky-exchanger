@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ChainItemView } from '@features/chains';
 
-import { receivesItem, useChain } from '@entities/chain';
+import { receivesItem, useChain, useIsBestChain } from '@entities/chain';
 
 import { ErrorState } from '@shared/ui';
 
@@ -17,7 +17,9 @@ export function ChainDetailPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
-  const { data: chain, isLoading, isError, refetch } = useChain(chainId);
+  const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
+  const { isBest, isLoading: isBestLoading } = useIsBestChain(chain);
+  const isLoading = isChainLoading || isBestLoading;
 
   const received = chain ? receivesItem(chain) : [];
   const single = received.length === 1 ? received[0] : null;
@@ -41,6 +43,7 @@ export function ChainDetailPage() {
         ) : (
           <ChainItemView
             chain={chain}
+            isBest={isBest}
             onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
           />
         )}
