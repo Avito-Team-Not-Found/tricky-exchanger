@@ -427,7 +427,7 @@ func (h *Handler) Think(c *gin.Context) {
 		return
 	}
 	if err := h.service.Think(c.Request.Context(), userID, chainID); err != nil {
-		handleProposalDecisionError(c, err)
+		DetermineError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "vote": entity.VoteThinking})
@@ -446,7 +446,7 @@ func (h *Handler) Decline(c *gin.Context) {
 	}
 	replacementAvailable, status, err := h.service.Decline(c.Request.Context(), userID, chainID)
 	if err != nil {
-		handleProposalDecisionError(c, err)
+		DetermineError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -466,7 +466,7 @@ func (h *Handler) ListReplacements(c *gin.Context) {
 	}
 	options, err := h.service.ListReplacements(c.Request.Context(), userID, chainID)
 	if err != nil {
-		handleProposalDecisionError(c, err)
+		DetermineError(c, err)
 		return
 	}
 	response := make([]replacementResponse, 0, len(options))
@@ -501,13 +501,13 @@ func (h *Handler) SelectReplacement(c *gin.Context) {
 			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
-		handleProposalDecisionError(c, err)
+		DetermineError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "requestId": body.RequestID, "status": entity.ChainStatusProposed})
 }
 
-func handleProposalDecisionError(c *gin.Context, err error) {
+func DetermineError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, entity.ErrChainNotFound):
 		api.SendError(c, http.StatusNotFound, err.Error())
