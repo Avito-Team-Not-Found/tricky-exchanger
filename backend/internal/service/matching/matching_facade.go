@@ -136,6 +136,24 @@ func (f *MatchingFacade) RepairAffectedChains(ctx context.Context, tx database.T
 	return nil
 }
 
+// RebuildRequests запускает новый поиск для освобождённых заявок, исключая повторы.
+func (f *MatchingFacade) RebuildRequests(ctx context.Context, tx database.Tx, requestIDs []int64) error {
+	seen := make(map[int64]struct{}, len(requestIDs))
+	for _, requestID := range requestIDs {
+		if requestID <= 0 {
+			continue
+		}
+		if _, exists := seen[requestID]; exists {
+			continue
+		}
+		seen[requestID] = struct{}{}
+		if _, err := f.RebuildForRequest(ctx, tx, requestID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func chainStateFromDraft(draft entity.ChainDraft) ranker.ChainState {
 	return ranker.ChainState{
 		Count:                   len(draft.Participants),

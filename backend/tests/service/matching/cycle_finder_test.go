@@ -35,6 +35,38 @@ func TestCycleFinderReturnsCyclesOfLengthTwoToFive(t *testing.T) {
 	}
 }
 
+func TestCycleFinderTwoWayExchangeRespectsEveryEdgeThreshold(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {edge(1, 101, 2, 102, 0.8894)},
+		},
+		closers: []entity.CandidateEdge{
+			edge(2, 102, 1, 101, 0.9501),
+		},
+	}
+
+	highThresholdFinder := matching.NewCycleFinder(loader, 20, 10, 0.90)
+	drafts, err := highThresholdFinder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() with high threshold error = %v", err)
+	}
+	if len(drafts) != 0 {
+		t.Fatalf("draft count with threshold 0.90 = %d, want 0", len(drafts))
+	}
+
+	workingThresholdFinder := matching.NewCycleFinder(loader, 20, 10, 0.80)
+	drafts, err = workingThresholdFinder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() with working threshold error = %v", err)
+	}
+	if len(drafts) != 1 {
+		t.Fatalf("draft count with threshold 0.80 = %d, want 1", len(drafts))
+	}
+	if len(drafts[0].Participants) != 2 {
+		t.Fatalf("participant count = %d, want 2", len(drafts[0].Participants))
+	}
+}
+
 func TestCycleFinderExcludesRepeatedRequest(t *testing.T) {
 	loader := &fakeFrontierLoader{
 		outgoing: map[int64][]entity.CandidateEdge{

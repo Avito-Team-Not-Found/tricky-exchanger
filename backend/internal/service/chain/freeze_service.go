@@ -14,6 +14,7 @@ const FreezeTTL = 24 * time.Hour
 // конкурентов; реализует MatchingFacade.RepairAffectedChains.
 type ChainRebuilder interface {
 	RepairAffectedChains(ctx context.Context, tx database.Tx, affected []int64) error
+	RebuildRequests(ctx context.Context, tx database.Tx, requestIDs []int64) error
 }
 
 type FreezeService struct {
@@ -33,6 +34,9 @@ func (s *FreezeService) Freeze(ctx context.Context, tx database.Tx, chainID int6
 	if err != nil {
 		return err
 	}
+	if err := s.repository.LockRequestsForFreeze(ctx, tx, requestIDs); err != nil {
+		return err
+	}
 	if err := s.assertNoDoubleFreeze(ctx, tx, requestIDs); err != nil {
 		return err
 	}
@@ -46,12 +50,19 @@ func (s *FreezeService) Freeze(ctx context.Context, tx database.Tx, chainID int6
 	if err := s.repository.MarkItemsUnavailable(ctx, tx, chainID); err != nil {
 		return err
 	}
+	released, err := s.repository.ReleaseUnselectedFromChain(ctx, tx, chainID)
+	if err != nil {
+		return err
+	}
 	affected, err := s.repository.ReleaseCompetitorsFromOtherChains(ctx, tx, chainID)
 	if err != nil {
 		return err
 	}
 	if s.rebuilder != nil {
-		return s.rebuilder.RepairAffectedChains(ctx, tx, affected)
+		if err := s.rebuilder.RepairAffectedChains(ctx, tx, affected); err != nil {
+			return err
+		}
+		return s.rebuilder.RebuildRequests(ctx, tx, released)
 	}
 	return nil
 }

@@ -16,8 +16,6 @@ import (
 	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
 )
 
-
-
 func TestGetReturnsOrderedExchangePositions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
@@ -136,16 +134,20 @@ func TestExchangeOptionsReturnsOnlyNextClusterMembers(t *testing.T) {
 }
 
 type fakeService struct {
-	chain         entity.Chain
-	chains        []entity.Chain
-	vote          entity.ChainVote
-	voteInput     chainservice.VoteInput
-	withdrawInput chainservice.VoteInput
-	confirmStatus entity.ChainStatus
-	err           error
+	chain          entity.Chain
+	chains         []entity.Chain
+	vote           entity.ChainVote
+	voteInput      chainservice.VoteInput
+	withdrawInput  chainservice.VoteInput
+	confirmStatus  entity.ChainStatus
+	confirmUserID  string
+	confirmChainID int64
+	err            error
 }
 
-func (s *fakeService) Confirm(_ context.Context, _ string, _ int64) (entity.ChainStatus, error) {
+func (s *fakeService) Confirm(_ context.Context, userID string, chainID int64) (entity.ChainStatus, error) {
+	s.confirmUserID = userID
+	s.confirmChainID = chainID
 	return s.confirmStatus, s.err
 }
 
@@ -233,5 +235,51 @@ func TestWithdrawVoteUsesSourceAndTargetQuery(t *testing.T) {
 	}
 	if service.withdrawInput.RequestID != 10 || service.withdrawInput.TargetRequestID != 20 {
 		t.Fatalf("input = %+v", service.withdrawInput)
+	}
+}
+
+func TestConfirmReturnsFrozenStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	service := &fakeService{confirmStatus: entity.ChainStatusFrozen}
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c.Set("userID", userID)
+		c.Next()
+	})
+	engine.POST("/chains/:id/confirm", chainhandler.NewHandler(service).Confirm)
+
+	request := httptest.NewRequest(http.MethodPost, "/chains/7/confirm", nil)
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if service.confirmUserID != userID.String() || service.confirmChainID != 7 {
+		t.Fatalf("confirm call = user %q, chain %d", service.confirmUserID, service.confirmChainID)
+	}
+	if !strings.Contains(recorder.Body.String(), `"status":"FROZEN"`) {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestConfirmMapsForeignParticipantToForbidden(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	service := &fakeService{err: entity.ErrChainVoteForbidden}
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c.Set("userID", userID)
+		c.Next()
+	})
+	engine.POST("/chains/:id/confirm", chainhandler.NewHandler(service).Confirm)
+
+	request := httptest.NewRequest(http.MethodPost, "/chains/7/confirm", nil)
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 }

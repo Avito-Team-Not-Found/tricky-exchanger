@@ -33,8 +33,10 @@ type Repository interface {
 	LockRequestsInChain(ctx context.Context, tx database.Tx, chainID int64) error
 	MarkItemsUnavailable(ctx context.Context, tx database.Tx, chainID int64) error
 	LoadChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
+	LockRequestsForFreeze(ctx context.Context, tx database.Tx, requestIDs []int64) error
 	LoadRequestLiveChainStatus(ctx context.Context, tx database.Tx, requestID int64) (entity.ChainStatus, error)
 	FindParticipantEdge(ctx context.Context, tx database.Tx, chainID int64, userID string) (requestID, targetRequestID int64, err error)
+	ReleaseUnselectedFromChain(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
 
 	// Жизненный цикл цепочек (пересборка/удаление) под властью matcher.
 	ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error)

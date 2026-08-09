@@ -54,13 +54,15 @@ type Config struct {
 	// Matching* — настройки векторного поиска кандидатов (задача SCRUM-24).
 	// pgvector даёт только Top-/пороговых семантических кандидатов; поиск циклов и
 	// кластеры строятся уже поверх них в Go. Параметры меняются через окружение.
-	MatchingTopK      int     // LIMIT для Top-K рёбер графа (default 20)
-	MatchingThreshold float64 // порог cosine для рёбер want→item (default 0.5)
-	ClusterTopK       int     // LIMIT кандидатов при кластеризации (default 50)
-	ClusterThreshold  float64 // порог «то же направление» offer+want (default 0.8)
-	VectorMetric      string  // "cosine" (зафиксировано, соответствует индексу)
-	CycleOutgoingK    int     // максимум исходящих рёбер одной вершины
-	CycleMaxDrafts    int     // максимум возвращаемых вариантов цепочки
+	MatchingTopK         int     // LIMIT для Top-K рёбер графа (default 20)
+	MatchingThreshold    float64 // порог cosine для рёбер want→item (default 0.5)
+	ClusterTopK          int     // LIMIT кандидатов при кластеризации (default 50)
+	ClusterThreshold     float64 // порог «то же направление» offer+want (default 0.8)
+	VectorMetric         string  // "cosine" (зафиксировано, соответствует индексу)
+	CycleOutgoingK       int     // максимум исходящих рёбер одной вершины
+	CycleMaxDrafts       int     // максимум возвращаемых вариантов цепочки
+	CycleMinAverageScore float64 // минимальное среднее качество стрелок цикла
+	CycleMaxScoreGap     float64 // допустимая разница между лучшей и худшей стрелкой
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -96,13 +98,15 @@ func Load() (*Config, error) {
 		EmbeddingTimeout:  envDurationOrDefault("EMBEDDING_TIMEOUT", 2*time.Second),
 		MaxInputLength:    envIntOrDefault("MAX_INPUT_LENGTH", 1500),
 
-		MatchingTopK:      envIntOrDefault("MATCHING_TOPK", 20),
-		MatchingThreshold: envFloatOrDefault("MATCHING_THRESHOLD", 0.5),
-		ClusterTopK:       envIntOrDefault("CLUSTER_TOPK", 50),
-		ClusterThreshold:  envFloatOrDefault("CLUSTER_SIMILARITY_THRESHOLD", 0.9),
-		VectorMetric:      envOrDefault("VECTOR_METRIC", "cosine"),
-		CycleOutgoingK:    envIntOrDefault("CYCLE_OUTGOING_K", 20),
-		CycleMaxDrafts:    envIntOrDefault("CYCLE_MAX_DRAFTS", 10),
+		MatchingTopK:         envIntOrDefault("MATCHING_TOPK", 20),
+		MatchingThreshold:    envFloatOrDefault("MATCHING_THRESHOLD", 0.5),
+		ClusterTopK:          envIntOrDefault("CLUSTER_TOPK", 50),
+		ClusterThreshold:     envFloatOrDefault("CLUSTER_SIMILARITY_THRESHOLD", 0.9),
+		VectorMetric:         envOrDefault("VECTOR_METRIC", "cosine"),
+		CycleOutgoingK:       envIntOrDefault("CYCLE_OUTGOING_K", 20),
+		CycleMaxDrafts:       envIntOrDefault("CYCLE_MAX_DRAFTS", 10),
+		CycleMinAverageScore: envFloatOrDefault("CYCLE_MIN_AVERAGE_SCORE", 0.5),
+		CycleMaxScoreGap:     envFloatOrDefault("CYCLE_MAX_SCORE_GAP", 1),
 
 		MinIOEndpoint:       envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOPublicEndpoint: envOrDefault("MINIO_PUBLIC_ENDPOINT", "localhost:9000"),

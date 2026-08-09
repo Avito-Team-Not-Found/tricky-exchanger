@@ -89,15 +89,15 @@ func main() {
 	clusterSvc := clusterservice.NewService(
 		clusterRepository,
 		candidateSearch,
-		cfg.MatchingTopK,
-		cfg.MatchingThreshold,
+		cfg.ClusterTopK,
+		cfg.ClusterThreshold,
 	)
 	cycleFinder := matching.NewCycleFinder(
 		candidateSearch,
 		cfg.CycleOutgoingK,
 		cfg.CycleMaxDrafts,
 		cfg.MatchingThreshold,
-	)
+	).WithQualityRules(cfg.CycleMinAverageScore, cfg.CycleMaxScoreGap)
 	transactionManager := database.NewTransactionManager(pool)
 	chainRepository := chainRepo.NewRepository(pool)
 

@@ -84,7 +84,7 @@ func New(
 			chains.PUT("/:id/votes", chainH.Vote)
 			chains.DELETE("/:id/votes", chainH.WithdrawVote)
 			chains.POST("/:id/confirm", chainH.Confirm)
-			
+
 		}
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен

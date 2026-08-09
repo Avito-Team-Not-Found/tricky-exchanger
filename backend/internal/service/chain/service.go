@@ -169,7 +169,7 @@ func (s *Service) Vote(ctx context.Context, userID string, chainID int64, input 
 			return err
 		}
 		result.ChainStatus = entity.ChainStatusProposed
-		return s.refreshScore(ctx, tx, chainID, entity.ChainStatusCandidate, ranker.EventRespond)
+		return s.refreshScore(ctx, tx, chainID, entity.ChainStatusProposed, ranker.EventRespond)
 	})
 	if err != nil {
 		return entity.ChainVote{}, err
@@ -325,7 +325,11 @@ func (s *Service) refreshScore(ctx context.Context, tx database.Tx, chainID int6
 	if err != nil {
 		return err
 	}
-	approved, err := s.repository.CountPendingVoters(ctx, tx, chainID)
+	voters := s.repository.CountPendingVoters
+	if event == ranker.EventConfirm {
+		voters = s.repository.CountApprovedVoters
+	}
+	approved, err := voters(ctx, tx, chainID)
 	if err != nil {
 		return err
 	}
@@ -383,7 +387,6 @@ func scoreStage(status entity.ChainStatus) ranker.ChainStateStatus {
 	}
 }
 
-
 // Confirm фиксирует подтверждение участника (раунд 2): его запрос переходит
 // в LOCKED, участник больше не может откликаться по нему в других цепочках.
 // Когда все подтвердили — цепочка атомарно замораживается.
@@ -405,10 +408,21 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 		// Идемпотентный возврат: если цепочка уже заморожена — успех.
 		if status != entity.ChainStatusProposed {
 			if status == entity.ChainStatusFrozen {
+				if _, _, err := s.repository.FindParticipantEdge(ctx, tx, chainID, userID); err != nil {
+					return err
+				}
 				resultStatus = status
 				return nil
 			}
 			return entity.ErrChainNotProposed
+		}
+
+		requestIDs, err := s.repository.LoadChainRequestIDs(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if err := s.repository.LockRequestsForFreeze(ctx, tx, requestIDs); err != nil {
+			return err
 		}
 
 		requestID, targetID, err := s.repository.FindParticipantEdge(ctx, tx, chainID, userID)

@@ -68,10 +68,49 @@ func TestCandidateValidatorFiltersThresholdOwnerAndDuplicates(t *testing.T) {
 	}
 }
 
+func TestRepairAffectedChainsDeletesOldVariantsAndRebuildsRemaining(t *testing.T) {
+	clusters := &fakeClusters{}
+	cycles := &fakeCycles{clusters: clusters}
+	chains := &fakeChains{
+		cycles: cycles,
+		requestIDsByChain: map[int64][]int64{
+			7: {20, 30},
+			8: {},
+		},
+	}
+	facade := matching.NewFacade(clusters, cycles, chains).
+		WithRanker(ranker.NewChainScoreCalculator(ranker.NewRankerConfig()))
+
+	if err := facade.RepairAffectedChains(context.Background(), nil, []int64{7, 8}); err != nil {
+		t.Fatalf("RepairAffectedChains() error = %v", err)
+	}
+	if len(chains.deleted) != 2 || chains.deleted[0] != 7 || chains.deleted[1] != 8 {
+		t.Fatalf("deleted chains = %v, want [7 8]", chains.deleted)
+	}
+	if cycles.searchedID != 20 {
+		t.Fatalf("rebuilt request = %d, want 20", cycles.searchedID)
+	}
+}
+
+func TestRebuildRequestsSkipsDuplicatesAndInvalidIDs(t *testing.T) {
+	clusters := &fakeClusters{}
+	cycles := &fakeCycles{clusters: clusters}
+	facade := matching.NewFacade(clusters, cycles, &fakeChains{cycles: cycles}).
+		WithRanker(ranker.NewChainScoreCalculator(ranker.NewRankerConfig()))
+
+	if err := facade.RebuildRequests(context.Background(), nil, []int64{0, 20, 20}); err != nil {
+		t.Fatalf("RebuildRequests() error = %v", err)
+	}
+	if clusters.synchronizeCalls != 1 || cycles.searchedID != 20 {
+		t.Fatalf("rebuild calls = %d, searched request = %d; want 1 and 20", clusters.synchronizeCalls, cycles.searchedID)
+	}
+}
+
 type fakeClusters struct {
-	synchronizedID int64
-	removedID      int64
-	err            error
+	synchronizedID   int64
+	synchronizeCalls int
+	removedID        int64
+	err              error
 }
 
 type fakeCycles struct {
@@ -80,8 +119,10 @@ type fakeCycles struct {
 }
 
 type fakeChains struct {
-	cycles *fakeCycles
-	saved  []entity.ChainDraft
+	cycles            *fakeCycles
+	saved             []entity.ChainDraft
+	requestIDsByChain map[int64][]int64
+	deleted           []int64
 }
 
 func (c *fakeChains) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
@@ -94,13 +135,15 @@ func (c *fakeChains) SaveCandidates(_ context.Context, _ database.Tx, drafts []e
 func (c *fakeChains) ListChainsContainingRequest(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
 	return nil, nil
 }
-func (c *fakeChains) LoadChainRequestIDs(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
-	return nil, nil
+func (c *fakeChains) LoadChainRequestIDs(_ context.Context, _ database.Tx, chainID int64) ([]int64, error) {
+	return c.requestIDsByChain[chainID], nil
 }
 func (c *fakeChains) DeleteRequestParticipation(_ context.Context, _ database.Tx, _ int64) error {
 	return nil
 }
-func (c *fakeChains) DeleteChain(_ context.Context, _ database.Tx, _ int64) error {
+
+func (c *fakeChains) DeleteChain(_ context.Context, _ database.Tx, chainID int64) error {
+	c.deleted = append(c.deleted, chainID)
 	return nil
 }
 
@@ -121,6 +164,7 @@ func (c *fakeCycles) Find(_ context.Context, _ database.Tx, requestID int64) ([]
 
 func (c *fakeClusters) Synchronize(_ context.Context, _ database.Tx, offerID int64) error {
 	c.synchronizedID = offerID
+	c.synchronizeCalls++
 	return c.err
 }
 

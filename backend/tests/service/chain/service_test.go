@@ -9,6 +9,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 func TestSaveCandidatesCanonicalizesCycleRotation(t *testing.T) {
@@ -95,27 +96,35 @@ func TestSaveCandidatesAllowsOneClusterInDifferentChains(t *testing.T) {
 }
 
 type fakeRepository struct {
-	saved             []entity.ChainDraft
-	status            entity.ChainStatus
-	length            int
-	edges             []entity.VoteEdge
-	existingVote      entity.ChainVote
-	proposed          []int64
-	upsertCalls       int
-	deleteCalls       int
-	markInProposal    int
-	restoredActive    int
-	validationErr     error
-	approvedCount     int
-	lockRequestCalls  int
-	freezeCalled      bool
-	lockAllInChain    int
-	itemsUnavailable  int
-	removedFromOthers int
-	requestIDs        []int64
-	requestStatus     entity.ChainStatus
-	edgeRequestID     int64
-	edgeTargetID      int64
+	saved              []entity.ChainDraft
+	status             entity.ChainStatus
+	length             int
+	edges              []entity.VoteEdge
+	existingVote       entity.ChainVote
+	proposed           []int64
+	upsertCalls        int
+	deleteCalls        int
+	markInProposal     int
+	restoredActive     int
+	validationErr      error
+	approvedCount      int
+	lockRequestCalls   int
+	freezeCalled       bool
+	lockAllInChain     int
+	itemsUnavailable   int
+	removedFromOthers  int
+	requestIDs         []int64
+	requestStatus      entity.ChainStatus
+	edgeRequestID      int64
+	edgeTargetID       int64
+	edgeErr            error
+	requestLocks       int
+	pendingCountCalls  int
+	approvedCountCalls int
+	confirmedRequestID int64
+	confirmedTargetID  int64
+	affectedChains     []int64
+	releasedRequests   []int64
 }
 
 func (r *fakeRepository) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
@@ -181,10 +190,11 @@ func (r *fakeRepository) RestoreActiveIfNoPendingVotes(_ context.Context, _ data
 }
 
 func (r *fakeRepository) LoadScoreFeatures(_ context.Context, _ database.Tx, _ int64) ([]float64, []float64, []int, error) {
-	return []float64{}, []float64{}, []int{}, nil
+	return []float64{0.9, 0.9}, []float64{0.75, 0.75}, []int{1, 1}, nil
 }
 
 func (r *fakeRepository) CountPendingVoters(_ context.Context, _ database.Tx, _ int64) (int, error) {
+	r.pendingCountCalls++
 	return 0, nil
 }
 
@@ -194,11 +204,14 @@ func (r *fakeRepository) UpdateScore(_ context.Context, _ database.Tx, _ int64, 
 
 // --- методы, добавленные для Scrum-32 (подтверждение/заморозка) ---
 
-func (r *fakeRepository) ConfirmParticipant(_ context.Context, _ database.Tx, _, _, _ int64) error {
+func (r *fakeRepository) ConfirmParticipant(_ context.Context, _ database.Tx, _, requestID, targetID int64) error {
+	r.confirmedRequestID = requestID
+	r.confirmedTargetID = targetID
 	return nil
 }
 
 func (r *fakeRepository) CountApprovedVoters(_ context.Context, _ database.Tx, _ int64) (int, error) {
+	r.approvedCountCalls++
 	return r.approvedCount, nil
 }
 
@@ -222,10 +235,13 @@ func (r *fakeRepository) MarkItemsUnavailable(_ context.Context, _ database.Tx, 
 	return nil
 }
 
-
-
 func (r *fakeRepository) LoadChainRequestIDs(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
 	return r.requestIDs, nil
+}
+
+func (r *fakeRepository) LockRequestsForFreeze(_ context.Context, _ database.Tx, _ []int64) error {
+	r.requestLocks++
+	return nil
 }
 
 func (r *fakeRepository) LoadRequestLiveChainStatus(_ context.Context, _ database.Tx, _ int64) (entity.ChainStatus, error) {
@@ -233,7 +249,7 @@ func (r *fakeRepository) LoadRequestLiveChainStatus(_ context.Context, _ databas
 }
 
 func (r *fakeRepository) FindParticipantEdge(_ context.Context, _ database.Tx, _ int64, _ string) (int64, int64, error) {
-	return r.edgeRequestID, r.edgeTargetID, nil
+	return r.edgeRequestID, r.edgeTargetID, r.edgeErr
 }
 
 type fakeTransactionManager struct{}
@@ -252,8 +268,157 @@ func (r *fakeRepository) DeleteChain(_ context.Context, _ database.Tx, _ int64) 
 	return nil
 }
 func (r *fakeRepository) ReleaseCompetitorsFromOtherChains(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
-	return nil, nil
-} 
+	return r.affectedChains, nil
+}
+
+func (r *fakeRepository) ReleaseUnselectedFromChain(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
+	return r.releasedRequests, nil
+}
+
+type fakeRebuilder struct {
+	affected []int64
+	rebuilt  []int64
+}
+
+func (r *fakeRebuilder) RepairAffectedChains(_ context.Context, _ database.Tx, affected []int64) error {
+	r.affected = append([]int64(nil), affected...)
+	return nil
+}
+
+func (r *fakeRebuilder) RebuildRequests(_ context.Context, _ database.Tx, requestIDs []int64) error {
+	r.rebuilt = append([]int64(nil), requestIDs...)
+	return nil
+}
+
+func TestConfirmKeepsProposedUntilEveryParticipantApproves(t *testing.T) {
+	repository := &fakeRepository{
+		status:        entity.ChainStatusProposed,
+		length:        3,
+		approvedCount: 1,
+		requestIDs:    []int64{10, 20, 30},
+		edgeRequestID: 10,
+		edgeTargetID:  20,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{}).
+		WithScorer(ranker.NewChainScoreCalculator(ranker.NewRankerConfig()))
+
+	status, err := service.Confirm(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if status != entity.ChainStatusProposed {
+		t.Fatalf("status = %s, want %s", status, entity.ChainStatusProposed)
+	}
+	if repository.lockRequestCalls != 1 || repository.requestLocks != 1 {
+		t.Fatalf("lock calls: participant=%d, chain requests=%d", repository.lockRequestCalls, repository.requestLocks)
+	}
+	if repository.confirmedRequestID != 10 || repository.confirmedTargetID != 20 {
+		t.Fatalf("confirmed edge = %d -> %d, want 10 -> 20", repository.confirmedRequestID, repository.confirmedTargetID)
+	}
+	if repository.pendingCountCalls != 0 || repository.approvedCountCalls != 2 {
+		t.Fatalf("score voter calls: pending=%d, approved=%d", repository.pendingCountCalls, repository.approvedCountCalls)
+	}
+}
+
+func TestConfirmFreezesWhenEveryParticipantApproved(t *testing.T) {
+	repository := &fakeRepository{
+		status:        entity.ChainStatusProposed,
+		length:        2,
+		approvedCount: 2,
+		requestIDs:    []int64{10, 20},
+		edgeRequestID: 10,
+		edgeTargetID:  20,
+	}
+	rebuilder := &fakeRebuilder{}
+	repository.affectedChains = []int64{8, 9}
+	repository.releasedRequests = []int64{30, 40}
+	freezer := chainservice.NewFreezeService(repository, rebuilder)
+	service := chainservice.NewService(repository, fakeTransactionManager{}).WithFreezer(freezer)
+
+	status, err := service.Confirm(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if status != entity.ChainStatusFrozen {
+		t.Fatalf("status = %s, want %s", status, entity.ChainStatusFrozen)
+	}
+	if !repository.freezeCalled || repository.lockAllInChain != 1 || repository.itemsUnavailable != 1 {
+		t.Fatalf("freeze calls: chain=%v requests=%d items=%d", repository.freezeCalled, repository.lockAllInChain, repository.itemsUnavailable)
+	}
+	if repository.requestLocks != 2 {
+		t.Fatalf("request lock calls = %d, want 2 (confirm and freeze guard)", repository.requestLocks)
+	}
+	if len(rebuilder.affected) != 2 || rebuilder.affected[0] != 8 || rebuilder.affected[1] != 9 {
+		t.Fatalf("rebuilt competitors = %v, want [8 9]", rebuilder.affected)
+	}
+	if len(rebuilder.rebuilt) != 2 || rebuilder.rebuilt[0] != 30 || rebuilder.rebuilt[1] != 40 {
+		t.Fatalf("rebuilt released requests = %v, want [30 40]", rebuilder.rebuilt)
+	}
+}
+
+func TestConfirmRejectsCandidateChain(t *testing.T) {
+	repository := &fakeRepository{status: entity.ChainStatusCandidate, length: 2}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	_, err := service.Confirm(context.Background(), "user-1", 7)
+	if !errors.Is(err, entity.ErrChainNotProposed) {
+		t.Fatalf("Confirm() error = %v, want %v", err, entity.ErrChainNotProposed)
+	}
+	if repository.lockRequestCalls != 0 || repository.requestLocks != 0 {
+		t.Fatal("candidate confirm must not lock requests")
+	}
+}
+
+func TestConfirmFrozenRetryRequiresParticipant(t *testing.T) {
+	repository := &fakeRepository{
+		status:  entity.ChainStatusFrozen,
+		length:  2,
+		edgeErr: entity.ErrChainVoteForbidden,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	_, err := service.Confirm(context.Background(), "stranger", 7)
+	if !errors.Is(err, entity.ErrChainVoteForbidden) {
+		t.Fatalf("Confirm() error = %v, want %v", err, entity.ErrChainVoteForbidden)
+	}
+}
+
+func TestConfirmFrozenRetryIsIdempotentForParticipant(t *testing.T) {
+	repository := &fakeRepository{
+		status:        entity.ChainStatusFrozen,
+		length:        2,
+		edgeRequestID: 10,
+		edgeTargetID:  20,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	status, err := service.Confirm(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	if status != entity.ChainStatusFrozen {
+		t.Fatalf("status = %s, want %s", status, entity.ChainStatusFrozen)
+	}
+	if repository.lockRequestCalls != 0 || repository.freezeCalled {
+		t.Fatal("idempotent retry must not repeat locking or freezing")
+	}
+}
+
+func TestFreezeRejectsRequestFromAnotherFrozenChain(t *testing.T) {
+	repository := &fakeRepository{
+		requestIDs:    []int64{10, 20},
+		requestStatus: entity.ChainStatusFrozen,
+	}
+	freezer := chainservice.NewFreezeService(repository, nil)
+
+	err := freezer.Freeze(context.Background(), nil, 7)
+	if !errors.Is(err, entity.ErrRequestInTwoFrozenChains) {
+		t.Fatalf("Freeze() error = %v, want %v", err, entity.ErrRequestInTwoFrozenChains)
+	}
+	if repository.freezeCalled {
+		t.Fatal("chain must not freeze after detecting a competing frozen chain")
+	}
+}
 
 // --- тесты раунда 1 (Vote / WithdrawVote) ---
 
