@@ -1,5 +1,7 @@
 export {
   chainLinks,
+  HARD_LOCK_MESSAGE,
+  isHardLocked,
   myParticipant,
   receivesItem,
   VOTE_META,
@@ -8,11 +10,18 @@ export {
   type ChainParticipant,
   type ChainStatus,
   type ChainVoteResult,
+  type ConfirmResult,
   type ExchangeOption,
   type ExchangeOptions,
   type VotePayload,
   type VoteValue,
 } from './model';
 export { participantAlias, type ParticipantAlias } from './alias';
-export { fetchChain, fetchExchangeOptions, voteForRequest, withdrawVote } from './api';
+export {
+  confirmChain,
+  fetchChain,
+  fetchExchangeOptions,
+  voteForRequest,
+  withdrawVote,
+} from './api';
 export { useChain, useExchangeOptions } from './hooks';

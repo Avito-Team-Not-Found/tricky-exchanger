@@ -76,6 +76,12 @@ export interface ChainVoteResult {
   chainStatus: ChainStatus;
 }
 
+// ответ POST /chains/{id}/confirm: статус цепочки после подтверждения участника (SOFT-LOCK §3.1.3)
+export interface ConfirmResult {
+  chainId: number;
+  status: ChainStatus;
+}
+
 export interface ChainLink {
   position: number;
   candidates: ChainParticipant[];
@@ -87,6 +93,14 @@ export const VOTE_META: Record<VoteValue, { label: string; glyph: string; tone: 
   approved: { label: 'Отклик принят', glyph: '✓', tone: 'success' },
   rejected: { label: 'Отклик отклонён', glyph: '✕', tone: 'error' },
 };
+
+// единая формулировка плашки жёсткой блокировки на карточке 4.6 и экране 4.7 (SOFT-LOCK §5.5/§7)
+export const HARD_LOCK_MESSAGE = '🔒 Товар жёстко заблокирован: изменить или удалить заявку нельзя';
+
+// цепочка заморожена или уже в сделке: товары и заявки жёстко заблокированы (SOFT-LOCK §5.5)
+export function isHardLocked(status: ChainStatus): boolean {
+  return status === 'FROZEN' || status === 'IN_PROGRESS';
+}
 
 // Участник текущего пользователя: только он может откликаться за себя
 export function myParticipant(chain: Chain): ChainParticipant | null {

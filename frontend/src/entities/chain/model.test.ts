@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   chainLinks,
+  isHardLocked,
   myParticipant,
   receivesItem,
   type Chain,
@@ -106,5 +107,14 @@ describe('receivesItem', () => {
   it('returns an empty array when the receiving position is missing', () => {
     const chain = buildChain([], { receivesFromPosition: 9 });
     expect(receivesItem(chain)).toEqual([]);
+  });
+});
+
+describe('isHardLocked', () => {
+  it('locks FROZEN and IN_PROGRESS chains', () => {
+    expect(isHardLocked('FROZEN')).toBe(true);
+    expect(isHardLocked('IN_PROGRESS')).toBe(true);
+    expect(isHardLocked('CANDIDATE')).toBe(false);
+    expect(isHardLocked('PROPOSED')).toBe(false);
   });
 });
