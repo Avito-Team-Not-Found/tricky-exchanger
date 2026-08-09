@@ -124,27 +124,35 @@ describe('RegisterForm', () => {
     expect(await screen.findByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument();
   });
 
-  // сообщение показываем только пока поле в фокусе — уход из поля стирает ошибку (SCRUM-52)
-  it('clears the password and confirm errors when the fields lose focus', async () => {
+  // ошибка о коротком пароле остаётся видимой и после ухода из поля
+  it('keeps the password length error visible after the field loses focus', async () => {
     const user = userEvent.setup();
     setup();
 
     const password = screen.getByLabelText(/^Пароль$/);
-    const confirm = screen.getByLabelText(/Повторите пароль/i);
 
     await user.type(password, 'abc');
     expect(await screen.findByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument();
 
     password.blur();
     await waitFor(() =>
-      expect(screen.queryByText('Пароль должен быть не короче 8 символов')).not.toBeInTheDocument(),
+      expect(screen.getByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument(),
     );
+  });
+
+  // ошибка о несовпадении остаётся видимой и после ухода из поля
+  it('keeps the confirm mismatch error visible after the field loses focus', async () => {
+    const user = userEvent.setup();
+    setup();
+
+    const password = screen.getByLabelText(/^Пароль$/);
+    const confirm = screen.getByLabelText(/Повторите пароль/i);
 
     await user.type(password, 'password123');
     await user.type(confirm, 'wrong');
     expect(await screen.findByText('Пароли не совпадают')).toBeInTheDocument();
 
     confirm.blur();
-    await waitFor(() => expect(screen.queryByText('Пароли не совпадают')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Пароли не совпадают')).toBeInTheDocument());
   });
 });

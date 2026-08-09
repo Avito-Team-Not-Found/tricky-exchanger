@@ -50,10 +50,6 @@ export function RegisterForm() {
           prefix={<LockOutlined />}
           placeholder="Пароль"
           autoComplete="new-password"
-          // сообщение показываем только пока поле в фокусе — уход из поля стирает ошибку.
-          // Дебаунс тут не держим: его отложенная проверка сработала бы уже после blur
-          // и вернула бы стёртое сообщение (SCRUM-52)
-          onBlur={() => form.setFields([{ name: 'password', errors: [] }])}
         />
       </Form.Item>
       <Form.Item
@@ -76,7 +72,6 @@ export function RegisterForm() {
           prefix={<LockOutlined />}
           placeholder="Пароль ещё раз"
           autoComplete="new-password"
-          onBlur={() => form.setFields([{ name: 'confirm', errors: [] }])}
         />
       </Form.Item>
       <Button
