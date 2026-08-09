@@ -136,7 +136,14 @@ func (r *Postgres) DeleteMembership(ctx context.Context, tx database.Tx, offerID
 
 // FindClusterForCandidates одним запросом возвращает кластер первого кандидата
 // в порядке релевантности, полученном от pgvector-поиска.
-func (r *Postgres) FindClusterForCandidates(ctx context.Context, tx database.Tx, offerIDs []int64) (*int64, error) {
+func (r *Postgres) FindClusterForCandidates(
+	ctx context.Context,
+	tx database.Tx,
+	offerIDs []int64,
+	vectors clusterservice.OfferVectors,
+	threshold float64,
+	directionMargin float64,
+) (*int64, error) {
 	if len(offerIDs) == 0 {
 		return nil, nil
 	}
@@ -145,16 +152,53 @@ func (r *Postgres) FindClusterForCandidates(ctx context.Context, tx database.Tx,
 		WITH candidates AS (
 			SELECT request_id, position
 			FROM unnest($1::bigint[]) WITH ORDINALITY AS candidate(request_id, position)
+		), candidate_clusters AS (
+			SELECT cm.cluster_id, min(candidate.position) AS position
+			FROM candidates AS candidate
+			JOIN cluster_members AS cm ON cm.request_id = candidate.request_id
+			GROUP BY cm.cluster_id
 		)
-		SELECT cm.cluster_id
-		FROM candidates AS candidate
-		JOIN cluster_members AS cm ON cm.request_id = candidate.request_id
-		ORDER BY candidate.position
+		SELECT candidate_cluster.cluster_id
+		FROM candidate_clusters AS candidate_cluster
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM cluster_members AS member
+			JOIN exchange_offers AS member_offer ON member_offer.id = member.request_id
+			JOIN items AS member_item ON member_item.id = member_offer.offered_item_id
+			WHERE member.cluster_id = candidate_cluster.cluster_id
+			  AND member_offer.status = 'ACTIVE'
+			  AND member_item.status = 'ACTIVE'
+			  AND (
+				COALESCE(member_item.category, '') IS DISTINCT FROM $4
+				OR 1 - (member_item.embedding <=> $2::vector) < $5
+				OR 1 - (member_offer.want_embedding <=> $3::vector) < $5
+				OR (
+					$4 = ''
+					AND (
+						(1 - (member_item.embedding <=> $2::vector)) +
+						(1 - (member_offer.want_embedding <=> $3::vector))
+					) / 2 < (
+						(1 - (member_item.embedding <=> $3::vector)) +
+						(1 - (member_offer.want_embedding <=> $2::vector))
+					) / 2 + $6
+				)
+			  )
+		)
+		ORDER BY candidate_cluster.position
 		LIMIT 1
 	`
 
 	var clusterID int64
-	err := tx.QueryRow(ctx, query, offerIDs).Scan(&clusterID)
+	err := tx.QueryRow(
+		ctx,
+		query,
+		offerIDs,
+		vectors.OfferEmbedding,
+		vectors.WantEmbedding,
+		vectors.Category,
+		threshold,
+		directionMargin,
+	).Scan(&clusterID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

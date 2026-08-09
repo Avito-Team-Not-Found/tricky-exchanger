@@ -67,6 +67,61 @@ func TestCycleFinderTwoWayExchangeRespectsEveryEdgeThreshold(t *testing.T) {
 	}
 }
 
+func TestCycleFinderRejectsLowAverageAndLargeScoreGap(t *testing.T) {
+	cases := []struct {
+		name     string
+		outgoing float64
+		closing  float64
+		want     int
+	}{
+		{name: "balanced_and_strong", outgoing: 0.8894, closing: 0.9501, want: 1},
+		{name: "low_average", outgoing: 0.80, closing: 0.81, want: 0},
+		{name: "large_gap", outgoing: 0.80, closing: 0.99, want: 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			loader := &fakeFrontierLoader{
+				outgoing: map[int64][]entity.CandidateEdge{
+					1: {edge(1, 101, 2, 102, tc.outgoing)},
+				},
+				closers: []entity.CandidateEdge{edge(2, 102, 1, 101, tc.closing)},
+			}
+			finder := matching.NewCycleFinder(loader, 20, 10, 0.80).WithQualityRules(0.85, 0.15)
+
+			drafts, err := finder.Find(context.Background(), nil, 1)
+			if err != nil {
+				t.Fatalf("Find() error = %v", err)
+			}
+			if len(drafts) != tc.want {
+				t.Fatalf("draft count = %d, want %d", len(drafts), tc.want)
+			}
+		})
+	}
+}
+
+func TestCycleFinderContinuesAfterRejectingShortLowQualityCycle(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {edge(1, 101, 2, 102, 0.80)},
+			2: {edge(2, 102, 3, 103, 0.90)},
+		},
+		closers: []entity.CandidateEdge{
+			edge(2, 102, 1, 101, 0.80), // цикл 1 -> 2 -> 1: среднее слишком низкое.
+			edge(3, 103, 1, 101, 0.95), // цикл 1 -> 2 -> 3 -> 1: проходит правила.
+		},
+	}
+	finder := matching.NewCycleFinder(loader, 20, 10, 0.80).WithQualityRules(0.85, 0.20)
+
+	drafts, err := finder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(drafts) != 1 || len(drafts[0].Participants) != 3 {
+		t.Fatalf("drafts = %#v, want one valid 3-participant cycle", drafts)
+	}
+}
+
 func TestCycleFinderExcludesRepeatedRequest(t *testing.T) {
 	loader := &fakeFrontierLoader{
 		outgoing: map[int64][]entity.CandidateEdge{
