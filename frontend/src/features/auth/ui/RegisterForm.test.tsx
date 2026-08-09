@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App as AntApp } from 'antd';
 import { AxiosError } from 'axios';
@@ -110,5 +110,49 @@ describe('RegisterForm', () => {
       await screen.findByText('Пользователь с таким email уже зарегистрирован'),
     ).toBeInTheDocument();
     expect(store.getState().user.token).toBeNull();
+  });
+
+  // короткий пароль отбивается на месте правилом поля (минимальная длина)
+  it('shows a password length error after a short password is typed', async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.type(screen.getByLabelText(/Имя/i), 'Новый Пользователь');
+    await user.type(screen.getByLabelText(/Email/i), 'new@example.com');
+    await user.type(screen.getByLabelText(/^Пароль$/), 'pass1');
+
+    expect(await screen.findByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument();
+  });
+
+  // ошибка о коротком пароле остаётся видимой и после ухода из поля
+  it('keeps the password length error visible after the field loses focus', async () => {
+    const user = userEvent.setup();
+    setup();
+
+    const password = screen.getByLabelText(/^Пароль$/);
+
+    await user.type(password, 'abc');
+    expect(await screen.findByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument();
+
+    password.blur();
+    await waitFor(() =>
+      expect(screen.getByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument(),
+    );
+  });
+
+  // ошибка о несовпадении остаётся видимой и после ухода из поля
+  it('keeps the confirm mismatch error visible after the field loses focus', async () => {
+    const user = userEvent.setup();
+    setup();
+
+    const password = screen.getByLabelText(/^Пароль$/);
+    const confirm = screen.getByLabelText(/Повторите пароль/i);
+
+    await user.type(password, 'password123');
+    await user.type(confirm, 'wrong');
+    expect(await screen.findByText('Пароли не совпадают')).toBeInTheDocument();
+
+    confirm.blur();
+    await waitFor(() => expect(screen.getByText('Пароли не совпадают')).toBeInTheDocument());
   });
 });

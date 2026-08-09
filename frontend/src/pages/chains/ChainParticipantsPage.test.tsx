@@ -104,7 +104,7 @@ describe('ChainParticipantsPage', () => {
 
     expect(screen.getByText('3 варианта')).toBeInTheDocument();
     // пул не получаемого звена сворачивается, а единственный кандидат получаемого звена
-    // по-прежнему откликаем — кнопка остаётся одна
+    // по-прежнему откликаем — кнопка внизу остаётся одна
     expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
   });
 
@@ -136,7 +136,9 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(2);
+    // каждая строка получаемого пула выбираемая, кнопка внизу одна — действует на выбранного
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
   });
 
   it('casts a vote for the concrete candidate', async () => {
@@ -153,6 +155,7 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
+    await user.click(screen.getAllByRole('radio')[0]);
     await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
     await waitFor(() =>
       expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
@@ -171,6 +174,7 @@ describe('ChainParticipantsPage', () => {
     // статус отклика — пилюля с глифом, чтобы он читался не только по цвету (макет 4.8)
     expect(screen.getByText('⏳ Отклик отправлен')).toBeInTheDocument();
 
+    await user.click(screen.getAllByRole('radio')[0]);
     await user.click(screen.getByRole('button', { name: 'Отозвать отклик' }));
     await user.click(await screen.findByRole('button', { name: 'Да, отозвать' }));
 

@@ -71,8 +71,11 @@ const lockedRequest = {
 
 const liveRequest = { ...lockedRequest, status: 'ACTIVE' } as ExchangeRequest;
 
-async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Электроника') {
+// выпадашка из 37 опций виртуализирована — до нижних строк DOM не доходит, поэтому сначала
+// фильтруем поиском (showSearch включён), как это делает и живой пользователь
+async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Ноутбуки') {
   await user.click(screen.getByLabelText('Категория'));
+  await user.type(screen.getByLabelText('Категория'), name);
   await user.click(await screen.findByTitle(name));
 }
 
@@ -114,7 +117,7 @@ describe('RequestForm', () => {
     expect(mockedCreateRequest).toHaveBeenCalledWith({
       offeredItemId: 1,
       wantedDescription: 'Ноутбук',
-      wantedCategory: 'Электроника',
+      wantedCategory: 'Ноутбуки',
     });
   });
 

@@ -117,4 +117,17 @@ describe('LoginForm', () => {
     expect(await screen.findByText('Неверный email или пароль')).toBeInTheDocument();
     expect(store.getState().user.token).toBeNull();
   });
+
+  // короткий пароль отбивается на месте (после дебаунса), а не молчаливым 401 от сервера
+  it('shows a password length error after a short password is typed', async () => {
+    const user = userEvent.setup();
+    setup();
+
+    await user.type(screen.getByLabelText(/Email/i), 'anna@example.com');
+    await user.type(screen.getByLabelText(/Пароль/i), 'demo12');
+
+    expect(
+      await screen.findByText('Пароль должен быть не короче 8 символов', {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
+  });
 });
