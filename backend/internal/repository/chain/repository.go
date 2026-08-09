@@ -35,23 +35,17 @@ const loadVisibleChainsQuery = `
 		WHERE cp.chain_id = c.id
 		  AND (c.status = 'CANDIDATE' OR member.request_id = cp.request_id)
 		  AND eo.user_id = $1
-		  AND eo.status = 'ACTIVE'
+		  AND (
+			(c.status = 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL'))
+			OR (c.status <> 'CANDIDATE' AND member.request_id = cp.request_id
+				AND eo.status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED'))
+		  )
 		ORDER BY cp.position
 		LIMIT 1
 	) AS viewer ON true
 	WHERE c.status IN ('CANDIDATE', 'PROPOSED', 'FROZEN', 'IN_PROGRESS')
 		AND ($2::bigint = 0 OR c.id = $2)
 		AND ($3::bigint = 0 OR viewer.request_id = $3)
-		AND ($2::bigint <> 0 OR c.status <> 'FROZEN')
-		AND NOT EXISTS (
-		SELECT 1
-		FROM cluster_members AS veto
-		JOIN votes AS vv
-			ON vv.chain_id = c.id
-			AND vv.request_id = veto.request_id
-		WHERE veto.cluster_id = viewer.cluster_id
-			AND vv.vote = 'approved'
-		)
 	ORDER BY c.created_at DESC, c.id DESC
 `
 
@@ -63,7 +57,7 @@ const validateVoteSourceQuery = `
 	WHERE cp.chain_id = $1
 	  AND source.id = $2
 	  AND source.user_id = $3
-	  AND source.status = 'ACTIVE'
+	  AND source.status IN ('ACTIVE', 'IN_PROPOSAL')
 `
 
 const validateVoteTargetQuery = `
@@ -73,7 +67,7 @@ const validateVoteTargetQuery = `
 	JOIN chain_participants AS cp ON cp.cluster_id = member.cluster_id
 	WHERE cp.chain_id = $1
 	  AND target.id = $2
-	  AND target.status = 'ACTIVE'
+	  AND target.status IN ('ACTIVE', 'IN_PROPOSAL')
 `
 
 const listPendingVoteEdgesQuery = `
@@ -526,10 +520,14 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 		FROM chain_participants AS cp
 		JOIN chains AS c ON c.id = cp.chain_id
 		JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
-		JOIN exchange_offers AS eo ON eo.id = member.request_id AND eo.status = 'ACTIVE'
+		JOIN exchange_offers AS eo ON eo.id = member.request_id
 		JOIN items AS i ON i.id = eo.offered_item_id
 		WHERE cp.chain_id = ANY($1::bigint[])
 		  AND (c.status = 'CANDIDATE' OR member.request_id = cp.request_id)
+		  AND (
+			(c.status = 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL'))
+			OR (c.status <> 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED'))
+		  )
 		ORDER BY cp.chain_id, cp.position, member.request_id
 	`, chainIDs)
 	if err != nil {
@@ -675,9 +673,13 @@ func (r *Postgres) LoadScoreFeatures(
 func (r *Postgres) CountPendingVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error) {
 	var count int
 	if err := tx.QueryRow(ctx, `
-		SELECT COUNT(DISTINCT request_id)
-		FROM votes
-		WHERE chain_id = $1 AND vote = 'pending'
+		SELECT COUNT(DISTINCT vote.request_id)
+		FROM votes AS vote
+		JOIN chain_participants AS source
+		  ON source.chain_id = vote.chain_id AND source.request_id = vote.request_id
+		JOIN chain_participants AS target
+		  ON target.chain_id = vote.chain_id AND target.request_id = vote.target_request_id
+		WHERE vote.chain_id = $1 AND vote.vote = 'pending'
 	`, chainID).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count pending voters: %w", err)
 	}
@@ -694,6 +696,388 @@ func (r *Postgres) UpdateScore(ctx context.Context, tx database.Tx, chainID int6
 		return fmt.Errorf("update chain score: %w", err)
 	}
 	return nil
+}
+
+// ConfirmParticipant помечает голос участника как approved (идемпотентно).
+func (r *Postgres) ConfirmParticipant(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO votes (chain_id, request_id, target_request_id, vote, voted_at)
+		VALUES ($1, $2, $3, 'approved', NOW())
+		ON CONFLICT ON CONSTRAINT votes_chain_request_target_key
+		DO UPDATE SET vote = 'approved', voted_at = NOW()
+	`, chainID, requestID, targetRequestID)
+	if err != nil {
+		return fmt.Errorf("confirm participant vote: %w", err)
+	}
+	return nil
+}
+
+// CountApprovedVoters возвращает число участников цепочки, подтвердивших участие.
+func (r *Postgres) CountApprovedVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error) {
+	var count int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT vote.request_id)
+		FROM votes AS vote
+		JOIN chain_participants AS source
+		  ON source.chain_id = vote.chain_id AND source.request_id = vote.request_id
+		JOIN chain_participants AS target
+		  ON target.chain_id = vote.chain_id AND target.request_id = vote.target_request_id
+		WHERE vote.chain_id = $1 AND vote.vote = 'approved'
+	`, chainID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count approved voters: %w", err)
+	}
+	return count, nil
+}
+
+// MarkRequestLocked переводит заявку в жёсткую блокировку.
+func (r *Postgres) MarkRequestLocked(ctx context.Context, tx database.Tx, requestID int64) error {
+	result, err := tx.Exec(ctx, `
+		UPDATE exchange_offers
+		SET status = 'LOCKED', updated_at = NOW()
+		WHERE id = $1 AND status IN ('IN_PROPOSAL', 'ACTIVE', 'LOCKED')
+	`, requestID)
+	if err != nil {
+		return fmt.Errorf("mark request locked: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return entity.ErrChainNotProposed
+	}
+	return nil
+}
+
+// FreezeChain переводит цепочку в FROZEN с дедлайном и оптимистичной версией.
+func (r *Postgres) FreezeChain(ctx context.Context, tx database.Tx, chainID int64, deadline time.Time) error {
+	result, err := tx.Exec(ctx, `
+		UPDATE chains
+		SET status = 'FROZEN',
+		    freeze_deadline_at = $2,
+		    version = version + 1,
+		    updated_at = NOW()
+		WHERE id = $1 AND status = 'PROPOSED'
+	`, chainID, deadline)
+	if err != nil {
+		return fmt.Errorf("freeze chain: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return entity.ErrChainNotProposed
+	}
+	return nil
+}
+
+// LockRequestsInChain переводит все заявки цепочки в LOCKED.
+func (r *Postgres) LockRequestsInChain(ctx context.Context, tx database.Tx, chainID int64) error {
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers AS eo
+		SET status = 'LOCKED', updated_at = NOW()
+		WHERE eo.id IN (
+			SELECT cp.request_id
+			FROM chain_participants AS cp
+			WHERE cp.chain_id = $1
+		)
+		  AND eo.status IN ('IN_PROPOSAL', 'ACTIVE')
+	`, chainID); err != nil {
+		return fmt.Errorf("lock requests in chain: %w", err)
+	}
+	return nil
+}
+
+// MarkItemsUnavailable переводит предлагаемые товары участников в UNAVAILABLE.
+func (r *Postgres) MarkItemsUnavailable(ctx context.Context, tx database.Tx, chainID int64) error {
+	if _, err := tx.Exec(ctx, `
+		UPDATE items AS i
+		SET status = 'UNAVAILABLE', updated_at = NOW()
+		WHERE i.id IN (
+			SELECT eo.offered_item_id
+			FROM chain_participants AS cp
+			JOIN exchange_offers AS eo ON eo.id = cp.request_id
+			WHERE cp.chain_id = $1
+		)
+	`, chainID); err != nil {
+		return fmt.Errorf("mark items unavailable: %w", err)
+	}
+	return nil
+}
+
+// LoadChainRequestIDs возвращает заявки участников цепочки.
+func (r *Postgres) LoadChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT cp.request_id
+		FROM chain_participants AS cp
+		WHERE cp.chain_id = $1
+		ORDER BY cp.position
+	`, chainID)
+	if err != nil {
+		return nil, fmt.Errorf("load chain request ids: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan chain request id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate chain request ids: %w", err)
+	}
+	return ids, nil
+}
+
+// LockRequestsForFreeze сериализует подтверждения пересекающихся цепочек.
+// Сортировка исключает взаимную блокировку при разном порядке участников.
+func (r *Postgres) LockRequestsForFreeze(ctx context.Context, tx database.Tx, requestIDs []int64) error {
+	rows, err := tx.Query(ctx, `
+		SELECT id
+		FROM exchange_offers
+		WHERE id = ANY($1::bigint[])
+		ORDER BY id
+		FOR UPDATE
+	`, requestIDs)
+	if err != nil {
+		return fmt.Errorf("lock requests for freeze: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var requestID int64
+		if err := rows.Scan(&requestID); err != nil {
+			return fmt.Errorf("scan locked request: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate locked requests: %w", err)
+	}
+	return nil
+}
+
+// LoadRequestLiveChainStatus вернёт FROZEN, если заявка уже сидит в замороженной цепочке.
+func (r *Postgres) LoadRequestLiveChainStatus(ctx context.Context, tx database.Tx, requestID int64) (entity.ChainStatus, error) {
+	var status entity.ChainStatus
+	err := tx.QueryRow(ctx, `
+		SELECT c.status
+		FROM chain_participants AS cp
+		JOIN chains AS c ON c.id = cp.chain_id
+		WHERE cp.request_id = $1
+		ORDER BY CASE WHEN c.status = 'FROZEN' THEN 0 ELSE 1 END
+		LIMIT 1
+	`, requestID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entity.ChainStatusCandidate, nil
+	}
+	if err != nil {
+		return entity.ChainStatus(""), fmt.Errorf("load request live chain status: %w", err)
+	}
+	return status, nil
+}
+
+// FindParticipantEdge находит голос (request→target) участника в цепочке по userID.
+func (r *Postgres) FindParticipantEdge(ctx context.Context, tx database.Tx, chainID int64, userID string) (int64, int64, error) {
+	var requestID, targetID int64
+	err := tx.QueryRow(ctx, `
+		SELECT vote.request_id, vote.target_request_id
+		FROM votes AS vote
+		JOIN exchange_offers AS source ON source.id = vote.request_id
+		JOIN chain_participants AS source_participant
+		  ON source_participant.chain_id = vote.chain_id
+		 AND source_participant.request_id = vote.request_id
+		JOIN chain_participants AS target_participant
+		  ON target_participant.chain_id = vote.chain_id
+		 AND target_participant.request_id = vote.target_request_id
+		WHERE vote.chain_id = $1
+		  AND source.user_id = $2
+		  AND vote.vote IN ('pending', 'approved')
+		ORDER BY source.id
+		LIMIT 1
+	`, chainID, userID).Scan(&requestID, &targetID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, entity.ErrChainVoteForbidden
+	}
+	if err != nil {
+		return 0, 0, fmt.Errorf("find participant edge: %w", err)
+	}
+	return requestID, targetID, nil
+}
+
+// ListChainsContainingRequest возвращает цепочки, где заявка участвует как представитель.
+func (r *Postgres) ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT DISTINCT cp.chain_id
+		FROM chain_participants AS cp
+		WHERE cp.request_id = $1
+	`, requestID)
+	if err != nil {
+		return nil, fmt.Errorf("list chains containing request: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan affected chain id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate affected chain ids: %w", err)
+	}
+	return ids, nil
+}
+
+// DeleteChain удаляет цепочку целиком каскадом: голоса, участники, саму цепочку.
+func (r *Postgres) DeleteChain(ctx context.Context, tx database.Tx, chainID int64) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1`, chainID); err != nil {
+		return fmt.Errorf("delete chain votes: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM chain_participants WHERE chain_id = $1`, chainID); err != nil {
+		return fmt.Errorf("delete chain participants: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM chains WHERE id = $1`, chainID); err != nil {
+		return fmt.Errorf("delete chain: %w", err)
+	}
+	return nil
+}
+
+// DeleteRequestParticipation удаляет только участие заявки в цепочках и её голоса,
+// не трогая сами цепочки (их последующей пересборкой занимается matcher).
+func (r *Postgres) DeleteRequestParticipation(ctx context.Context, tx database.Tx, requestID int64) error {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM votes WHERE request_id = $1 OR target_request_id = $1
+	`, requestID); err != nil {
+		return fmt.Errorf("delete request votes: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM chain_participants WHERE request_id = $1
+	`, requestID); err != nil {
+		return fmt.Errorf("delete request chain participation: %w", err)
+	}
+	return nil
+}
+
+// ReleaseCompetitorsFromOtherChains вычёркивает участников замороженной цепочки
+// из конкурирующих цепочек (удаляет их голоса и chain_participants) и возвращает
+// chainID конкурирующих цепочек, где остались участники (нужно пересобрать).
+// Сама замороженная цепочка chainID НЕ трогается.
+// ReleaseUnselectedFromChain оставляет в замороженной цепочке только выбранный
+// цикл из chain_participants и возвращает альтернативные заявки в активный поиск.
+func (r *Postgres) ReleaseUnselectedFromChain(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT DISTINCT v.request_id
+		FROM votes AS v
+		WHERE v.chain_id = $1
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM chain_participants AS selected
+			WHERE selected.chain_id = v.chain_id
+			  AND selected.request_id = v.request_id
+		  )
+		ORDER BY v.request_id
+	`, chainID)
+	if err != nil {
+		return nil, fmt.Errorf("list unselected chain requests: %w", err)
+	}
+	released := make([]int64, 0)
+	for rows.Next() {
+		var requestID int64
+		if err := rows.Scan(&requestID); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan unselected chain request: %w", err)
+		}
+		released = append(released, requestID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("iterate unselected chain requests: %w", err)
+	}
+	rows.Close()
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM votes AS v
+		WHERE v.chain_id = $1
+		  AND (
+			NOT EXISTS (
+				SELECT 1 FROM chain_participants AS source
+				WHERE source.chain_id = v.chain_id AND source.request_id = v.request_id
+			)
+			OR NOT EXISTS (
+				SELECT 1 FROM chain_participants AS target
+				WHERE target.chain_id = v.chain_id AND target.request_id = v.target_request_id
+			)
+		  )
+	`, chainID); err != nil {
+		return nil, fmt.Errorf("delete unselected chain votes: %w", err)
+	}
+
+	for _, requestID := range released {
+		if err := r.RestoreActiveIfNoPendingVotes(ctx, tx, requestID); err != nil {
+			return nil, err
+		}
+	}
+	return released, nil
+}
+
+func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	// Удаляем голоса замороженных участников в других цепочках.
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM votes AS v
+		WHERE v.chain_id <> $1
+		  AND EXISTS (
+			SELECT 1
+			FROM chain_participants AS frozen
+			WHERE frozen.chain_id = $1
+			  AND (frozen.request_id = v.request_id OR frozen.request_id = v.target_request_id)
+		  )
+	`, chainID); err != nil {
+		return nil, fmt.Errorf("delete competitor votes: %w", err)
+	}
+
+	// Запоминаем, какие конкурирующие цепочки затронуты (до удаления участников).
+	affected, err := func() ([]int64, error) {
+		rows, err := tx.Query(ctx, `
+			SELECT DISTINCT cp_outside.chain_id
+			FROM chain_participants AS cp_outside
+			JOIN chain_participants AS frozen
+			  ON frozen.chain_id = $1 AND frozen.request_id = cp_outside.request_id
+			WHERE cp_outside.chain_id <> $1
+		`, chainID)
+		if err != nil {
+			return nil, fmt.Errorf("list affected competitor chains: %w", err)
+		}
+		defer rows.Close()
+		ids := make([]int64, 0)
+		for rows.Next() {
+			var id int64
+			if err := rows.Scan(&id); err != nil {
+				return nil, fmt.Errorf("scan affected chain id: %w", err)
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate affected chain ids: %w", err)
+		}
+		return ids, nil
+	}()
+	if err != nil {
+		return nil, err
+	}
+
+	// Убираем вхождения замороженных участников из конкурирующих цепочек.
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM chain_participants AS cp
+		WHERE cp.chain_id <> $1
+		  AND EXISTS (
+			SELECT 1
+			FROM chain_participants AS frozen
+			WHERE frozen.chain_id = $1
+			  AND frozen.request_id = cp.request_id
+		  )
+	`, chainID); err != nil {
+		return nil, fmt.Errorf("remove frozen participants from competitor chains: %w", err)
+	}
+
+	return affected, nil
 }
 
 var _ chainservice.Repository = (*Postgres)(nil)
