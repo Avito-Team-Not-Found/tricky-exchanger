@@ -141,6 +141,10 @@ func (stubItemService) UploadImage(_ context.Context, _ uuid.UUID, _ int64, _ io
 	return &entity.Item{}, nil
 }
 
+func (stubChainService) Confirm(_ context.Context, _ string, _ int64) (entity.ChainStatus, error) {
+	return entity.ChainStatusProposed, nil
+}
+
 func TestPingHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

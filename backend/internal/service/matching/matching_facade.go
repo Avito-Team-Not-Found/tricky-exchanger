@@ -21,16 +21,21 @@ type CycleSearcher interface {
 	Find(ctx context.Context, tx database.Tx, startRequestID int64) ([]entity.ChainDraft, error)
 }
 
-// CandidateChainSaver сохраняет найденные варианты цепочек в текущей транзакции.
-type CandidateChainSaver interface {
+// ChainLifecycle описывает операции над цепочками, которые выполняет matcher
+// при пересборке после выбытия заявки/участника.
+type ChainLifecycle interface {
 	SaveCandidates(ctx context.Context, tx database.Tx, drafts []entity.ChainDraft) error
+	LoadChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
+	ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error)
+	DeleteRequestParticipation(ctx context.Context, tx database.Tx, requestID int64) error
+	DeleteChain(ctx context.Context, tx database.Tx, chainID int64) error
 }
 
 // MatchingFacade связывает CRUD заявок с кластеризацией и поиском вариантов цепочек.
 type MatchingFacade struct {
 	clusters ClusterSynchronizer
 	cycles   CycleSearcher
-	chains   CandidateChainSaver
+	chains   ChainLifecycle
 	ranker   *ranker.ChainScoreCalculator
 }
 
@@ -40,7 +45,7 @@ func (f *MatchingFacade) WithRanker(r *ranker.ChainScoreCalculator) *MatchingFac
 }
 
 // NewFacade создаёт рабочий matching-фасад.
-func NewFacade(clusters ClusterSynchronizer, cycles CycleSearcher, chains CandidateChainSaver) *MatchingFacade {
+func NewFacade(clusters ClusterSynchronizer, cycles CycleSearcher, chains ChainLifecycle) *MatchingFacade {
 	return &MatchingFacade{clusters: clusters, cycles: cycles, chains: chains}
 }
 
@@ -70,8 +75,6 @@ func (f *MatchingFacade) RebuildForRequest(
 		if f.ranker == nil {
 			return nil, entity.ErrScoreNotConfigured
 		}
-		// Score считает Ranker, один раз на каждую собранную цепочку —
-		// перед созданием. CycleFinder не считает score и не отбирает топ-N.
 		for i := range drafts {
 			score, err := f.ranker.Score(chainStateFromDraft(drafts[i]))
 			if err != nil {
@@ -86,16 +89,71 @@ func (f *MatchingFacade) RebuildForRequest(
 	return drafts, nil
 }
 
-// RemoveRequest удаляет заявку из производных данных matching.
+// RemoveRequest исключает заявку из производных данных: вычищает её участие
+// в цепочках, убирает из кластера и пересобирает/удаляет затронутые цепочки.
 func (f *MatchingFacade) RemoveRequest(ctx context.Context, tx database.Tx, requestID int64) error {
 	if f.clusters == nil {
 		return entity.ErrClusterNotConfigured
 	}
-	return f.clusters.Remove(ctx, tx, requestID)
+	var affected []int64
+	if f.chains != nil {
+		var err error
+		affected, err = f.chains.ListChainsContainingRequest(ctx, tx, requestID)
+		if err != nil {
+			return err
+		}
+		if err := f.chains.DeleteRequestParticipation(ctx, tx, requestID); err != nil {
+			return err
+		}
+	}
+	if err := f.clusters.Remove(ctx, tx, requestID); err != nil {
+		return err
+	}
+	return f.RepairAffectedChains(ctx, tx, affected)
 }
 
-// chainStateFromDraft переносит сырые данные фич из драфта (собранные CycleFinder'ом)
-// в ChainState для ChainScoreCalculator. Один вызов Ranker перед созданием цепочки.
+// RepairAffectedChains приводит затронутые цепочки в актуальное состояние:
+// удаляет прежние варианты и запускает новый круг поиска от первого
+// оставшегося участника каждой, либо удаляет опустевшие.
+func (f *MatchingFacade) RepairAffectedChains(ctx context.Context, tx database.Tx, affected []int64) error {
+	for _, chainID := range affected {
+		requestIDs, err := f.chains.LoadChainRequestIDs(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		// Прежний вариант цепочки больше не актуален (статус/состав изменились).
+		if err := f.chains.DeleteChain(ctx, tx, chainID); err != nil {
+			return err
+		}
+		if len(requestIDs) == 0 {
+			continue
+		}
+		// Новый круг поиска от первого оставшегося участника.
+		if _, err := f.RebuildForRequest(ctx, tx, requestIDs[0]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RebuildRequests запускает новый поиск для освобождённых заявок, исключая повторы.
+func (f *MatchingFacade) RebuildRequests(ctx context.Context, tx database.Tx, requestIDs []int64) error {
+	seen := make(map[int64]struct{}, len(requestIDs))
+	for _, requestID := range requestIDs {
+		if requestID <= 0 {
+			continue
+		}
+		if _, exists := seen[requestID]; exists {
+			continue
+		}
+		seen[requestID] = struct{}{}
+		if _, err := f.RebuildForRequest(ctx, tx, requestID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func chainStateFromDraft(draft entity.ChainDraft) ranker.ChainState {
 	return ranker.ChainState{
 		Count:                   len(draft.Participants),

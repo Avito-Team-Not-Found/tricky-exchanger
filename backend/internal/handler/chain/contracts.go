@@ -14,4 +14,5 @@ type chainService interface {
 	Get(ctx context.Context, userID string, chainID int64) (entity.Chain, error)
 	Vote(ctx context.Context, userID string, chainID int64, input chainservice.VoteInput) (entity.ChainVote, error)
 	WithdrawVote(ctx context.Context, userID string, chainID int64, input chainservice.VoteInput) error
+	Confirm(ctx context.Context, userID string, chainID int64) (entity.ChainStatus, error)
 }

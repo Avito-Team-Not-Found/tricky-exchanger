@@ -37,10 +37,12 @@ type FrontierLoader interface {
 
 // CycleFinder строит локальный граф вокруг одной заявки и ищет в нём простые циклы.
 type CycleFinder struct {
-	loader    FrontierLoader
-	outgoingK int
-	capHint   int // только начальная ёмкость слайса драфтов, НЕ лимит на число результатов
-	threshold float64
+	loader      FrontierLoader
+	outgoingK   int
+	capHint     int // только начальная ёмкость слайса драфтов, НЕ лимит на число результатов
+	threshold   float64
+	minAverage  float64
+	maxScoreGap float64
 }
 
 type cycleVertex struct {
@@ -60,11 +62,26 @@ func NewCycleFinder(loader FrontierLoader, outgoingK, capHint int, threshold flo
 		threshold = defaultCycleThreshold
 	}
 	return &CycleFinder{
-		loader:    loader,
-		outgoingK: outgoingK,
-		capHint:   capHint,
-		threshold: threshold,
+		loader:      loader,
+		outgoingK:   outgoingK,
+		capHint:     capHint,
+		threshold:   threshold,
+		minAverage:  threshold,
+		maxScoreGap: 1,
 	}
+}
+
+// WithQualityRules добавляет проверку качества уже собранного цикла.
+// Порог каждой стрелки остаётся в NewCycleFinder, а эти правила защищают от
+// циклов с низким средним качеством или слишком неравномерными направлениями.
+func (f *CycleFinder) WithQualityRules(minAverage, maxScoreGap float64) *CycleFinder {
+	if minAverage > 0 && minAverage <= 1 {
+		f.minAverage = minAverage
+	}
+	if maxScoreGap >= 0 && maxScoreGap <= 1 {
+		f.maxScoreGap = maxScoreGap
+	}
+	return f
 }
 
 // Find возвращает ВСЕ уникальные простые циклы длиной 2–5, начинающиеся со
@@ -111,30 +128,32 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 	dfs = func(currentClusterID int64, cosines []float64) {
 		if len(path) >= minCycleLength {
 			if closing, ok := closers[currentClusterID]; ok {
-				participants := make([]entity.ChainDraftParticipant, len(path))
-				for position, vertex := range path {
-					participants[position] = entity.ChainDraftParticipant{
-						ClusterID: vertex.clusterID,
-						RequestID: vertex.representativeRequestID,
-					}
-				}
-
 				edgeCosines := append(append([]float64(nil), cosines...), closing.Score)
-				sizes := make([]int, len(participants))
-				reliability := make([]float64, len(participants))
-				for i := range participants {
-					sizes[i] = 1          // MVP: размер кластера; позже — из ClusterSynchronizer/разметки
-					reliability[i] = 0.75 // MVP: константная надёжность (нет личного рейтинга)
-				}
+				if f.acceptsQuality(edgeCosines) {
+					participants := make([]entity.ChainDraftParticipant, len(path))
+					for position, vertex := range path {
+						participants[position] = entity.ChainDraftParticipant{
+							ClusterID: vertex.clusterID,
+							RequestID: vertex.representativeRequestID,
+						}
+					}
 
-				draft := entity.ChainDraft{
-					Participants:           participants,
-					ClusterSizes:           sizes,
-					EdgeCosines:            edgeCosines,
-					ParticipantReliability: reliability,
-					// Score НЕ заполняем — его назначает Ranker на фасаде.
+					sizes := make([]int, len(participants))
+					reliability := make([]float64, len(participants))
+					for i := range participants {
+						sizes[i] = 1          // MVP: размер кластера; позже — из ClusterSynchronizer/разметки
+						reliability[i] = 0.75 // MVP: константная надёжность (нет личного рейтинга)
+					}
+
+					draft := entity.ChainDraft{
+						Participants:           participants,
+						ClusterSizes:           sizes,
+						EdgeCosines:            edgeCosines,
+						ParticipantReliability: reliability,
+						// Score НЕ заполняем — его назначает Ranker на фасаде.
+					}
+					drafts = dedupeDraft(drafts, draft)
 				}
-				drafts = dedupeDraft(drafts, draft)
 			}
 		}
 
@@ -164,6 +183,27 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 
 	dfs(startClusterID, nil)
 	return drafts, nil
+}
+
+func (f *CycleFinder) acceptsQuality(scores []float64) bool {
+	if len(scores) < minCycleLength {
+		return false
+	}
+
+	minScore, maxScore := scores[0], scores[0]
+	sum := 0.0
+	for _, score := range scores {
+		sum += score
+		if score < minScore {
+			minScore = score
+		}
+		if score > maxScore {
+			maxScore = score
+		}
+	}
+
+	average := sum / float64(len(scores))
+	return average >= f.minAverage && maxScore-minScore <= f.maxScoreGap
 }
 
 func (f *CycleFinder) indexClosers(
