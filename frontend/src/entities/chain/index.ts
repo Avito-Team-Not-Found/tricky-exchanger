@@ -12,6 +12,7 @@ export {
   type ChainStatus,
   type ChainVoteResult,
   type ConfirmResult,
+  type DeclineResult,
   type ExchangeOption,
   type ExchangeOptions,
   type VotePayload,
@@ -20,6 +21,7 @@ export {
 export { participantAlias, type ParticipantAlias } from './alias';
 export {
   confirmChain,
+  declineChain,
   fetchChain,
   fetchExchangeOptions,
   voteForRequest,

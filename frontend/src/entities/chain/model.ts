@@ -82,6 +82,15 @@ export interface ConfirmResult {
   status: ChainStatus;
 }
 
+// ответ POST /chains/{id}/decline: цепочка либо распалась (BROKEN), либо откатилась к сбору
+// откликов (CANDIDATE), либо живёт с вакансией под замену (PROPOSED) — SOFT-LOCK §3.2.
+// replacementAvailable относится к предыдущему по кольцу участнику, а не к отказавшемуся
+export interface DeclineResult {
+  chainId: number;
+  status: ChainStatus;
+  replacementAvailable: boolean;
+}
+
 export interface ChainLink {
   position: number;
   candidates: ChainParticipant[];
