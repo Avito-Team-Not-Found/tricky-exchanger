@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 import { App as AntApp, Form } from 'antd';
@@ -14,6 +14,7 @@ import {
 } from '@entities/exchangeRequest';
 import { useItems } from '@entities/item';
 
+import { DESCRIPTION_MIN_LENGTH } from '@shared/config/categories';
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
 export interface RequestFormValues {
@@ -69,8 +70,17 @@ export function useRequestForm(requestId?: number) {
   const wantedDescription = Form.useWatch('wantedDescription', form);
   const wantedCategory = Form.useWatch('wantedCategory', form);
 
+  // заявки, созданные до требования 50 символов, приходят с коротким описанием: antd не
+  // валидирует initialValues, поэтому без явной проверки кнопка молча оставалась бы
+  // заблокированной без единой подсказки на экране
+  useEffect(() => {
+    if (!request || readOnly) return;
+    form.validateFields(['wantedDescription']).catch(() => undefined);
+  }, [form, request, readOnly]);
+
+  // гейт кнопки повторяет правило формы, иначе короткое описание уйдёт в молчаливый сабмит
   const canSubmit =
-    Boolean(wantedDescription?.trim()) &&
+    (wantedDescription?.trim().length ?? 0) >= DESCRIPTION_MIN_LENGTH &&
     Boolean(wantedCategory) &&
     (isEdit || Boolean(offeredItemId)) &&
     !submitting &&
