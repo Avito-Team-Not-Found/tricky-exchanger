@@ -12,9 +12,8 @@ export function useArchiveItem(onSuccess?: () => void) {
   return useMutation({
     mutationFn: (itemId: number) => archiveItem(itemId),
     onSuccess: () => {
-      message.success('Товар в архиве');
+      message.success('Товар удалён');
       queryClient.invalidateQueries({ queryKey: ['items'] });
-      queryClient.invalidateQueries({ queryKey: ['items-page'] });
       // вместе с товаром сервер удаляет и связанные с ним заявки — иначе их список
       // остаётся в кеше stale (staleTime 60s) и клик по удалённой заявке уводит в 404
       queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
@@ -22,11 +21,7 @@ export function useArchiveItem(onSuccess?: () => void) {
     },
     onError: (error) =>
       message.error(
-        getErrorMessage(
-          error,
-          { 409: 'Товар уже участвует в сделке' },
-          'Не удалось отправить товар в архив',
-        ),
+        getErrorMessage(error, { 409: 'Товар уже участвует в сделке' }, 'Не удалось удалить товар'),
       ),
   });
 }

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import { screen, within } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useSearchParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -92,6 +92,32 @@ describe('ItemForm', () => {
 
     await pickCategory(user);
     expect(submit).toBeEnabled();
+  });
+
+  // svg проходит image/* из старого accept, но бэкенд его не принимает — файл отклоняем
+  // при выборе, чтобы не получать 422 уже после сохранения товара
+  it('does not select a file with a disallowed type as the photo', async () => {
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<ItemForm />);
+
+    const svg = new File(['<svg/>'], 'icon.svg', { type: 'image/svg+xml' });
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, svg);
+
+    // antd не передаёт файл вне accept в beforeUpload — он молча не попадает в форму
+    expect(screen.getByText('Добавить фото')).toBeInTheDocument();
+    expect(screen.queryByText('Фото выбрано')).not.toBeInTheDocument();
+  });
+
+  it('rejects a file larger than the backend limit without selecting it', async () => {
+    const user = userEvent.setup();
+    const { container } = renderWithProviders(<ItemForm />);
+
+    const big = new File([new Uint8Array(6 * 1024 * 1024)], 'big.png', { type: 'image/png' });
+    await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, big);
+
+    expect(await screen.findByText('Фото не больше 5 МБ')).toBeInTheDocument();
+    expect(screen.getByText('Добавить фото')).toBeInTheDocument();
+    expect(screen.queryByText('Фото выбрано')).not.toBeInTheDocument();
   });
 
   it('blocks saving a description shorter than 50 characters', async () => {
@@ -258,27 +284,10 @@ describe('ItemForm', () => {
       routes: [{ path: '/products', element: <div>products screen</div> }],
     });
 
-    await user.click(screen.getByRole('button', { name: /В архив/ }));
-    const modal = (await screen.findByRole('dialog')) as HTMLElement;
-    expect(within(modal).getAllByText('Отправить в архив?').length).toBeGreaterThan(0);
-    await user.click(within(modal).getByRole('button', { name: 'В архив' }));
+    await user.click(screen.getByRole('button', { name: /Удалить товар/ }));
+    await user.click(await screen.findByRole('button', { name: /Да, удалить/ }));
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedArchiveItem).toHaveBeenCalledWith(1);
-  });
-
-  // архивный товар сервер менять не даёт (422) — форма открывается только для чтения,
-  // вместо кнопки сохранения плашка «Товар в архиве» (SCRUM-52 §6.2)
-  it('shows an archived item as read-only without a save button', () => {
-    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, status: 'ARCHIVED' } as Item));
-    renderWithProviders(<ItemForm itemId={1} />);
-
-    expect(screen.getByText('Товар в архиве — редактирование недоступно')).toBeInTheDocument();
-    expect(screen.getByLabelText('Название')).toBeDisabled();
-    // фото-контролы не подхватывают disabled формы — прячем их, чтобы архивный товар
-    // нельзя было «отредактировать» удалением/сменой фото (SCRUM-52 §6.2)
-    expect(screen.queryByRole('button', { name: /Удалить фото/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Сохранить изменения/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /В архив/ })).not.toBeInTheDocument();
   });
 });

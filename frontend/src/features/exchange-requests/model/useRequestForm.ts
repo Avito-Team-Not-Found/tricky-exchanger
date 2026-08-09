@@ -162,7 +162,8 @@ export function useRequestForm(requestId?: number) {
         okButtonProps: { danger: true },
         cancelText: 'Остаться',
         closable: false,
-        maskClosable: false,
+        centered: true,
+        mask: { closable: false },
         onOk: () => goToList(),
       });
       return;
@@ -173,7 +174,8 @@ export function useRequestForm(requestId?: number) {
       okText: 'Сохранить изменения',
       cancelText: 'Назад',
       closable: false,
-      maskClosable: false,
+      centered: true,
+      mask: { closable: false },
       // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
       // берём значения синхронно и шлём сами (сюда попадаем только при canSubmit)
       onOk: () => {

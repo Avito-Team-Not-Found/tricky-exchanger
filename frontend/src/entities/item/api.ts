@@ -2,17 +2,12 @@ import { apiClient } from '@shared/api';
 
 import type { Item, ItemPayload, ItemsList } from './model';
 
-// размер страницы «Моих товаров» — совпадает с дефолтом бэкенда (service/item/service.go);
-// больше maxPageSize=100 слать бессмысленно, бэкенд обрежет молча
-export const ITEMS_PAGE_SIZE = 20;
-
-// Пул всех товаров владельца тянет одну страницу pageSize=100: пикер товара в заявке и поиск
-// миниатюры по id (карточки заявок, варианты обмена) требуют весь набор, а не страницу.
-// Архивные не отсеиваем — пагинация ведётся по всем товарам, и клиентский отсев после ответа
-// рисовал бы «рваные страницы» (SCRUM-52 §6.2).
-export async function fetchItems(page = 1, pageSize = 100): Promise<ItemsList> {
-  const { data } = await apiClient.get<ItemsList>('/items', { params: { page, pageSize } });
-  return { items: data.items, total: data.total };
+// Бэкенд не умеет фильтровать по статусу — список приходит вместе с архивными
+// (личный список владельца), поэтому архивные отсекаем на клиенте. Запрашиваем
+// максимальную страницу, чтобы на «Моих товарах» и в пикере товара ничего не терялось.
+export async function fetchItems(): Promise<ItemsList> {
+  const { data } = await apiClient.get<ItemsList>('/items', { params: { pageSize: 100 } });
+  return { items: data.items.filter((item) => item.status !== 'ARCHIVED'), total: data.total };
 }
 
 export async function fetchItem(itemId: number): Promise<Item> {

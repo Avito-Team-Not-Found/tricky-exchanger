@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { App as AntApp } from 'antd';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,19 +62,5 @@ describe('useArchiveItem', () => {
     });
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
-  });
-
-  // архивная подача — тост про архив, а не про удаление: пользователь «удалил» товар,
-  // а карточка осталась в списке (SCRUM-52 §6.2)
-  it('shows a toast about the archive on success', async () => {
-    mockedArchiveItem.mockResolvedValue(undefined);
-    const { result } = renderHook(() => useArchiveItem(), { wrapper });
-
-    await act(async () => {
-      result.current.mutate(1);
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(await screen.findByText('Товар в архиве')).toBeInTheDocument();
   });
 });

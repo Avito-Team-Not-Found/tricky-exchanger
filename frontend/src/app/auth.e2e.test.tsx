@@ -22,10 +22,9 @@ vi.mock('@features/auth/api/authApi', () => ({
   registerRequest: vi.fn(),
 }));
 
-vi.mock('@entities/item/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@entities/item/api')>();
-  return { ...actual, fetchItems: vi.fn() };
-});
+vi.mock('@entities/item/api', () => ({
+  fetchItems: vi.fn(),
+}));
 
 const mockedLoginRequest = vi.mocked(loginRequest);
 const mockedRegisterRequest = vi.mocked(registerRequest);

@@ -43,8 +43,6 @@ export function useItemForm(itemId?: number) {
   const returnToRequest = searchParams.get('returnTo') === 'request';
   const isLoading = isEdit && itemQuery.isPending;
   const isLoadError = isEdit && itemQuery.isError;
-  // архивный товар сервер не даёт менять (422 ErrItemArchived) — форма открывается только для чтения
-  const readOnly = isEdit && item?.status === 'ARCHIVED';
 
   // форма монтируется только после загрузки данных (ItemForm рендерит Skeleton), поэтому initialValues достаточно
   const initialValues: Partial<ItemFormValues> | undefined = useMemo(() => {
@@ -91,7 +89,7 @@ export function useItemForm(itemId?: number) {
   const descriptionLength = description?.trim().length ?? 0;
   const fieldsValid =
     Boolean(title?.trim()) && descriptionLength >= DESCRIPTION_MIN_LENGTH && Boolean(category);
-  const canSubmit = !readOnly && fieldsValid && hasPhoto && !submitting;
+  const canSubmit = fieldsValid && hasPhoto && !submitting;
 
   function handleImageSelected(file: UploadedFile) {
     setPendingFile(file);
@@ -129,7 +127,8 @@ export function useItemForm(itemId?: number) {
         okButtonProps: { danger: true },
         cancelText: 'Остаться',
         closable: false,
-        maskClosable: false,
+        centered: true,
+        mask: { closable: false },
         onOk: () => goBack(),
       });
       return;
@@ -140,7 +139,8 @@ export function useItemForm(itemId?: number) {
       okText: 'Сохранить изменения',
       cancelText: 'Назад',
       closable: false,
-      maskClosable: false,
+      centered: true,
+      mask: { closable: false },
       // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
       // берём значения синхронно и шлём сами (сюда попадаем только при canSubmit)
       onOk: () => {
@@ -166,7 +166,6 @@ export function useItemForm(itemId?: number) {
         await updateItem(itemId as number, payload, pendingFile ?? undefined);
         message.success('Товар обновлён');
         queryClient.invalidateQueries({ queryKey: ['items'] });
-        queryClient.invalidateQueries({ queryKey: ['items-page'] });
         // карточки заявок показывают название отдаваемого товара (offeredItemTitle) —
         // без инвалидации список заявок ещё минуту показывает старое название
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
@@ -177,7 +176,6 @@ export function useItemForm(itemId?: number) {
         const created = await createItem(payload, pendingFile);
         message.success('Товар создан');
         queryClient.invalidateQueries({ queryKey: ['items'] });
-        queryClient.invalidateQueries({ queryKey: ['items-page'] });
         // форма запроса читает кеш синхронно при монтировании — новый товар должен там уже быть,
         // иначе пресет offeredItemId не применится до фонового refetch
         queryClient.setQueryData<ItemsList>(['items'], (old) => ({
@@ -201,7 +199,6 @@ export function useItemForm(itemId?: number) {
         // товар создан/обновлён на сервере, но клиентский список его ещё не знает —
         // иначе /products ещё 60 с отдаёт кеш без изменений
         queryClient.invalidateQueries({ queryKey: ['items'] });
-        queryClient.invalidateQueries({ queryKey: ['items-page'] });
         // название товара уже могло поменяться — карточки заявок (offeredItemTitle)
         // иначе ещё минуту показывают старый текст
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
@@ -221,10 +218,7 @@ export function useItemForm(itemId?: number) {
       message.error(
         getErrorMessage(
           error,
-          {
-            409: 'Товар уже участвует в сделке',
-            422: 'Товар в архиве — изменения недоступны',
-          },
+          { 409: 'Товар уже участвует в сделке' },
           'Не удалось сохранить товар',
         ),
       );
@@ -238,7 +232,6 @@ export function useItemForm(itemId?: number) {
     isEdit,
     isLoading,
     isLoadError,
-    readOnly,
     submitting,
     canSubmit,
     initialValues,
