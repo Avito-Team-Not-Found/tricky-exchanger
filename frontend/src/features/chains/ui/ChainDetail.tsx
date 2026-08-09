@@ -2,6 +2,7 @@ import { theme, Button } from 'antd';
 
 import {
   chainLinks,
+  isAssembled,
   isHardLocked,
   myParticipant,
   participantAlias,
@@ -33,7 +34,7 @@ export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: C
   const links = chainLinks(chain);
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
-  const assembled = chain.status !== 'CANDIDATE';
+  const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);
 
   return (

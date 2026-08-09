@@ -1,6 +1,12 @@
 import { theme, Button } from 'antd';
 
-import { HARD_LOCK_MESSAGE, isHardLocked, receivesItem, type Chain } from '@entities/chain';
+import {
+  HARD_LOCK_MESSAGE,
+  isAssembled,
+  isHardLocked,
+  receivesItem,
+  type Chain,
+} from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
 
@@ -27,7 +33,7 @@ export function ChainItemView({
   const { token } = theme.useToken();
   const received = receivesItem(chain);
   const single = received.length === 1 ? received[0] : null;
-  const isAssembled = chain.status !== 'CANDIDATE';
+  const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);
 
   return (
@@ -53,7 +59,7 @@ export function ChainItemView({
           <span className="chain-item__count">
             {chain.length} {pluralize(chain.length)} в цепочке
           </span>
-          {isAssembled ? (
+          {assembled ? (
             <span className="chain-item__ready">Цепочка собрана</span>
           ) : (
             <ProbabilityBadge score={chain.score} />

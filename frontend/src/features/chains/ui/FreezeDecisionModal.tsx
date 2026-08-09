@@ -7,15 +7,17 @@ import './FreezeDecisionModal.scss';
 export interface FreezeDecisionModalProps {
   onClose: () => void;
   onConfirm: () => Promise<void>;
+  onDecline: () => void;
 }
 
-// Модалка «Готовность к сделке» (SOFT-LOCK §6.1): заголовок, вопрос и кнопки «Да»/«Отмена»
+// Модалка «Готовность к сделке» (SOFT-LOCK §6.1): заголовок, вопрос и кнопки «Да»/«Нет»/«Отмена»
 // блоками в колонку. Открывается через App.useApp().modal — antd-Modal не импортируется
 // (no-restricted-imports), а `title` confirm-модалки не используется: он рендерится дважды
 // (в заголовке модалки и в confirm-title), поэтому заголовок живёт здесь же в контенте.
 // «Да» держит loading, пока не пришёл ответ сервера; модалка закрывается только после него,
-// при ошибке остаётся открытой — тост объясняет, что пошло не так.
-export function FreezeDecisionModal({ onClose, onConfirm }: FreezeDecisionModalProps) {
+// при ошибке остаётся открытой — тост объясняет, что пошло не так. «Нет» — отказ от сделки,
+// действие необратимое, поэтому подтверждается отдельной модалкой (§6.3), а не шлёт запрос сразу.
+export function FreezeDecisionModal({ onClose, onConfirm, onDecline }: FreezeDecisionModalProps) {
   const [pending, setPending] = useState(false);
 
   const confirm = async () => {
@@ -36,6 +38,9 @@ export function FreezeDecisionModal({ onClose, onConfirm }: FreezeDecisionModalP
       <div className="freeze-decision__actions">
         <Button type="primary" block loading={pending} onClick={confirm}>
           Да
+        </Button>
+        <Button type="text" danger block disabled={pending} onClick={onDecline}>
+          Нет
         </Button>
         <Button block disabled={pending} onClick={onClose}>
           Отмена
