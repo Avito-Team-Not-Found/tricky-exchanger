@@ -69,7 +69,7 @@ func (s *Service) Synchronize(ctx context.Context, tx database.Tx, offerID int64
 		ctx,
 		vectors.OfferEmbedding,
 		vectors.WantEmbedding,
-		vectors.CategoryID,
+		vectors.Category,
 		offerID,
 		s.threshold,
 		s.directionMargin,

@@ -5,6 +5,8 @@ import (
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 // ClusterSynchronizer описывает часть matching, отвечающую за актуальное
@@ -29,10 +31,10 @@ type MatchingFacade struct {
 	clusters ClusterSynchronizer
 	cycles   CycleSearcher
 	chains   CandidateChainSaver
-	ranker   *ChainScoreCalculator
+	ranker   *ranker.ChainScoreCalculator
 }
 
-func (f *MatchingFacade) WithRanker(r *ChainScoreCalculator) *MatchingFacade {
+func (f *MatchingFacade) WithRanker(r *ranker.ChainScoreCalculator) *MatchingFacade {
 	f.ranker = r
 	return f
 }
@@ -94,11 +96,11 @@ func (f *MatchingFacade) RemoveRequest(ctx context.Context, tx database.Tx, requ
 
 // chainStateFromDraft переносит сырые данные фич из драфта (собранные CycleFinder'ом)
 // в ChainState для ChainScoreCalculator. Один вызов Ranker перед созданием цепочки.
-func chainStateFromDraft(draft entity.ChainDraft) ChainState {
-	return ChainState{
+func chainStateFromDraft(draft entity.ChainDraft) ranker.ChainState {
+	return ranker.ChainState{
 		Count:                   len(draft.Participants),
-		Stage:                   ChainStateCandidate,
-		Event:                   EventAdd,
+		Stage:                   ranker.ChainStateCandidate,
+		Event:                   ranker.EventAdd,
 		EdgeCosines:             draft.EdgeCosines,
 		ParticipantReliability:  draft.ParticipantReliability,
 		ParticipantClusterSizes: draft.ClusterSizes,

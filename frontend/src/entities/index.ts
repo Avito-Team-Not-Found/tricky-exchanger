@@ -17,27 +17,26 @@ export {
   type CreateRequestPayload,
   type CreateRequestResult,
   type ExchangeRequest,
-  type RequestDraft,
   type RequestStatus,
-  type WantedProfile,
+  type UpdateRequestPayload,
 } from './exchangeRequest';
 
-export { useCategories, type Category } from './category';
-
 export {
-  chainReadiness,
+  chainLinks,
   myParticipant,
   participantAlias,
   receivesItem,
-  RESPONSE_STATUS_META,
   useChain,
-  useRequestChains,
+  useExchangeOptions,
+  VOTE_META,
   type Chain,
+  type ChainLink,
   type ChainParticipant,
-  type ParticipantAlias,
-  type ChainPermissions,
-  type ChainResponseResult,
   type ChainStatus,
-  type FreezeVoteStatus,
-  type ResponseStatus,
+  type ChainVoteResult,
+  type ExchangeOption,
+  type ExchangeOptions,
+  type ParticipantAlias,
+  type VotePayload,
+  type VoteValue,
 } from './chain';

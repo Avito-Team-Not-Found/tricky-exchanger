@@ -1,6 +1,7 @@
 package exchange_offer
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/validator"
 )
 
 // Handler обрабатывает HTTP-запросы CRUD заявок на обмен.
@@ -24,16 +26,28 @@ func NewHandler(service exchangeOfferService) *Handler {
 	return &Handler{service: service}
 }
 
-type mutationBody struct {
-	OfferedItemID     int64  `json:"offeredItemId" binding:"required"`
-	WantedDescription string `json:"wantedDescription" binding:"required"`
-	Version           int64  `json:"version"`
+type createBody struct {
+	OfferedItemID     int64  `json:"offeredItemId" validate:"required,gt=0"`
+	WantedDescription string `json:"wantedDescription" validate:"not_empty,max=5000"`
+	WantedCategory    string `json:"wantedCategory" validate:"omitempty,max=100"`
+}
+
+type updateBody struct {
+	OfferedItemID     int64  `json:"offeredItemId" validate:"required,gt=0"`
+	WantedDescription string `json:"wantedDescription" validate:"not_empty,max=5000"`
+	WantedCategory    string `json:"wantedCategory" validate:"omitempty,max=100"`
+	Version           int64  `json:"version" validate:"required,gt=0"`
+}
+
+type deleteQuery struct {
+	Version int64 `schema:"version" validate:"required,gt=0"`
 }
 
 type exchangeOfferResponse struct {
 	ID                int64                `json:"id"`
 	OfferedItemID     int64                `json:"offeredItemId"`
 	WantedDescription string               `json:"wantedDescription"`
+	WantedCategory    string               `json:"wantedCategory"`
 	Status            entity.RequestStatus `json:"status"`
 	Version           int64                `json:"version"`
 	CreatedAt         string               `json:"createdAt"`
@@ -51,22 +65,28 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	var body mutationBody
-	if err := c.ShouldBindJSON(&body); err != nil {
-		api.SendError(c, http.StatusUnprocessableEntity, "invalid request body")
+	var body createBody
+	if err := validator.BindJSON(&body, c.Request); err != nil {
+		var jsonSyntaxErr *json.SyntaxError
+		if errors.As(err, &jsonSyntaxErr) {
+			api.SendError(c, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
 	created, err := h.service.Create(c.Request.Context(), userID, offerservice.CreateInput{
 		OfferedItemID:     body.OfferedItemID,
 		WantedDescription: body.WantedDescription,
+		WantedCategory:    body.WantedCategory,
 	})
 	if err != nil {
+		var ve validator.Error
 		switch {
-		case errors.Is(err, entity.ErrOfferedItemUnavailable),
-			errors.Is(err, entity.ErrInvalidOfferedItem),
-			errors.Is(err, entity.ErrWantedDescriptionRequired),
-			errors.Is(err, entity.ErrWantedDescriptionTooLong):
+		case errors.As(err, &ve):
+			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
+		case errors.Is(err, entity.ErrOfferedItemUnavailable):
 			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		default:
 			api.SendError(c, http.StatusInternalServerError, "internal server error")
@@ -138,19 +158,28 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	var body mutationBody
-	if err := c.ShouldBindJSON(&body); err != nil {
-		api.SendError(c, http.StatusUnprocessableEntity, "invalid request body")
+	var body updateBody
+	if err := validator.BindJSON(&body, c.Request); err != nil {
+		var jsonSyntaxErr *json.SyntaxError
+		if errors.As(err, &jsonSyntaxErr) {
+			api.SendError(c, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
 	updated, err := h.service.Update(c.Request.Context(), userID, requestID, offerservice.UpdateInput{
 		OfferedItemID:     body.OfferedItemID,
 		WantedDescription: body.WantedDescription,
+		WantedCategory:    body.WantedCategory,
 		Version:           body.Version,
 	})
 	if err != nil {
+		var ve validator.Error
 		switch {
+		case errors.As(err, &ve):
+			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		case errors.Is(err, entity.ErrExchangeOfferNotFound):
 			api.SendError(c, http.StatusNotFound, err.Error())
 		case errors.Is(err, entity.ErrExchangeOfferForbidden):
@@ -158,11 +187,7 @@ func (h *Handler) Update(c *gin.Context) {
 		case errors.Is(err, entity.ErrExchangeOfferVersionConflict),
 			errors.Is(err, entity.ErrExchangeOfferLocked):
 			api.SendError(c, http.StatusConflict, err.Error())
-		case errors.Is(err, entity.ErrOfferedItemUnavailable),
-			errors.Is(err, entity.ErrInvalidOfferedItem),
-			errors.Is(err, entity.ErrWantedDescriptionRequired),
-			errors.Is(err, entity.ErrWantedDescriptionTooLong),
-			errors.Is(err, entity.ErrInvalidVersion):
+		case errors.Is(err, entity.ErrOfferedItemUnavailable):
 			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		default:
 			api.SendError(c, http.StatusInternalServerError, "internal server error")
@@ -184,14 +209,17 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	version, err := strconv.ParseInt(c.Query("version"), 10, 64)
-	if err != nil || version <= 0 {
-		api.SendError(c, http.StatusUnprocessableEntity, "version query parameter must be a positive integer")
+	var query deleteQuery
+	if err := validator.BindQuery(&query, c.Request); err != nil {
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
-	if err := h.service.Delete(c.Request.Context(), userID, requestID, version); err != nil {
+	if err := h.service.Delete(c.Request.Context(), userID, requestID, query.Version); err != nil {
+		var ve validator.Error
 		switch {
+		case errors.As(err, &ve):
+			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		case errors.Is(err, entity.ErrExchangeOfferNotFound):
 			api.SendError(c, http.StatusNotFound, err.Error())
 		case errors.Is(err, entity.ErrExchangeOfferForbidden):
@@ -199,8 +227,6 @@ func (h *Handler) Delete(c *gin.Context) {
 		case errors.Is(err, entity.ErrExchangeOfferVersionConflict),
 			errors.Is(err, entity.ErrExchangeOfferLocked):
 			api.SendError(c, http.StatusConflict, err.Error())
-		case errors.Is(err, entity.ErrInvalidVersion):
-			api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		default:
 			api.SendError(c, http.StatusInternalServerError, "internal server error")
 		}
@@ -215,6 +241,7 @@ func newExchangeOfferResponse(offer entity.ExchangeOffer) exchangeOfferResponse 
 		ID:                offer.ID,
 		OfferedItemID:     offer.OfferedItemID,
 		WantedDescription: offer.WantedDescription,
+		WantedCategory:    offer.WantedCategory,
 		Status:            offer.Status,
 		Version:           offer.Version,
 		CreatedAt:         offer.CreatedAt.UTC().Format(time.RFC3339),

@@ -1,88 +1,114 @@
 import type { StatusTone } from '@shared/ui';
 
-export type ChainStatus = 'CANDIDATE' | 'PROPOSED' | 'FROZEN' | 'IN_PROGRESS';
-export type ResponseStatus = 'ACCEPTED' | 'DECLINED';
-export type FreezeVoteStatus = 'CONFIRMED' | 'DECLINED';
+export type ChainStatus =
+  'CANDIDATE' | 'PROPOSED' | 'FROZEN' | 'IN_PROGRESS' | 'COMPLETED' | 'BROKEN';
 
-export interface ChainItemRef {
-  id: string;
-  title: string;
-  image: string | null;
-  // описание/характеристики товара для экрана цепочки (макет 4.7); мок кладёт их в offeredItem
-  description?: string | null;
-  categoryId?: string | null;
-  color?: string | null;
-  material?: string | null;
-  attributes?: Record<string, string> | null;
-}
-
-export interface ChainUserRef {
-  id: string;
-  name: string;
-}
+export type VoteValue = 'pending' | 'approved' | 'rejected';
 
 export interface ChainParticipant {
+  clusterId: number;
+  requestId: number;
   position: number;
-  requestId: string | null;
   isCurrentUser: boolean;
-  user: ChainUserRef;
-  offeredItem: ChainItemRef | null;
-  receivesFromPosition: number;
-  responseStatus: ResponseStatus | null;
-  freezeVoteStatus: FreezeVoteStatus | null;
-}
-
-export interface ChainPermissions {
-  canRespond: boolean;
-  // выбор не эксклюзивен: пользователь отмечает сколько угодно вариантов и снимает отметку (макет 4.6)
-  canSelect: boolean;
-  canDeselect: boolean;
-  canVote: boolean;
-  canRequestReplacement: boolean;
+  offeredItemId: number;
+  offeredItemTitle: string;
+  offeredItemDescription: string;
+  wantedDescription: string;
+  // фото может отсутствовать вовсе (omitempty), а не только быть null — поле опционально (PROJECT.md §4.4)
+  imageUrl?: string | null;
+  // отклик приходит только у кандидатов позиции receivesFromPosition
+  vote?: VoteValue;
 }
 
 export interface Chain {
-  id: string;
-  requestId: string;
+  id: number;
   status: ChainStatus;
   score: number;
-  responseDeadlineAt: string | null;
-  freezeDeadlineAt: string | null;
+  length: number;
+  version: number;
+  currentRequestId: number;
+  currentPosition: number;
+  givesToPosition: number;
+  receivesFromPosition: number;
+  freezeDeadlineAt?: string | null;
+  invalidReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
   participants: ChainParticipant[];
-  viewerPermissions: ChainPermissions;
 }
 
-export interface ChainResponseResult {
-  chainId: string;
+export interface ExchangeOption {
+  clusterId: number;
+  requestId: number;
+  itemId: number;
+  title: string;
+  description: string;
+  wantedDescription: string;
+  imageUrl?: string | null;
+  vote?: VoteValue;
+}
+
+// варианты обмена по заявке: один кандидатный пул на цепочку, получаемое разворачивается в receiveOptions
+export interface ExchangeOptions {
+  chainId: number;
   status: ChainStatus;
-  isReadyForSelection: boolean;
+  score: number;
+  length: number;
+  currentRequestId: number;
+  currentPosition: number;
+  givesToPosition: number;
+  receivesFromPosition: number;
+  currentOffer: ExchangeOption;
+  receiveOptions: ExchangeOption[];
+}
+
+export interface VotePayload {
+  requestId: number;
+  targetRequestId: number;
+}
+
+export interface ChainVoteResult {
+  chainId: number;
+  requestId: number;
+  targetRequestId: number;
+  vote: VoteValue;
+  votedAt: string;
+  chainStatus: ChainStatus;
+}
+
+export interface ChainLink {
+  position: number;
+  candidates: ChainParticipant[];
 }
 
 // глиф перед подписью — требование доступности: статус отклика не передаётся одним лишь цветом
-export const RESPONSE_STATUS_META: Record<
-  ResponseStatus,
-  { label: string; glyph: string; tone: StatusTone }
-> = {
-  ACCEPTED: { label: 'Согласился', glyph: '✓', tone: 'success' },
-  DECLINED: { label: 'Отказался', glyph: '✕', tone: 'error' },
+export const VOTE_META: Record<VoteValue, { label: string; glyph: string; tone: StatusTone }> = {
+  pending: { label: 'Отклик отправлен', glyph: '⏳', tone: 'warning' },
+  approved: { label: 'Отклик принят', glyph: '✓', tone: 'success' },
+  rejected: { label: 'Отклик отклонён', glyph: '✕', tone: 'error' },
 };
 
-// Участник текущего пользователя: только он может отвечать за себя (viewerPermissions не дублируем)
+// Участник текущего пользователя: только он может откликаться за себя
 export function myParticipant(chain: Chain): ChainParticipant | null {
   return chain.participants.find((p) => p.isCurrentUser) ?? null;
 }
 
-// Прогресс готовности цепочки: сколько участников уже согласились (макет «N/M согласий»)
-export function chainReadiness(chain: Chain): { agreed: number; total: number } {
-  const total = chain.participants.length;
-  const agreed = chain.participants.filter((p) => p.responseStatus === 'ACCEPTED').length;
-  return { agreed, total };
+// participants — это пул кандидатов, а не участники: одна позиция кольца развёрнута во все
+// заявки своего кластера. Единица UI — звено (position + кандидаты), а не запись participants.
+export function chainLinks(chain: Chain): ChainLink[] {
+  const byPosition = new Map<number, ChainParticipant[]>();
+  for (const participant of chain.participants) {
+    const candidates = byPosition.get(participant.position);
+    if (candidates) candidates.push(participant);
+    else byPosition.set(participant.position, [participant]);
+  }
+  return [...byPosition.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([position, candidates]) => ({ position, candidates }));
 }
 
-// Что участник получает взамен: товар следующего звена по кольцу (PROJECT.md §4.4)
-export function receivesItem(participant: ChainParticipant, chain: Chain): ChainItemRef | null {
-  return (
-    chain.participants.find((p) => p.position === participant.receivesFromPosition)?.offeredItem ??
-    null
-  );
+// Что пользователь получит взамен: пул заявок следующего звена по кольцу (PROJECT.md §4.4).
+// Пока цепочка CANDIDATE, кандидатов несколько — UI сам решает, как их показать.
+export function receivesItem(chain: Chain): ChainParticipant[] {
+  return chain.participants.filter((p) => p.position === chain.receivesFromPosition);
 }

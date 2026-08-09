@@ -47,7 +47,7 @@ describe('useLogin', () => {
   it('stores the session on a successful login', async () => {
     mockedLoginRequest.mockResolvedValue({
       token: 'jwt',
-      user: { id: '1', name: 'Анна', email: 'anna@example.com' },
+      user: { id: '1', fullName: 'Анна', email: 'anna@example.com' },
     });
     const { result } = renderHook(() => useLogin(), { wrapper });
 
@@ -58,25 +58,18 @@ describe('useLogin', () => {
     expect(store.getState().user.token).toBe('jwt');
   });
 
-  it('distinguishes an unregistered email from a wrong password', async () => {
-    const notFound = new AxiosError('Not Found');
-    Object.assign(notFound, { response: { status: 404 } });
-    mockedLoginRequest.mockRejectedValueOnce(notFound);
+  it('shows a single message for a wrong password or an unregistered email', async () => {
+    // бэкенд осознанно отвечает 401 в обоих случаях, чтобы нельзя было перебором проверять email
+    const unauthorized = new AxiosError('Unauthorized');
+    Object.assign(unauthorized, { response: { status: 401 } });
+    mockedLoginRequest.mockRejectedValue(unauthorized);
     const { result } = renderHook(() => useLogin(), { wrapper });
 
     await act(async () => {
       await result.current.handleSubmit({ email: 'ghost@example.com', password: 'whatever' });
     });
-    expect(await screen.findByText('Пользователь с таким email не найден')).toBeInTheDocument();
 
-    const unauthorized = new AxiosError('Unauthorized');
-    Object.assign(unauthorized, { response: { status: 401 } });
-    mockedLoginRequest.mockRejectedValueOnce(unauthorized);
-
-    await act(async () => {
-      await result.current.handleSubmit({ email: 'anna@example.com', password: 'wrong' });
-    });
-    expect(await screen.findByText('Неверный пароль')).toBeInTheDocument();
+    expect(await screen.findByText('Неверный email или пароль')).toBeInTheDocument();
     expect(store.getState().user.token).toBeNull();
   });
 });

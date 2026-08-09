@@ -1,4 +1,10 @@
 // экран формы внутри AppLayout: глобальная шапка скрыта, меню остаётся; у экрана своя шапка (DESIGN.md §4.4)
+.request-form-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
 .request-form-page__header {
   position: sticky;
   top: 0;
@@ -28,6 +34,7 @@
 .request-form-page__body {
   display: flex;
   flex-direction: column;
+  flex: 1;
   padding: var(--spacing-lg) var(--spacing-md) var(--spacing-xl);
 }
 

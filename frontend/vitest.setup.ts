@@ -3,7 +3,7 @@ import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 // jsdom не реализует matchMedia, но на него опираются адаптивные компоненты antd;
-// в node-окружении (mock/server.test.ts) окна нет, поэтому шим подключается только под jsdom
+// в настоящем node-окружении окна нет, поэтому шим подключается только под jsdom
 if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,

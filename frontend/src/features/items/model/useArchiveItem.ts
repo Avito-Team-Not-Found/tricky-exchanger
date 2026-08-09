@@ -10,7 +10,7 @@ export function useArchiveItem(onSuccess?: () => void) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (itemId: string) => archiveItem(itemId),
+    mutationFn: (itemId: number) => archiveItem(itemId),
     onSuccess: () => {
       message.success('Товар удалён');
       queryClient.invalidateQueries({ queryKey: ['items'] });

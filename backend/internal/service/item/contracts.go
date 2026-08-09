@@ -19,11 +19,6 @@ type ItemRepository interface {
 	UpdateStatus(ctx context.Context, id int64, status entity.ItemStatus) error
 	UpdateImageURL(ctx context.Context, id int64, url string) error
 	CategoryExists(ctx context.Context, categoryID int64) (bool, error)
-}
-
-// ReservationChecker — временный адаптер до появления полноценной фичи цепочек
-// обмена. Реализация-заглушка лежит в internal/infrastructure/reservation.
-type ReservationChecker interface {
 	HasActiveHardReservation(ctx context.Context, itemID int64) (bool, error)
 }
 

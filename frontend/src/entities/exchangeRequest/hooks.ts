@@ -6,10 +6,10 @@ export function useRequests() {
   return useQuery({ queryKey: ['exchange-requests'], queryFn: fetchRequests });
 }
 
-export function useRequest(requestId?: string) {
+export function useRequest(requestId?: number) {
   return useQuery({
     queryKey: ['exchange-requests', requestId],
-    queryFn: () => fetchRequest(requestId as string),
+    queryFn: () => fetchRequest(requestId as number),
     enabled: Boolean(requestId),
   });
 }

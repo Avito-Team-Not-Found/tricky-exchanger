@@ -50,7 +50,7 @@ func TestListUsesAuthenticatedUserFromContext(t *testing.T) {
 	if service.listOwnerID != ownerID {
 		t.Fatalf("list owner ID = %s, want %s", service.listOwnerID, ownerID)
 	}
-	const want = `{"items":[{"id":1,"ownerUserId":"11111111-1111-1111-1111-111111111111","title":"PlayStation 5","description":"","categoryId":null,"imageUrl":null,"status":"ACTIVE","createdAt":"2026-08-07T09:00:00Z","updatedAt":"2026-08-07T09:00:00Z"}],"page":1,"pageSize":20,"total":1}`
+	const want = `{"items":[{"id":1,"ownerUserId":"11111111-1111-1111-1111-111111111111","title":"PlayStation 5","description":"","category":"","imageUrl":null,"status":"ACTIVE","createdAt":"2026-08-07T09:00:00Z","updatedAt":"2026-08-07T09:00:00Z"}],"page":1,"pageSize":20,"total":1}`
 	if got := recorder.Body.String(); got != want {
 		t.Fatalf("body = %s, want %s", got, want)
 	}

@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/codestore"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/storage"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/token"
 	"log"
 	"net/http"
 	"os"
@@ -20,12 +23,8 @@ import (
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/codestore"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/reservation"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/storage"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/token"
 	chainRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/chain"
 	clusterRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/cluster"
 	exchangeOfferRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/exchange_offer"
@@ -38,6 +37,8 @@ import (
 	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
+
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 func main() {
@@ -100,10 +101,11 @@ func main() {
 	).WithQualityRules(cfg.CycleMinAverageScore, cfg.CycleMaxScoreGap)
 	transactionManager := database.NewTransactionManager(pool)
 	chainRepository := chainRepo.NewRepository(pool)
-	chainSvc := chainservice.NewService(chainRepository, transactionManager)
-	ranker := matching.NewChainScoreCalculator(matching.NewRankerConfig())
-	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).WithRanker(ranker)
 
+	scoreRanker := ranker.NewChainScoreCalculator(ranker.NewRankerConfig())
+	chainSvc := chainservice.NewService(chainRepository, transactionManager)
+	chainSvc = chainSvc.WithScorer(scoreRanker)
+	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).WithRanker(scoreRanker)
 	// Выбор embed-провайдера конфигом: tei | stub.
 	var embedClient embedding.Client
 	switch cfg.EmbeddingProvider {
@@ -136,7 +138,7 @@ func main() {
 	}
 
 	itemRepository := itemRepo.NewRepository(pool)
-	itemSvc := itemService.NewService(itemRepository, reservation.NewStubChecker(), embedClient, imageStorage)
+	itemSvc := itemService.NewService(itemRepository, embedClient, imageStorage)
 	itemH := itemHandler.NewHandler(itemSvc)
 	chainH := chainHandler.NewHandler(chainSvc)
 

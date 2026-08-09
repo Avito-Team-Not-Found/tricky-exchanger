@@ -60,6 +60,9 @@
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-body);
   color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chain-list-page__summary-line--muted {

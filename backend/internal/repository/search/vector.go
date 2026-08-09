@@ -18,3 +18,5 @@ func embedLiteral(vector []float32) string {
 	}
 	return "[" + strings.Join(parts, ",") + "]"
 }
+
+//TODO: Снести, зачем целый файл ради 1 функции??

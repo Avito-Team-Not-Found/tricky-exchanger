@@ -22,14 +22,11 @@ function queryOk(data: unknown) {
 }
 
 const item = {
-  id: 'item-1',
+  id: 1,
   title: 'Комбайн',
   description: 'Мощный',
-  categoryId: null,
-  color: 'white',
-  material: 'plastic',
-  attributes: null,
-  image: 'data:image/png;base64,x',
+  category: 'Для дома и дачи',
+  imageUrl: 'data:image/png;base64,x',
   status: 'ACTIVE',
   createdAt: '',
   updatedAt: '',
@@ -37,7 +34,7 @@ const item = {
 
 function renderEditPage() {
   return renderWithProviders(<div />, {
-    initialEntries: ['/products/item-1/edit'],
+    initialEntries: ['/products/1/edit'],
     routes: [
       { path: '/products/:itemId/edit', element: <ItemFormPage /> },
       { path: '/products', element: <div>products screen</div> },
@@ -56,8 +53,8 @@ describe('ItemFormPage', () => {
     mockedUpdateItem.mockResolvedValue(item);
     renderEditPage();
 
-    await user.clear(screen.getByLabelText('Цвет'));
-    await user.type(screen.getByLabelText('Цвет'), 'black');
+    await user.clear(screen.getByLabelText('Название'));
+    await user.type(screen.getByLabelText('Название'), 'Комбайн Bosch');
     await user.click(screen.getByRole('button', { name: 'Назад' }));
 
     expect(
@@ -83,7 +80,7 @@ describe('ItemFormPage', () => {
       ],
     });
 
-    await user.type(screen.getByLabelText('Цвет'), 'белый');
+    await user.type(screen.getByLabelText('Название'), 'Часы');
     await user.click(screen.getByRole('button', { name: 'Назад' }));
 
     const modal = (await screen.findByRole('dialog')) as HTMLElement;

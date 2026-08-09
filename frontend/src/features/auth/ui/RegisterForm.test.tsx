@@ -78,7 +78,7 @@ describe('RegisterForm', () => {
     const user = userEvent.setup();
     mockedRegisterRequest.mockResolvedValue({
       token: 'jwt',
-      user: { id: '1', name: 'Новый Пользователь', email: 'new@example.com' },
+      user: { id: '1', fullName: 'Новый Пользователь', email: 'new@example.com' },
     });
     setup();
 

@@ -6,18 +6,18 @@ import (
 	"testing"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
-func newCalc() *matching.ChainScoreCalculator {
-	return matching.NewChainScoreCalculator(matching.NewRankerConfig())
+func newCalc() *ranker.ChainScoreCalculator {
+	return ranker.NewChainScoreCalculator(ranker.NewRankerConfig())
 }
 
-func state() matching.ChainState {
-	return matching.ChainState{
+func state() ranker.ChainState {
+	return ranker.ChainState{
 		Count:                   4,
-		Stage:                   matching.ChainStateCandidate,
-		Event:                   matching.EventAdd,
+		Stage:                   ranker.ChainStateCandidate,
+		Event:                   ranker.EventAdd,
 		EdgeCosines:             []float64{0.5, 0.5, 0.5, 0.5},
 		ParticipantReliability:  []float64{0.8, 0.8, 0.8, 0.8},
 		ParticipantClusterSizes: []int{3, 3, 3, 3},
@@ -25,31 +25,30 @@ func state() matching.ChainState {
 	}
 }
 
-// Score возвращается в [0,1] (не в [0,100]) и с округлением до 4 знаков.
 func TestScoreRangeAndFourDecimals(t *testing.T) {
 	calc := newCalc()
 
-	cases := []matching.ChainState{
-		state(), // базовый
-		func() matching.ChainState {
+	cases := []ranker.ChainState{
+		state(),
+		func() ranker.ChainState {
 			s := state()
 			s.Count = 100
 			s.EdgeCosines = []float64{1, 1, 1, 1}
 			s.ParticipantClusterSizes = []int{1000000, 1000000, 1000000, 1000000}
 			s.ParticipantReliability = []float64{1, 1, 1, 1}
 			s.ApprovedVotes = 100
-			s.Stage = matching.ChainStateCompleted
+			s.Stage = ranker.ChainStateCompleted
 			return s
-		}(), // верхняя граница: все максимумы
-		func() matching.ChainState {
+		}(),
+		func() ranker.ChainState {
 			s := state()
 			s.EdgeCosines = []float64{-1, -1, -1, -1}
 			s.ParticipantReliability = []float64{0.75, 0.75, 0.75, 0.75}
 			s.ParticipantClusterSizes = []int{0, 0, 0, 0}
 			s.ApprovedVotes = 0
-			s.Stage = matching.ChainStateBroken
+			s.Stage = ranker.ChainStateBroken
 			return s
-		}(), // нижняя граница: все минимумы
+		}(),
 	}
 
 	for i, s := range cases {
@@ -68,14 +67,14 @@ func TestScoreRangeAndFourDecimals(t *testing.T) {
 
 func TestMonotonicityStatusAndApprovals(t *testing.T) {
 	calc := newCalc()
-	base := func(stage matching.ChainStateStatus, votes int) matching.ChainState {
+	base := func(stage ranker.ChainStateStatus, votes int) ranker.ChainState {
 		s := state()
 		s.Stage = stage
 		s.ApprovedVotes = votes
 		return s
 	}
 
-	frozen := func(stage matching.ChainStateStatus) float64 {
+	frozen := func(stage ranker.ChainStateStatus) float64 {
 		sc, err := calc.Score(base(stage, 2))
 		if err != nil {
 			t.Fatalf("Score() error = %v", err)
@@ -83,20 +82,17 @@ func TestMonotonicityStatusAndApprovals(t *testing.T) {
 		return sc
 	}
 
-	// PROPOSED > CANDIDATE при прочих равных.
-	cand := frozen(matching.ChainStateCandidate)
-	prop := frozen(matching.ChainStateProposed)
+	cand := frozen(ranker.ChainStateCandidate)
+	prop := frozen(ranker.ChainStateProposed)
 	if prop <= cand {
 		t.Fatalf("expected PROPOSED > CANDIDATE, got PROPOSED=%v CANDIDATE=%v", prop, cand)
 	}
-	// FROZEN >= PROPOSED (двойной бонус: is_proposed + is_frozen).
-	if frozen(matching.ChainStateFrozen) < prop {
+	if frozen(ranker.ChainStateFrozen) < prop {
 		t.Fatalf("expected FROZEN >= PROPOSED")
 	}
 
-	// Больше approved -> не меньше score.
-	less := frozen(matching.ChainStateCandidate) // votes=2
-	moreS := base(matching.ChainStateCandidate, 4)
+	less := frozen(ranker.ChainStateCandidate)
+	moreS := base(ranker.ChainStateCandidate, 4)
 	more, err := calc.Score(moreS)
 	if err != nil {
 		t.Fatalf("Score() error = %v", err)
@@ -109,7 +105,6 @@ func TestMonotonicityStatusAndApprovals(t *testing.T) {
 func TestLiquiditySaturation(t *testing.T) {
 	calc := newCalc()
 
-	// minClusterSize = CAP и = 100 дают одинаковый (насыщенный) вклад.
 	capS := func(size int) float64 {
 		s := state()
 		s.ParticipantClusterSizes = []int{size, size, size, size}
@@ -142,7 +137,7 @@ func TestClampHoldsAnomalies(t *testing.T) {
 	s.ParticipantReliability = []float64{1, 1}
 	s.ParticipantClusterSizes = []int{100, 100}
 	s.ApprovedVotes = 2
-	s.Stage = matching.ChainStateCompleted
+	s.Stage = ranker.ChainStateCompleted
 	sc, err := calc.Score(s)
 	if err != nil {
 		t.Fatalf("Score() error = %v", err)
@@ -150,7 +145,6 @@ func TestClampHoldsAnomalies(t *testing.T) {
 	if sc > 1 {
 		t.Fatalf("clamp failed: score %v > 1", sc)
 	}
-	// на нормальных входах clamp не должен давать 1 (максимум = все единицы).
 	normal, _ := calc.Score(state())
 	if normal >= 1 {
 		t.Fatalf("expected normal score < 1, got %v", normal)
@@ -160,14 +154,12 @@ func TestClampHoldsAnomalies(t *testing.T) {
 func TestValidationErrors(t *testing.T) {
 	calc := newCalc()
 
-	// Count < 2.
 	s := state()
 	s.Count = 1
 	if _, err := calc.Score(s); !errors.Is(err, entity.ErrInvalidChainState) {
 		t.Fatalf("want ErrInvalidChainState, got %v", err)
 	}
 
-	// ApprovedVotes вне [0, Count].
 	s = state()
 	s.ApprovedVotes = 99
 	if _, err := calc.Score(s); !errors.Is(err, entity.ErrInvalidChainState) {
@@ -178,12 +170,11 @@ func TestValidationErrors(t *testing.T) {
 func TestEmptyEdgeCosinesMeansZeroMatch(t *testing.T) {
 	calc := newCalc()
 	s := state()
-	s.EdgeCosines = nil // Count>=2, но пустые рёбра
+	s.EdgeCosines = nil
 	sc, err := calc.Score(s)
 	if err != nil {
 		t.Fatalf("Score() error = %v", err)
 	}
-	// Не должно падать; Match=0. Просто проверяем, что вызывается без паники и в диапазоне.
 	if sc < 0 || sc > 1 {
 		t.Fatalf("score out of range: %v", sc)
 	}
@@ -198,8 +189,6 @@ func TestSituationalMethods(t *testing.T) {
 		t.Fatalf("ScoreForAdd error = %v", err)
 	}
 
-	// Отклик повышает score за счёт Progress (ApprovedVotes++).
-	// decline возвращает то же состояние без голоса -> score падает ровно к create.
 	respond, err := calc.ScoreForRespond(s)
 	if err != nil {
 		t.Fatalf("ScoreForRespond error = %v", err)
@@ -215,7 +204,6 @@ func TestSituationalMethods(t *testing.T) {
 		t.Fatalf("expected decline to return to add-score (no accumulation): decline=%v create=%v", decline, create)
 	}
 
-	// ScoreForReplacement с новым участником (слабее надёжность/совпадение) должен изменить score.
 	repl := s
 	repl.EdgeCosines = []float64{0.1, 0.1, 0.1, 0.1}
 	repl.ParticipantReliability = []float64{0.2, 0.2, 0.2, 0.2}

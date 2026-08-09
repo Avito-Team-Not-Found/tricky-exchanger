@@ -21,8 +21,9 @@ type Item struct {
 	OwnerUserID uuid.UUID
 	Title       string
 	Description string
-	CategoryID  *int64
-	Embedding   []float32
+	// Category — текстовое имя категории (например, "Телефоны").
+	Category  string
+	Embedding []float32
 	// ImageURL — публичный URL фото в объектном хранилище (MinIO), nil пока фото не загружено.
 	ImageURL  *string
 	Status    ItemStatus

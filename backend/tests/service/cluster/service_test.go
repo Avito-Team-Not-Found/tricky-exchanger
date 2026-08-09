@@ -53,8 +53,8 @@ func TestSynchronizeRefreshesOldClusterAndUsesCandidate(t *testing.T) {
 			repository.threshold, repository.directionMargin,
 		)
 	}
-	if repository.vectors.CategoryID == nil || *repository.vectors.CategoryID != 3 {
-		t.Fatalf("repository category = %v, want 3", repository.vectors.CategoryID)
+	if repository.vectors.Category != "Телефоны" {
+		t.Fatalf("repository category = %q, want %q", repository.vectors.Category, "Телефоны")
 	}
 	if searcher.excludeOfferID != 10 || searcher.topK != 50 || searcher.threshold != 0.8 || searcher.directionMargin != 0.05 {
 		t.Fatalf(
@@ -62,8 +62,8 @@ func TestSynchronizeRefreshesOldClusterAndUsesCandidate(t *testing.T) {
 			searcher.excludeOfferID, searcher.topK, searcher.threshold, searcher.directionMargin,
 		)
 	}
-	if searcher.categoryID == nil || *searcher.categoryID != 3 {
-		t.Fatalf("search category = %v, want 3", searcher.categoryID)
+	if searcher.category != "Телефоны" {
+		t.Fatalf("search category = %q, want %q", searcher.category, "Телефоны")
 	}
 }
 
@@ -95,11 +95,10 @@ type fakeRepository struct {
 }
 
 func (r *fakeRepository) LoadVectors(context.Context, database.Tx, int64) (clusterservice.OfferVectors, error) {
-	categoryID := int64(3)
 	return clusterservice.OfferVectors{
 		OfferEmbedding: "[1,0]",
 		WantEmbedding:  "[0,1]",
-		CategoryID:     &categoryID,
+		Category:       "Телефоны",
 	}, nil
 }
 
@@ -145,7 +144,7 @@ func (r *fakeRepository) ListActiveMembers(context.Context, int64) ([]entity.Exc
 
 type fakeSearcher struct {
 	candidates      []entity.Candidate
-	categoryID      *int64
+	category        string
 	excludeOfferID  int64
 	topK            int
 	threshold       float64
@@ -155,13 +154,13 @@ type fakeSearcher struct {
 func (s *fakeSearcher) FindSimilarOffers(
 	_ context.Context,
 	_, _ string,
-	categoryID *int64,
+	category string,
 	excludeOfferID int64,
 	threshold float64,
 	directionMargin float64,
 	topK int,
 ) ([]entity.Candidate, error) {
-	s.categoryID = categoryID
+	s.category = category
 	s.excludeOfferID = excludeOfferID
 	s.threshold = threshold
 	s.directionMargin = directionMargin

@@ -36,7 +36,7 @@ export function useChangePassword() {
   async function handleSubmit(values: ChangePasswordValues) {
     setState({ status: 'form', submitting: true });
     try {
-      await changePassword(values.currentPassword, values.newPassword);
+      await changePassword(values.currentPassword, values.newPassword, values.newPassword);
       setState({ status: 'success' });
     } catch (error) {
       // неверный текущий пароль — бизнес-ошибка (400), форма остаётся заполненной для исправления

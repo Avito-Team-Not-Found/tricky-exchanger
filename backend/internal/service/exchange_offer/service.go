@@ -8,19 +8,26 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/validator"
 )
 
 // CreateInput содержит данные для создания заявки на обмен.
 type CreateInput struct {
-	OfferedItemID     int64
-	WantedDescription string
+	OfferedItemID     int64  `json:"offeredItemId" validate:"required,gt=0"`
+	WantedDescription string `json:"wantedDescription" validate:"not_empty,max=5000"`
+	WantedCategory    string `json:"wantedCategory" validate:"omitempty,max=100"`
 }
 
 // UpdateInput содержит новые данные и ожидаемую версию для изменения заявки.
 type UpdateInput struct {
-	OfferedItemID     int64
-	WantedDescription string
-	Version           int64
+	OfferedItemID     int64  `json:"offeredItemId" validate:"required,gt=0"`
+	WantedDescription string `json:"wantedDescription" validate:"not_empty,max=5000"`
+	WantedCategory    string `json:"wantedCategory" validate:"omitempty,max=100"`
+	Version           int64  `json:"version" validate:"required,gt=0"`
+}
+
+type deleteInput struct {
+	Version int64 `json:"version" validate:"required,gt=0"`
 }
 
 // Service реализует сценарии работы с заявками без привязки к HTTP.
@@ -49,7 +56,7 @@ func NewService(
 
 // Create создаёт активную заявку, получает embedding желания и запускает matching.
 func (s *Service) Create(ctx context.Context, userID string, input CreateInput) (entity.ExchangeOffer, error) {
-	if err := validateCreate(input); err != nil {
+	if err := validator.Validate(&input); err != nil {
 		return entity.ExchangeOffer{}, err
 	}
 
@@ -69,6 +76,7 @@ func (s *Service) Create(ctx context.Context, userID string, input CreateInput) 
 			UserID:            userID,
 			OfferedItemID:     input.OfferedItemID,
 			WantedDescription: strings.TrimSpace(input.WantedDescription),
+			WantedCategory:    strings.TrimSpace(input.WantedCategory),
 			WantEmbedding:     embeddingValue,
 			Status:            entity.RequestStatusActive,
 			Version:           1,
@@ -98,7 +106,7 @@ func (s *Service) List(ctx context.Context, userID string) ([]entity.ExchangeOff
 
 // Update изменяет заявку, повышает её версию в репозитории и запускает matching.
 func (s *Service) Update(ctx context.Context, userID string, requestID int64, input UpdateInput) (entity.ExchangeOffer, error) {
-	if err := validateUpdate(input); err != nil {
+	if err := validator.Validate(&input); err != nil {
 		return entity.ExchangeOffer{}, err
 	}
 
@@ -119,6 +127,7 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 			UserID:            userID,
 			OfferedItemID:     input.OfferedItemID,
 			WantedDescription: strings.TrimSpace(input.WantedDescription),
+			WantedCategory:    strings.TrimSpace(input.WantedCategory),
 			WantEmbedding:     embeddingValue,
 		}, input.Version)
 		if updateErr != nil {
@@ -136,8 +145,8 @@ func (s *Service) Update(ctx context.Context, userID string, requestID int64, in
 
 // Delete архивирует заявку и удаляет её из производных данных matching.
 func (s *Service) Delete(ctx context.Context, userID string, requestID, version int64) error {
-	if version <= 0 {
-		return entity.ErrInvalidVersion
+	if err := validator.Validate(&deleteInput{Version: version}); err != nil {
+		return err
 	}
 
 	if s.transactions == nil || s.matching == nil {

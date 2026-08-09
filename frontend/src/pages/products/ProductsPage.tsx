@@ -14,7 +14,8 @@ export function ProductsPage() {
   const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useItems();
 
-  const items = data ?? [];
+  const items = data?.items ?? [];
+  const truncated = (data?.total ?? 0) > items.length;
 
   return (
     <div className="products-page">
@@ -58,15 +59,22 @@ export function ProductsPage() {
           </Button>
         </EmptyState>
       ) : (
-        <div className="products-page__grid">
-          {items.map((item) => (
-            <ProductCard
-              key={item.id}
-              item={item}
-              onClick={() => navigate(`/products/${item.id}/edit`)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="products-page__grid">
+            {items.map((item) => (
+              <ProductCard
+                key={item.id}
+                item={item}
+                onClick={() => navigate(`/products/${item.id}/edit`)}
+              />
+            ))}
+          </div>
+          {truncated ? (
+            <p className="products-page__limit-note" role="status">
+              Показаны первые {items.length} из {data?.total} товаров
+            </p>
+          ) : null}
+        </>
       )}
     </div>
   );

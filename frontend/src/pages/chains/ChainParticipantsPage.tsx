@@ -1,7 +1,7 @@
 import { Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainDetail, useChainActions } from '@features/chains';
+import { ChainDetail, useChainVote } from '@features/chains';
 
 import { useChain } from '@entities/chain';
 
@@ -11,14 +11,14 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Схема участников цепочки (макет 4.8): строки участников и их отклики, а при готовности —
-// выбор цепочки (canSelect). Открывается с экрана товара цепочки (макет 4.7).
+// Схема участников цепочки (макет 4.8): строки по звеньям кольца с пулом кандидатов и
+// откликами на получаемом звене. Открывается с экрана товара цепочки (макет 4.7).
 export function ChainParticipantsPage() {
-  const { chainId } = useParams<{ chainId: string }>();
+  const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
+  const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading, isError, refetch } = useChain(chainId);
-  const { confirmResponse, chooseChain, confirmCancelChoice, isResponding, isSelecting } =
-    useChainActions(refetch);
+  const { confirmVote, isVoting } = useChainVote(refetch);
 
   return (
     <div className="chain-detail-page">
@@ -32,11 +32,17 @@ export function ChainParticipantsPage() {
         ) : (
           <ChainDetail
             chain={chain}
-            isResponding={isResponding}
-            isSelecting={isSelecting}
-            onRespond={(kind) => confirmResponse(chain, kind)}
-            onSelect={() => chooseChain(chain)}
-            onDeselect={() => confirmCancelChoice(chain)}
+            isVoting={isVoting}
+            onVote={(candidate, active) =>
+              confirmVote(
+                {
+                  chainId: chain.id,
+                  requestId: chain.currentRequestId,
+                  targetRequestId: candidate.requestId,
+                },
+                active,
+              )
+            }
           />
         )}
       </div>

@@ -17,7 +17,11 @@ export function ProductCard({ item, onClick }: ProductCardProps) {
       className="product-card"
       role="button"
       tabIndex={0}
-      aria-label={`${item.title}, ${statusMeta.label}`}
+      aria-label={
+        item.category
+          ? `${item.title}, ${item.category}, ${statusMeta.label}`
+          : `${item.title}, ${statusMeta.label}`
+      }
       onClick={onClick}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -28,8 +32,8 @@ export function ProductCard({ item, onClick }: ProductCardProps) {
       }}
     >
       <div className="product-card__photo">
-        {item.image ? (
-          <img className="product-card__image" src={item.image} alt={item.title} />
+        {item.imageUrl ? (
+          <img className="product-card__image" src={item.imageUrl} alt={item.title} />
         ) : (
           <div className="product-card__placeholder" aria-hidden />
         )}
@@ -37,7 +41,11 @@ export function ProductCard({ item, onClick }: ProductCardProps) {
           <StatusTag tone={statusMeta.tone}>{statusMeta.label}</StatusTag>
         </div>
       </div>
-      <p className="product-card__title">{item.title}</p>
+      <div className="product-card__body">
+        <p className="product-card__title">{item.title}</p>
+        {/* категория есть не у всех товаров — у созданных до перехода на текстовую категорию она пустая */}
+        {item.category ? <p className="product-card__category">{item.category}</p> : null}
+      </div>
     </article>
   );
 }

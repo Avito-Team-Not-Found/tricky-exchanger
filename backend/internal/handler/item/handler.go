@@ -2,6 +2,7 @@
 package item
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 	itemservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/validator"
 )
 
 // Handler обрабатывает HTTP-запросы CRUD товаров.
@@ -27,16 +29,21 @@ func NewHandler(service itemService) *Handler {
 }
 
 type createItemRequest struct {
-	Title       string `json:"title" binding:"required"`
-	Description string `json:"description"`
-	CategoryID  *int64 `json:"categoryId"`
+	Title       string `json:"title" validate:"not_empty,max=200"`
+	Description string `json:"description" validate:"omitempty,max=2000"`
+	Category    string `json:"category" validate:"omitempty,max=100"`
 }
 
 type updateItemRequest struct {
-	Title       *string            `json:"title"`
-	Description *string            `json:"description"`
-	CategoryID  *int64             `json:"categoryId"`
-	Status      *entity.ItemStatus `json:"status"`
+	Title       *string            `json:"title" validate:"omitempty,not_empty,max=200"`
+	Description *string            `json:"description" validate:"omitempty,max=2000"`
+	Category    *string            `json:"category" validate:"omitempty,max=100"`
+	Status      *entity.ItemStatus `json:"status" validate:"omitempty,item_status"`
+}
+
+type listItemsQuery struct {
+	Page     int `schema:"page" validate:"omitempty,gte=0"`
+	PageSize int `schema:"pageSize" validate:"omitempty,gte=0"`
 }
 
 type itemResponse struct {
@@ -44,7 +51,7 @@ type itemResponse struct {
 	OwnerUserID string  `json:"ownerUserId"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
-	CategoryID  *int64  `json:"categoryId"`
+	Category    string  `json:"category"`
 	ImageURL    *string `json:"imageUrl"`
 	Status      string  `json:"status"`
 	CreatedAt   string  `json:"createdAt"`
@@ -65,15 +72,20 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	var body createItemRequest
-	if err := c.ShouldBindJSON(&body); err != nil {
-		api.SendError(c, http.StatusUnprocessableEntity, "invalid request body")
+	if err := validator.BindJSON(&body, c.Request); err != nil {
+		var jsonSyntaxErr *json.SyntaxError
+		if errors.As(err, &jsonSyntaxErr) {
+			api.SendError(c, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
 	created, err := h.service.Create(c.Request.Context(), ownerID, itemservice.CreateInput{
 		Title:       body.Title,
 		Description: body.Description,
-		CategoryID:  body.CategoryID,
+		Category:    body.Category,
 	})
 	if err != nil {
 		writeItemError(c, err)
@@ -109,15 +121,12 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	page, ok := queryInt(c, "page", 0)
-	if !ok {
+	var query listItemsQuery
+	if err := validator.BindQuery(&query, c.Request); err != nil {
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-	pageSize, ok := queryInt(c, "pageSize", 0)
-	if !ok {
-		return
-	}
-	page, pageSize = itemservice.NormalizePagination(page, pageSize)
+	page, pageSize := itemservice.NormalizePagination(query.Page, query.PageSize)
 
 	items, total, err := h.service.List(c.Request.Context(), userID, page, pageSize)
 	if err != nil {
@@ -150,15 +159,20 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	var body updateItemRequest
-	if err := c.ShouldBindJSON(&body); err != nil {
-		api.SendError(c, http.StatusUnprocessableEntity, "invalid request body")
+	if err := validator.BindJSON(&body, c.Request); err != nil {
+		var jsonSyntaxErr *json.SyntaxError
+		if errors.As(err, &jsonSyntaxErr) {
+			api.SendError(c, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
 	updated, err := h.service.Update(c.Request.Context(), userID, itemID, itemservice.UpdateInput{
 		Title:       body.Title,
 		Description: body.Description,
-		CategoryID:  body.CategoryID,
+		Category:    body.Category,
 		Status:      body.Status,
 	})
 	if err != nil {
@@ -235,7 +249,10 @@ func (h *Handler) UploadImage(c *gin.Context) {
 const maxImageUploadSize = 5 << 20
 
 func writeItemError(c *gin.Context, err error) {
+	var ve validator.Error
 	switch {
+	case errors.As(err, &ve):
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, entity.ErrItemNotFound), errors.Is(err, entity.ErrItemForbidden):
 		// Чужой и несуществующий товар неразличимы для клиента — не подтверждаем
 		// существование чужих товаров.
@@ -243,11 +260,7 @@ func writeItemError(c *gin.Context, err error) {
 	case errors.Is(err, entity.ErrItemHasHardReservation):
 		api.SendError(c, http.StatusConflict, err.Error())
 	case errors.Is(err, entity.ErrItemArchived),
-		errors.Is(err, entity.ErrTitleRequired),
-		errors.Is(err, entity.ErrTitleTooLong),
-		errors.Is(err, entity.ErrDescriptionTooLong),
 		errors.Is(err, entity.ErrInvalidItemStatus),
-		errors.Is(err, entity.ErrCategoryNotFound),
 		errors.Is(err, entity.ErrInvalidImageType),
 		errors.Is(err, entity.ErrImageTooLarge):
 		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
@@ -262,7 +275,7 @@ func newItemResponse(item *entity.Item) itemResponse {
 		OwnerUserID: item.OwnerUserID.String(),
 		Title:       item.Title,
 		Description: item.Description,
-		CategoryID:  item.CategoryID,
+		Category:    item.Category,
 		ImageURL:    item.ImageURL,
 		Status:      string(item.Status),
 		CreatedAt:   item.CreatedAt.UTC().Format(time.RFC3339),
@@ -288,19 +301,3 @@ func pathID(c *gin.Context) (int64, bool) {
 	return itemID, true
 }
 
-// queryInt читает необязательный integer query-параметр. Отсутствующий параметр
-// возвращает fallback без ошибки; нечисловое значение — ошибка 422.
-func queryInt(c *gin.Context, name string, fallback int) (int, bool) {
-	raw := c.Query(name)
-	if raw == "" {
-		return fallback, true
-	}
-
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		api.SendError(c, http.StatusUnprocessableEntity, name+" must be an integer")
-		return 0, false
-	}
-
-	return value, true
-}
