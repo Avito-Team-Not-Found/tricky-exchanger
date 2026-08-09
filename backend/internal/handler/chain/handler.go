@@ -322,9 +322,7 @@ func newChainResponse(chain entity.Chain, userID string) chainResponse {
 			OfferedItemDescription: participant.OfferedItemDescription,
 			WantedDescription:      participant.WantedDescription,
 			ImageURL:               participant.ImageURL,
-		}
-		if participant.Position == response.ReceivesFromPosition {
-			participantResponse.Vote = participant.Vote
+			Vote:                   participant.Vote,
 		}
 		response.Participants = append(response.Participants, participantResponse)
 	}

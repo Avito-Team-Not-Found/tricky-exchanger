@@ -20,6 +20,9 @@ func TestGetReturnsOrderedExchangePositions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	createdAt := time.Date(2026, 8, 8, 10, 0, 0, 0, time.UTC)
+	pending := entity.VotePending
+	approved := entity.VoteApproved
+	thinking := entity.VoteThinking
 	service := &fakeService{chain: entity.Chain{
 		ID:               7,
 		Status:           entity.ChainStatusCandidate,
@@ -31,10 +34,10 @@ func TestGetReturnsOrderedExchangePositions(t *testing.T) {
 		CreatedAt:        createdAt,
 		UpdatedAt:        createdAt,
 		Participants: []entity.ChainParticipant{
-			{ClusterID: 1, RequestID: 12, Position: 0, OwnerUserID: userID.String(), OfferedItemID: 101, OfferedItemTitle: "Кружка", WantedDescription: "Кофемашина"},
-			{ClusterID: 2, RequestID: 13, Position: 1, OwnerUserID: uuid.NewString(), OfferedItemID: 102, OfferedItemTitle: "Кофемашина", WantedDescription: "Велосипед"},
+			{ClusterID: 1, RequestID: 12, Position: 0, OwnerUserID: userID.String(), OfferedItemID: 101, OfferedItemTitle: "Кружка", WantedDescription: "Кофемашина", Vote: &pending},
+			{ClusterID: 2, RequestID: 13, Position: 1, OwnerUserID: uuid.NewString(), OfferedItemID: 102, OfferedItemTitle: "Кофемашина", WantedDescription: "Велосипед", Vote: &approved},
 			{ClusterID: 2, RequestID: 15, Position: 1, OwnerUserID: uuid.NewString(), OfferedItemID: 104, OfferedItemTitle: "Компактная кофемашина", WantedDescription: "Велосипед"},
-			{ClusterID: 3, RequestID: 14, Position: 2, OwnerUserID: uuid.NewString(), OfferedItemID: 103, OfferedItemTitle: "Велосипед", WantedDescription: "Кружка"},
+			{ClusterID: 3, RequestID: 14, Position: 2, OwnerUserID: uuid.NewString(), OfferedItemID: 103, OfferedItemTitle: "Велосипед", WantedDescription: "Кружка", Vote: &thinking},
 		},
 	}}
 
@@ -59,6 +62,11 @@ func TestGetReturnsOrderedExchangePositions(t *testing.T) {
 	for _, requestID := range []string{`"requestId":13`, `"requestId":15`} {
 		if body := recorder.Body.String(); !strings.Contains(body, requestID) {
 			t.Fatalf("body = %s, want both requests of receiving cluster", body)
+		}
+	}
+	for _, vote := range []string{`"vote":"pending"`, `"vote":"approved"`, `"vote":"thinking"`} {
+		if body := recorder.Body.String(); !strings.Contains(body, vote) {
+			t.Fatalf("body = %s, want participant vote %s", body, vote)
 		}
 	}
 }
