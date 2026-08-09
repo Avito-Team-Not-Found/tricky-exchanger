@@ -133,6 +133,16 @@ describe('ItemForm', () => {
     expect(screen.getByRole('button', { name: /Сохранить/ })).toBeDisabled();
   });
 
+  // товары старше требования 50 символов иначе молча блокировали сохранение: кнопка
+  // неактивна, а ошибки на экране нет — пользователю нечем объяснить отказ
+  it('explains the blocked save for an item created before the 50-character rule', async () => {
+    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, description: 'Мощный' }));
+    renderWithProviders(<ItemForm itemId={1} />);
+
+    expect(await screen.findByText('Пожалуйста, опишите товар подробнее')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Сохранить изменения/ })).toBeDisabled();
+  });
+
   it('creates an item on submit', async () => {
     const user = userEvent.setup();
     mockedCreateItem.mockResolvedValue(existingItem);

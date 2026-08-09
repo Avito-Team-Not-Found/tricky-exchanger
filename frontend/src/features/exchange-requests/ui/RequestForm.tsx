@@ -5,7 +5,7 @@ import { App as AntApp, Button, Form, Input, Radio, Select, Skeleton } from 'ant
 
 import { ITEM_STATUS_META } from '@entities/item';
 
-import { categoryOptions } from '@shared/config/categories';
+import { categoryOptions, DESCRIPTION_MIN_LENGTH } from '@shared/config/categories';
 import { ErrorState } from '@shared/ui';
 
 import { useRemoveRequest } from '../model/useRemoveRequest';
@@ -190,6 +190,16 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
           rules={[
             { required: true, message: 'Опишите желаемый товар' },
             { max: 500, message: 'Описание не длиннее 500 символов' },
+            {
+              // кастомный validator вместо min: antd считает символы до обрезки, а на бэкенд
+              // уходит values.wantedDescription.trim() — 50 пробелов прошли бы через min
+              validator(_, value: string | undefined) {
+                if (!value || value.trim().length >= DESCRIPTION_MIN_LENGTH) {
+                  return Promise.resolve();
+                }
+                return Promise.reject(new Error('Пожалуйста, опишите желаемое подробнее'));
+              },
+            },
           ]}
         >
           <Input.TextArea

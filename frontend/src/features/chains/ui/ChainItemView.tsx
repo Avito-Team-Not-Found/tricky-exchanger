@@ -4,17 +4,20 @@ import { receivesItem, type Chain } from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
 
+import { BestChainBadge } from './BestChainBadge';
+
 import './ChainItemView.scss';
 
 interface ChainItemViewProps {
   chain: Chain;
+  isBest: boolean;
   onOpenParticipants: () => void;
 }
 
 // Экран цепочки (макет 4.7): товар, который пользователь получит в обмене, его описание
 // и переход к схеме участников (макет 4.8). Пока цепочка CANDIDATE, получаемое звено — пул
 // кандидатов: товар однозначен только когда кандидат один (собранная цепочка, §3.1).
-export function ChainItemView({ chain, onOpenParticipants }: ChainItemViewProps) {
+export function ChainItemView({ chain, isBest, onOpenParticipants }: ChainItemViewProps) {
   const received = receivesItem(chain);
   const single = received.length === 1 ? received[0] : null;
   const isAssembled = chain.status !== 'CANDIDATE';
@@ -34,6 +37,7 @@ export function ChainItemView({ chain, onOpenParticipants }: ChainItemViewProps)
       </div>
 
       <div className="chain-item__head">
+        {isBest ? <BestChainBadge /> : null}
         <h2 className="chain-item__title">
           {single?.offeredItemTitle ??
             `Получаете: ${received.length} ${pluralizeVariants(received.length)}`}

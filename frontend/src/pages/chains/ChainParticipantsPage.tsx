@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ChainDetail, useChainVote } from '@features/chains';
 
-import { useChain } from '@entities/chain';
+import { useChain, useIsBestChain } from '@entities/chain';
 
 import { ErrorState } from '@shared/ui';
 
@@ -17,8 +17,10 @@ export function ChainParticipantsPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
-  const { data: chain, isLoading, isError, refetch } = useChain(chainId);
+  const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
   const { confirmVote, isVoting } = useChainVote(refetch);
+  const { isBest, isLoading: isBestLoading } = useIsBestChain(chain);
+  const isLoading = isChainLoading || isBestLoading;
 
   return (
     <div className="chain-detail-page">
@@ -32,6 +34,7 @@ export function ChainParticipantsPage() {
         ) : (
           <ChainDetail
             chain={chain}
+            isBest={isBest}
             isVoting={isVoting}
             onVote={(candidate, active) =>
               confirmVote(

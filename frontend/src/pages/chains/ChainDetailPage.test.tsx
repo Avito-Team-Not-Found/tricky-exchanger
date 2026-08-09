@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useChain, type Chain } from '@entities/chain';
+import { useChain, useIsBestChain, type Chain } from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -14,10 +14,11 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, useChain: vi.fn() };
+  return { ...actual, useChain: vi.fn(), useIsBestChain: vi.fn() };
 });
 
 const mockedUseChain = vi.mocked(useChain);
+const mockedUseIsBestChain = vi.mocked(useIsBestChain);
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
   return {
@@ -62,6 +63,36 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: false });
+  });
+
+  it('shows the best-chain badge when the chain leads the options of its request', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+    mockedUseIsBestChain.mockReturnValue({ isBest: true, isLoading: false });
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('Лучшая цепочка для этого товара')).toBeInTheDocument();
+  });
+
+  // иначе плашка появлялась бы после отрисовки и сдвигала вниз уже прочитанное содержимое
+  it('keeps the skeleton until the best-chain check resolves', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: true });
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(
+      screen.queryByRole('heading', { name: 'Зеркальный фотоаппарат Canon', level: 2 }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the best-chain badge for a chain that does not lead', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.queryByText('Лучшая цепочка для этого товара')).not.toBeInTheDocument();
   });
 
   it('shows the received item with its description', () => {

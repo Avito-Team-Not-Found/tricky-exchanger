@@ -39,6 +39,9 @@ const mockedRemoveRequest = vi.mocked(removeRequest);
 const mockedUseRequest = vi.mocked(useRequest);
 const mockedUseItems = vi.mocked(useItems);
 
+// описание желаемого обязано быть не короче 50 символов — валидное значение для заполненных форм
+const LONG_WANTED = 'Ноутбук в рабочем состоянии, любой диагонали, можно без зарядки';
+
 const items = [
   {
     id: 1,
@@ -81,7 +84,7 @@ async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Н
 
 // оба поля блока «что хочу получить» обязательны — заполняем их вместе
 async function fillWanted(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+  await user.type(screen.getByLabelText('Что вы хотите получить'), LONG_WANTED);
   await pickCategory(user);
 }
 
@@ -116,7 +119,7 @@ describe('RequestForm', () => {
     ).toBeInTheDocument();
     expect(mockedCreateRequest).toHaveBeenCalledWith({
       offeredItemId: 1,
-      wantedDescription: 'Ноутбук',
+      wantedDescription: LONG_WANTED,
       wantedCategory: 'Ноутбуки',
     });
   });
@@ -152,12 +155,34 @@ describe('RequestForm', () => {
     await user.click(screen.getByText('Кухонный комбайн'));
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
 
-    await user.type(screen.getByLabelText('Что вы хотите получить'), 'Ноутбук');
+    await user.type(screen.getByLabelText('Что вы хотите получить'), LONG_WANTED);
     // категория обязательна — одного описания мало
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
 
     await pickCategory(user);
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeEnabled();
+  });
+
+  it('blocks saving a wanted description shorter than 50 characters', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<RequestForm />);
+
+    await user.click(screen.getByText('Кухонный комбайн'));
+    await user.type(screen.getByLabelText('Что вы хотите получить'), 'x'.repeat(49));
+    await pickCategory(user);
+
+    expect(await screen.findByText('Пожалуйста, опишите желаемое подробнее')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
+  });
+
+  // заявки старше требования 50 символов иначе молча блокировали сохранение: кнопка
+  // неактивна, а ошибки на экране нет — пользователю нечем объяснить отказ
+  it('explains the blocked save for a request created before the 50-character rule', async () => {
+    mockedUseRequest.mockReturnValue(queryOk({ ...liveRequest, wantedDescription: 'Ноутбук' }));
+    renderWithProviders(<RequestForm requestId={1} />);
+
+    expect(await screen.findByText('Пожалуйста, опишите желаемое подробнее')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Сохранить запрос/ })).toBeDisabled();
   });
 
   it('shows a thumbnail for an item with a photo', () => {

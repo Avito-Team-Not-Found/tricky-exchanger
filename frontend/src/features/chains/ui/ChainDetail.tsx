@@ -14,10 +14,13 @@ import {
 
 import { Avatar } from '@shared/ui';
 
+import { BestChainBadge } from './BestChainBadge';
+
 import './ChainDetail.scss';
 
 interface ChainDetailProps {
   chain: Chain;
+  isBest: boolean;
   isVoting: boolean;
   onVote: (candidate: ChainParticipant, active: boolean) => void;
 }
@@ -28,7 +31,7 @@ interface ChainDetailProps {
 // пока цепочка ещё CANDIDATE (у собранной отклики уже не меняются, PROJECT.md §4.5).
 // Действие вынесено в отдельный блок под списком (SCRUM-52): кандидат выбирается кликом по
 // строке, кнопка внизу применяется к выбранному — в строках участников кнопок нет.
-export function ChainDetail({ chain, isVoting, onVote }: ChainDetailProps) {
+export function ChainDetail({ chain, isBest, isVoting, onVote }: ChainDetailProps) {
   const links = chainLinks(chain);
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
@@ -61,6 +64,13 @@ export function ChainDetail({ chain, isVoting, onVote }: ChainDetailProps) {
 
   return (
     <>
+      {isBest ? (
+        // обёртка обязательна: прямые дети .chain-detail-page__body растягиваются на всю
+        // ширину колонки, а плашка должна остаться по ширине текста
+        <div className="chain-detail__best">
+          <BestChainBadge />
+        </div>
+      ) : null}
       <ul className="chain-detail__participants">
         {links.map((link) => (
           <ChainLinkRow

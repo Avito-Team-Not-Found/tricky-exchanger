@@ -85,6 +85,14 @@ export function useItemForm(itemId?: number) {
   const description = Form.useWatch('description', form);
   const category = Form.useWatch('category', form);
 
+  // товары, созданные до требования 50 символов, приходят с коротким описанием: antd не
+  // валидирует initialValues, поэтому без явной проверки кнопка молча оставалась бы
+  // заблокированной без единой подсказки на экране
+  useEffect(() => {
+    if (!item) return;
+    form.validateFields(['description']).catch(() => undefined);
+  }, [form, item]);
+
   // гейт кнопки повторяет правило формы, иначе короткое описание уйдёт в молчаливый сабмит
   const descriptionLength = description?.trim().length ?? 0;
   const fieldsValid =
