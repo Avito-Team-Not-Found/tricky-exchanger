@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   chainLinks,
+  isAssembled,
   isHardLocked,
   myParticipant,
   receivesItem,
@@ -116,5 +117,16 @@ describe('isHardLocked', () => {
     expect(isHardLocked('IN_PROGRESS')).toBe(true);
     expect(isHardLocked('CANDIDATE')).toBe(false);
     expect(isHardLocked('PROPOSED')).toBe(false);
+  });
+});
+
+describe('isAssembled', () => {
+  it('treats PROPOSED and hard-locked chains as occupying the request', () => {
+    expect(isAssembled('PROPOSED')).toBe(true);
+    expect(isAssembled('FROZEN')).toBe(true);
+    expect(isAssembled('IN_PROGRESS')).toBe(true);
+    expect(isAssembled('CANDIDATE')).toBe(false);
+    expect(isAssembled('BROKEN')).toBe(false);
+    expect(isAssembled('COMPLETED')).toBe(false);
   });
 });

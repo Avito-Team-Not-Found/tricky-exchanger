@@ -87,9 +87,10 @@ export interface ChainLink {
   candidates: ChainParticipant[];
 }
 
-// глиф перед подписью — требование доступности: статус отклика не передаётся одним лишь цветом
+// статус отклика не передаётся одним лишь цветом — подпись текстом обязательна; глиф добавляется
+// там, где есть (у pending подпись «Ожидаем» несёт смысл сама)
 export const VOTE_META: Record<VoteValue, { label: string; glyph: string; tone: StatusTone }> = {
-  pending: { label: 'Отклик отправлен', glyph: '⏳', tone: 'warning' },
+  pending: { label: 'Ожидаем', glyph: '', tone: 'warning' },
   approved: { label: 'Отклик принят', glyph: '✓', tone: 'success' },
   rejected: { label: 'Отклик отклонён', glyph: '✕', tone: 'error' },
 };
@@ -100,6 +101,12 @@ export const HARD_LOCK_MESSAGE = '🔒 Товар жёстко заблокир�
 // цепочка заморожена или уже в сделке: товары и заявки жёстко заблокированы (SOFT-LOCK §5.5)
 export function isHardLocked(status: ChainStatus): boolean {
   return status === 'FROZEN' || status === 'IN_PROGRESS';
+}
+
+// собранная цепочка, которая занимает заявку: кольцо откликов замкнулось (PROPOSED) или сделка
+// уже идёт (FROZEN/IN_PROGRESS) — остальные варианты этого запроса приглушены и недоступны
+export function isAssembled(status: ChainStatus): boolean {
+  return status === 'PROPOSED' || isHardLocked(status);
 }
 
 // Участник текущего пользователя: только он может откликаться за себя

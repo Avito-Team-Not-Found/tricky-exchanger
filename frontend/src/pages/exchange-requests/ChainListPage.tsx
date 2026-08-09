@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import { useChainConfirm, useChainVote, ChainCard } from '@features/chains';
 
-import { isHardLocked, useExchangeOptions } from '@entities/chain';
+import { isAssembled, isHardLocked, useExchangeOptions } from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems } from '@entities/item';
 
@@ -13,8 +13,9 @@ import { EmptyState, ErrorState } from '@shared/ui';
 import './ChainListPage.scss';
 
 // Варианты обмена по заявке (PROJECT.md §2.6, макет 4.6): пул кандидатов следующего звена,
-// на каждого можно откликнуться или отозвать отклик. Как только по одной из цепочек сделка
-// заморожена — остальные варианты недоступны, кнопка правки запроса заблокирована (SOFT-LOCK §5.4/§5.5).
+// на каждого можно откликнуться или отозвать отклик. Когда одна из цепочек замкнулась
+// (PROPOSED) или заморожена — остальные варианты приглушены и недоступны; при заморозке
+// сделки дополнительно баннер, а кнопка правки запроса заблокирована (SOFT-LOCK §5.4/§5.5).
 export function ChainListPage() {
   const { requestId: requestIdParam } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
@@ -28,6 +29,8 @@ export function ChainListPage() {
   const request = requestQuery.data;
   const options = optionsQuery.data ?? [];
   const hasFrozen = options.some((entry) => isHardLocked(entry.status));
+  // собранная или замороженная цепочка занимает заявку: кандидатные варианты приглушены
+  const hasAssembled = options.some((entry) => isAssembled(entry.status));
   // деталь заявки не отдаёт снимок отдаваемого товара — берём его из кеша товаров
   const offeredItem = itemsQuery.data?.items.find((item) => item.id === request?.offeredItemId);
 
@@ -109,7 +112,7 @@ export function ChainListPage() {
                 options={entry}
                 option={option}
                 isVoting={isVoting}
-                locked={hasFrozen && !isHardLocked(entry.status)}
+                locked={hasAssembled && !isAssembled(entry.status)}
                 onOpen={() => navigate(`/chains/${entry.chainId}`)}
                 onConfirm={(chainId) => openConfirm(chainId)}
                 onVote={(active) =>

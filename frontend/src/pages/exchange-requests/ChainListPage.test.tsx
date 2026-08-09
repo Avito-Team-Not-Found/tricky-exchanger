@@ -283,6 +283,124 @@ describe('ChainListPage', () => {
     expect(editButton).toBeDisabled();
   });
 
+  // когда одна из цепочек замкнулась (PROPOSED, требует подтверждения), остальные варианты
+  // приглушены и недоступны — доступной остаётся сама собранная цепочка (SCRUM §2.6)
+  it('dims candidate chains when one chain is PROPOSED and needs confirmation', () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(
+      queryOk([
+        makeOptions({
+          chainId: 1,
+          status: 'PROPOSED',
+          receiveOptions: [
+            {
+              clusterId: 2,
+              requestId: 202,
+              itemId: 2,
+              title: 'Фотоаппарат',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+        makeOptions({
+          chainId: 2,
+          receiveOptions: [
+            {
+              clusterId: 3,
+              requestId: 204,
+              itemId: 4,
+              title: 'Книга',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+      ]),
+    );
+
+    renderWithProviders(<ChainListPage />);
+
+    // собранная цепочка остаётся доступной — действие второго раунда активно
+    expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeEnabled();
+
+    const dimmedCard = screen
+      .getAllByRole('article')
+      .find((card) => card.textContent?.includes('Книга'));
+    expect(dimmedCard).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Откликнуться' })).toBeDisabled();
+  });
+
+  // при нескольких собранных цепочках они все остаются доступными — приглушаются только кандидатные
+  it('keeps several PROPOSED chains available and dims only candidate chains', () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(
+      queryOk([
+        makeOptions({
+          chainId: 1,
+          status: 'PROPOSED',
+          receiveOptions: [
+            {
+              clusterId: 2,
+              requestId: 202,
+              itemId: 2,
+              title: 'Фотоаппарат',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+        makeOptions({
+          chainId: 2,
+          status: 'PROPOSED',
+          receiveOptions: [
+            {
+              clusterId: 3,
+              requestId: 204,
+              itemId: 4,
+              title: 'Планшет',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+        makeOptions({
+          chainId: 3,
+          receiveOptions: [
+            {
+              clusterId: 4,
+              requestId: 206,
+              itemId: 6,
+              title: 'Книга',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+      ]),
+    );
+
+    renderWithProviders(<ChainListPage />);
+
+    expect(screen.getAllByRole('button', { name: 'Требуются действия' })).toHaveLength(2);
+
+    const assembledCards = screen
+      .getAllByRole('article')
+      .filter(
+        (card) =>
+          card.textContent?.includes('Фотоаппарат') || card.textContent?.includes('Планшет'),
+      );
+    for (const card of assembledCards) {
+      expect(card).not.toHaveAttribute('aria-disabled');
+    }
+
+    const dimmedCard = screen
+      .getAllByRole('article')
+      .find((card) => card.textContent?.includes('Книга'));
+    expect(dimmedCard).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Откликнуться' })).toBeDisabled();
+  });
+
   it('shows the empty state when there are no exchange options', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(queryOk([]));

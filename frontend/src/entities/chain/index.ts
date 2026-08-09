@@ -1,6 +1,7 @@
 export {
   chainLinks,
   HARD_LOCK_MESSAGE,
+  isAssembled,
   isHardLocked,
   myParticipant,
   receivesItem,
