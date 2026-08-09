@@ -7,7 +7,12 @@ import { App as AntApp } from 'antd';
 import { AxiosError } from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { confirmChain, type ConfirmResult } from '@entities/chain';
+import {
+  confirmChain,
+  declineChain,
+  type ConfirmResult,
+  type DeclineResult,
+} from '@entities/chain';
 
 import { createTestQueryClient } from '@shared/testing/renderWithProviders';
 
@@ -15,10 +20,11 @@ import { useChainConfirm } from './useChainConfirm';
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, confirmChain: vi.fn() };
+  return { ...actual, confirmChain: vi.fn(), declineChain: vi.fn() };
 });
 
 const mockedConfirm = vi.mocked(confirmChain);
+const mockedDecline = vi.mocked(declineChain);
 
 let queryClient = createTestQueryClient();
 
@@ -37,6 +43,10 @@ function axiosError(status: number) {
 }
 
 const PROPOSED: ConfirmResult = { chainId: 1, status: 'PROPOSED' };
+
+function declined(status: DeclineResult['status']): DeclineResult {
+  return { chainId: 1, status, replacementAvailable: false };
+}
 
 describe('useChainConfirm', () => {
   beforeEach(() => {
@@ -149,5 +159,106 @@ describe('useChainConfirm', () => {
     await user.click(await screen.findByRole('button', { name: 'Да' }));
 
     await waitFor(() => expect(onNotFound).toHaveBeenCalled());
+  });
+
+  it('closes the decision modal when the chain has been removed', async () => {
+    mockedConfirm.mockRejectedValue(axiosError(404));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(vi.fn(), vi.fn()), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Да' }));
+    expect(await screen.findByText('Цепочка не найдена')).toBeInTheDocument();
+
+    // jsdom не доигрывает анимации antd, поэтому из DOM модалка не исчезает — наблюдаем её уход
+    await waitFor(() => expect(document.querySelector('.ant-modal')).toHaveClass('ant-zoom-leave'));
+  });
+
+  it('asks for a second confirmation before declining', async () => {
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+
+    expect(
+      await screen.findByText(
+        'Ваш товар вернётся в другие варианты обмена, а цепочка распадётся или будет пересобрана.',
+      ),
+    ).toBeInTheDocument();
+    expect(mockedDecline).not.toHaveBeenCalled();
+  });
+
+  it('declines participation on «Да, отказаться»', async () => {
+    mockedDecline.mockResolvedValue(declined('CANDIDATE'));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
+
+    await waitFor(() => expect(mockedDecline).toHaveBeenCalledWith(1));
+  });
+
+  it('keeps the chain untouched when the decline is cancelled', async () => {
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click((await screen.findAllByRole('button', { name: 'Отмена' })).at(-1)!);
+
+    expect(mockedDecline).not.toHaveBeenCalled();
+    expect(screen.getByText('Все участники найдены')).toBeInTheDocument();
+  });
+
+  it('toasts each outcome of a decline', async () => {
+    const cases: Array<[DeclineResult['status'], string]> = [
+      ['BROKEN', 'Вы вышли из сделки. Цепочка распалась'],
+      ['CANDIDATE', 'Вы вышли из сделки. Цепочка вернулась к сбору откликов'],
+      ['PROPOSED', 'Вы вышли из сделки. Участники подбирают замену'],
+    ];
+
+    for (const [status, expected] of cases) {
+      mockedDecline.mockResolvedValue(declined(status));
+      const user = userEvent.setup();
+      const { result, unmount } = renderHook(() => useChainConfirm(), { wrapper });
+
+      act(() => result.current.openConfirm(1));
+      await user.click(await screen.findByRole('button', { name: 'Нет' }));
+      await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
+
+      expect(await screen.findByText(expected)).toBeInTheDocument();
+      // модалки соседних итераций иначе остаются в DOM и делают запросы неоднозначными
+      unmount();
+    }
+  });
+
+  it('leaves the chain screen when the chain has fallen apart', async () => {
+    const onNotFound = vi.fn();
+    mockedDecline.mockResolvedValue(declined('BROKEN'));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(vi.fn(), onNotFound), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
+
+    await waitFor(() => expect(onNotFound).toHaveBeenCalled());
+  });
+
+  it('falls back to a decline-specific error toast', async () => {
+    const refetch = vi.fn();
+    mockedDecline.mockRejectedValue(axiosError(500));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(refetch), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
+
+    expect(await screen.findByText('Не удалось отказаться от участия')).toBeInTheDocument();
+    expect(refetch).toHaveBeenCalled();
   });
 });

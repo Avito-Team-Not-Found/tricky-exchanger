@@ -1,20 +1,40 @@
+import { useRef } from 'react';
+
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 import { isAxiosError } from 'axios';
 
-import { confirmChain, type ConfirmResult } from '@entities/chain';
+import {
+  confirmChain,
+  declineChain,
+  type ChainStatus,
+  type ConfirmResult,
+  type DeclineResult,
+} from '@entities/chain';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
 import { FreezeDecisionModal } from '../ui/FreezeDecisionModal';
 
+// Отказ не всегда ломает цепочку: сервер откатывает её в CANDIDATE, оставляет PROPOSED
+// с вакансией под замену или распускает совсем (SOFT-LOCK §3.2) — исход виден только из ответа
+const DECLINE_MESSAGE: Partial<Record<ChainStatus, string>> = {
+  BROKEN: 'Вы вышли из сделки. Цепочка распалась',
+  CANDIDATE: 'Вы вышли из сделки. Цепочка вернулась к сбору откликов',
+  PROPOSED: 'Вы вышли из сделки. Участники подбирают замену',
+};
+
 // Подтверждение участия во втором раунде (SOFT-LOCK §6, §10) — единая точка для 4.6/4.7/4.8:
 // модалка «Готовность к сделке» + POST /chains/{id}/confirm. Статус из ответа решает тост:
-// PROPOSED — ждём остальных, FROZEN — сделка подтверждена. Любая ошибка инвалидирует кэш,
+// PROPOSED — ждём остальных, FROZEN — сделка подтверждена. Отказ («Нет») идёт через отдельное
+// подтверждение (§6.3) и POST /chains/{id}/decline. Любая ошибка инвалидирует кэш,
 // чтобы карточки не остались с устаревшими действиями, и перезагружает данные.
 export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
   const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
+  // модалка живёт в портале вне дерева роутов: сама она уход с экрана не переживает, её надо
+  // закрывать руками, иначе останется висеть поверх нового экрана с живой кнопкой «Да»
+  const decision = useRef<{ destroy: () => void } | null>(null);
 
   const mutation = useMutation<ConfirmResult, Error, number>({
     mutationFn: (chainId) => confirmChain(chainId),
@@ -22,22 +42,21 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
       message.success(data.status === 'FROZEN' ? 'Сделка подтверждена' : 'Участие подтверждено');
       invalidate();
     },
-    onError: (error) => {
+    onError: (error) => handleError(error, 'Не удалось подтвердить участие'),
+  });
+
+  const declineMutation = useMutation<DeclineResult, Error, number>({
+    mutationFn: (chainId) => declineChain(chainId),
+    onSuccess: (data) => {
+      message.success(DECLINE_MESSAGE[data.status] ?? 'Вы вышли из сделки');
       invalidate();
-      if (isAxiosError(error) && error.response?.status === 404) onNotFound?.();
-      message.error(
-        getErrorMessage(
-          error,
-          {
-            403: 'Вы не участник этой цепочки',
-            404: 'Цепочка не найдена',
-            409: 'Цепочка изменилась: обновите варианты',
-          },
-          'Не удалось подтвердить участие',
-        ),
-      );
-      refetch?.();
+      // цепочки больше нет — на 4.7/4.8 остаться на её экране нельзя
+      if (data.status === 'BROKEN') {
+        closeDecision();
+        onNotFound?.();
+      }
     },
+    onError: (error) => handleError(error, 'Не удалось отказаться от участия'),
   });
 
   function invalidate() {
@@ -45,10 +64,53 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
   }
 
+  function closeDecision() {
+    decision.current?.destroy();
+    decision.current = null;
+  }
+
+  function handleError(error: Error, fallback: string) {
+    invalidate();
+    message.error(
+      getErrorMessage(
+        error,
+        {
+          403: 'Вы не участник этой цепочки',
+          404: 'Цепочка не найдена',
+          409: 'Цепочка изменилась: обновите варианты',
+        },
+        fallback,
+      ),
+    );
+    // цепочки нет — решать по ней больше нечего: закрываем модалку и уходим к списку,
+    // перезагружать данные удалённой цепочки уже некому
+    if (isAxiosError(error) && error.response?.status === 404) {
+      closeDecision();
+      onNotFound?.();
+      return;
+    }
+    refetch?.();
+  }
+
+  // отказ необратим и меняет судьбу всей цепочки, поэтому подтверждается отдельно (SOFT-LOCK §6.3);
+  // какой из трёх исходов случится, клиент заранее не знает — формулировка обтекаемая
+  function openDecline(chainId: number) {
+    modal.confirm({
+      title: 'Отказаться от сделки?',
+      content:
+        'Ваш товар вернётся в другие варианты обмена, а цепочка распадётся или будет пересобрана.',
+      okText: 'Да, отказаться',
+      okButtonProps: { danger: true },
+      cancelText: 'Отмена',
+      centered: true,
+      // reject гасится здесь: antd пробрасывает его наружу необработанным, а про ошибку уже
+      // рассказал тост мутации — модалка закрывается, решение остаётся за модалкой §6.1
+      onOk: () => declineMutation.mutateAsync(chainId).then(closeDecision, () => {}),
+    });
+  }
+
   function openConfirm(chainId: number) {
-    // instance нужен, чтобы закрыть модалку после ответа сервера из контента (FreezeDecisionModal)
-    let instance: { destroy: () => void } | null = null;
-    instance = modal.confirm({
+    decision.current = modal.confirm({
       icon: null,
       centered: true,
       width: 280,
@@ -57,7 +119,8 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
           onConfirm={async () => {
             await mutation.mutateAsync(chainId);
           }}
-          onClose={() => instance?.destroy()}
+          onDecline={() => openDecline(chainId)}
+          onClose={closeDecision}
         />
       ),
       footer: null,
