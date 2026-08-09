@@ -9,31 +9,37 @@ import (
 )
 
 const (
-	defaultTopK      = 50
-	defaultThreshold = 0.8
+	defaultTopK            = 50
+	defaultThreshold       = 0.8
+	defaultDirectionMargin = 0.05
 )
 
 // Service определяет, в какой кластер должно попасть предложение.
 type Service struct {
-	repository Repository
-	searcher   CandidateSearcher
-	topK       int
-	threshold  float64
+	repository      Repository
+	searcher        CandidateSearcher
+	topK            int
+	threshold       float64
+	directionMargin float64
 }
 
 // NewService создаёт сервис кластеризации.
-func NewService(repository Repository, searcher CandidateSearcher, topK int, threshold float64) *Service {
+func NewService(repository Repository, searcher CandidateSearcher, topK int, threshold, directionMargin float64) *Service {
 	if topK <= 0 {
 		topK = defaultTopK
 	}
 	if threshold <= 0 || threshold > 1 {
 		threshold = defaultThreshold
 	}
+	if directionMargin < 0 || directionMargin > 1 {
+		directionMargin = defaultDirectionMargin
+	}
 	return &Service{
-		repository: repository,
-		searcher:   searcher,
-		topK:       topK,
-		threshold:  threshold,
+		repository:      repository,
+		searcher:        searcher,
+		topK:            topK,
+		threshold:       threshold,
+		directionMargin: directionMargin,
 	}
 }
 
@@ -66,6 +72,7 @@ func (s *Service) Synchronize(ctx context.Context, tx database.Tx, offerID int64
 		vectors.CategoryID,
 		offerID,
 		s.threshold,
+		s.directionMargin,
 		s.topK,
 	)
 	if err != nil {
@@ -77,7 +84,9 @@ func (s *Service) Synchronize(ctx context.Context, tx database.Tx, offerID int64
 		candidateIDs = append(candidateIDs, candidate.RequestID)
 	}
 
-	clusterID, err := s.repository.FindClusterForCandidates(ctx, tx, candidateIDs)
+	clusterID, err := s.repository.FindClusterForCandidates(
+		ctx, tx, candidateIDs, vectors, s.threshold, s.directionMargin,
+	)
 	if err != nil {
 		return err
 	}

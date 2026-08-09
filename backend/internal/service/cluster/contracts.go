@@ -18,7 +18,14 @@ type OfferVectors struct {
 type Repository interface {
 	LoadVectors(ctx context.Context, tx database.Tx, offerID int64) (OfferVectors, error)
 	DeleteMembership(ctx context.Context, tx database.Tx, offerID int64) (*int64, error)
-	FindClusterForCandidates(ctx context.Context, tx database.Tx, offerIDs []int64) (*int64, error)
+	FindClusterForCandidates(
+		ctx context.Context,
+		tx database.Tx,
+		offerIDs []int64,
+		vectors OfferVectors,
+		threshold float64,
+		directionMargin float64,
+	) (*int64, error)
 	Create(ctx context.Context, tx database.Tx) (int64, error)
 	AddMember(ctx context.Context, tx database.Tx, clusterID, offerID int64) error
 	Refresh(ctx context.Context, tx database.Tx, clusterID int64) error
@@ -34,6 +41,7 @@ type CandidateSearcher interface {
 		categoryID *int64,
 		excludeOfferID int64,
 		threshold float64,
+		directionMargin float64,
 		k int,
 	) ([]entity.Candidate, error)
 }

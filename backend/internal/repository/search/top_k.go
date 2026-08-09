@@ -128,7 +128,9 @@ const querySimilarOffers = `
 		       eo.offered_item_id AS item_id,
 		       eo.user_id AS owner_id,
 		       1 - (i.embedding <=> $1::vector) AS offer_score,
-		       1 - (eo.want_embedding <=> $2::vector) AS want_score
+		       1 - (eo.want_embedding <=> $2::vector) AS want_score,
+		       1 - (i.embedding <=> $2::vector) AS offer_to_want_score,
+		       1 - (eo.want_embedding <=> $1::vector) AS want_to_offer_score
 		FROM exchange_offers AS eo
 		JOIN items AS i ON i.id = eo.offered_item_id
 		WHERE eo.status = 'ACTIVE'
@@ -145,6 +147,11 @@ const querySimilarOffers = `
 	FROM nearest_by_offer
 	WHERE offer_score >= $5
 	  AND want_score >= $5
+	  AND (
+		$4::bigint IS NOT NULL
+		OR (offer_score + want_score) / 2 >=
+		   (offer_to_want_score + want_to_offer_score) / 2 + $7
+	  )
 	ORDER BY offer_score + want_score DESC, request_id
 `
 
@@ -263,9 +270,12 @@ func (s *Search) FindSimilarOffers(
 	categoryID *int64,
 	excludeOfferID int64,
 	threshold float64,
+	directionMargin float64,
 	k int,
 ) ([]entity.Candidate, error) {
-	rows, err := s.pool.Query(ctx, querySimilarOffers, offer, want, excludeOfferID, categoryID, threshold, k)
+	rows, err := s.pool.Query(
+		ctx, querySimilarOffers, offer, want, excludeOfferID, categoryID, threshold, k, directionMargin,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("search similar offers: %w", err)
 	}

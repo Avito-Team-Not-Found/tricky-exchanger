@@ -90,6 +90,7 @@ func main() {
 		candidateSearch,
 		cfg.ClusterTopK,
 		cfg.ClusterThreshold,
+		cfg.ClusterDirectionMargin,
 	)
 	cycleFinder := matching.NewCycleFinder(
 		candidateSearch,
