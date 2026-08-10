@@ -29,7 +29,12 @@ import (
 	"net/mail"
 	"net/smtp"
 	"strings"
+	"time"
 )
+
+// dialTimeout — чтобы send-code не висел бесконечно, если SMTP недоступен
+// (типичный кейс: у VPS открыт только IPv6 до mail.ru, а Docker ходит по IPv4).
+const dialTimeout = 10 * time.Second
 
 // Encryption — режим шифрования соединения с SMTP-сервером.
 type Encryption string
@@ -103,7 +108,13 @@ func (s *Service) send(to, subject, body string) error {
 		if ok, _ := client.Extension("AUTH"); !ok {
 			return fmt.Errorf("smtp server does not support AUTH")
 		}
-		auth := smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
+		// net/smtp.PlainAuth отказывается слать пароль без TLS, если хост не localhost.
+		// Для EncryptionPlain (локальный TLS-terminating relay на docker gateway) это
+		// ломает AUTH — используем свой Plain, который не делает эту проверку.
+		auth := smtp.Auth(smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host))
+		if s.cfg.encryption() == EncryptionPlain {
+			auth = plainAuth{username: s.cfg.Username, password: s.cfg.Password}
+		}
 		if err := client.Auth(auth); err != nil {
 			return fmt.Errorf("smtp auth: %w", err)
 		}
@@ -134,42 +145,55 @@ func (s *Service) send(to, subject, body string) error {
 // dial устанавливает соединение с сервером в соответствии с s.cfg.Encryption
 // и возвращает готовый к AUTH/MAIL/RCPT smtp.Client.
 func (s *Service) dial() (*smtp.Client, error) {
-	addr := s.cfg.Host + ":" + s.cfg.Port
+	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
+	tlsCfg := &tls.Config{ServerName: s.cfg.Host}
 
 	switch s.cfg.encryption() {
 	case EncryptionTLS:
 		// implicit TLS — шифруем соединение сразу, до какого-либо SMTP-диалога.
-		conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: s.cfg.Host})
+		dialer := &net.Dialer{Timeout: dialTimeout}
+		conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsCfg)
 		if err != nil {
 			return nil, fmt.Errorf("tls dial: %w", err)
 		}
 		return smtp.NewClient(conn, s.cfg.Host)
 
 	case EncryptionSTARTTLS:
-		conn, err := net.Dial("tcp", addr)
+		conn, err := (&net.Dialer{Timeout: dialTimeout}).Dial("tcp", addr)
 		if err != nil {
 			return nil, fmt.Errorf("dial: %w", err)
 		}
+		_ = conn.SetDeadline(time.Now().Add(dialTimeout))
 		client, err := smtp.NewClient(conn, s.cfg.Host)
 		if err != nil {
+			_ = conn.Close()
 			return nil, err
 		}
 		if ok, _ := client.Extension("STARTTLS"); !ok {
 			_ = client.Close()
 			return nil, fmt.Errorf("smtp server does not support STARTTLS")
 		}
-		if err := client.StartTLS(&tls.Config{ServerName: s.cfg.Host}); err != nil {
+		if err := client.StartTLS(tlsCfg); err != nil {
 			_ = client.Close()
 			return nil, fmt.Errorf("starttls: %w", err)
 		}
+		// После handshake снимаем дедлайн — письмо может уходить дольше dialTimeout.
+		_ = conn.SetDeadline(time.Time{})
 		return client, nil
 
 	case EncryptionPlain:
-		conn, err := net.Dial("tcp", addr)
+		conn, err := (&net.Dialer{Timeout: dialTimeout}).Dial("tcp", addr)
 		if err != nil {
 			return nil, fmt.Errorf("dial: %w", err)
 		}
-		return smtp.NewClient(conn, s.cfg.Host)
+		_ = conn.SetDeadline(time.Now().Add(dialTimeout))
+		client, err := smtp.NewClient(conn, s.cfg.Host)
+		if err != nil {
+			_ = conn.Close()
+			return nil, err
+		}
+		_ = conn.SetDeadline(time.Time{})
+		return client, nil
 
 	default:
 		return nil, fmt.Errorf("unknown smtp encryption mode %q", s.cfg.Encryption)
@@ -190,4 +214,23 @@ func buildMessage(from, to, subject, body string) []byte {
 	b.WriteString(body)
 
 	return []byte(b.String())
+}
+
+// plainAuth — PLAIN AUTH без требования TLS (см. send()). Нужен для SMTP-релея
+// на хосте VPS, где TLS уже терминирован, а до контейнера идёт plaintext.
+type plainAuth struct {
+	username string
+	password string
+}
+
+func (a plainAuth) Start(_ *smtp.ServerInfo) (string, []byte, error) {
+	resp := []byte("\x00" + a.username + "\x00" + a.password)
+	return "PLAIN", resp, nil
+}
+
+func (a plainAuth) Next(_ []byte, more bool) ([]byte, error) {
+	if more {
+		return nil, errors.New("unexpected server challenge")
+	}
+	return nil, nil
 }
