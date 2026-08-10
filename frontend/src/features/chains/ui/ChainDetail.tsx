@@ -1,20 +1,30 @@
 import { useState } from 'react';
 
-import { Button } from 'antd';
+import { theme, Button } from 'antd';
 
 import {
+  approvedVotes,
   chainLinks,
+  CONFIRM_VOTE_META,
+  confirmVoteAt,
+  isAssembled,
+  isHardLocked,
+  myConfirmVote,
   myParticipant,
+  needsMyAction,
   participantAlias,
+  VACANCY_META,
   VOTE_META,
   type Chain,
   type ChainLink,
   type ChainParticipant,
+  type VoteValue,
 } from '@entities/chain';
 
 import { Avatar } from '@shared/ui';
 
 import { BestChainBadge } from './BestChainBadge';
+import { ConsentBadge } from './ConsentBadge';
 
 import './ChainDetail.scss';
 
@@ -23,18 +33,33 @@ interface ChainDetailProps {
   isBest: boolean;
   isVoting: boolean;
   onVote: (candidate: ChainParticipant, active: boolean) => void;
+  onConfirm: () => void;
+  onProceed: () => void;
 }
 
 // Схема цепочки (макет 4.8): строки по звеньям кольца. Внутри звена один кандидат показывается
 // карточкой товара, несколько — свёрнутым списком «N вариантов» (§3.1); отклик доступен только
 // на кандидатах позиции receivesFromPosition — за них голосует текущий пользователь, и только
-// пока цепочка ещё CANDIDATE (у собранной отклики уже не меняются, PROJECT.md §4.5).
-// Действие вынесено в отдельный блок под списком (SCRUM-52): кандидат выбирается кликом по
-// строке, кнопка внизу применяется к выбранному — в строках участников кнопок нет.
-export function ChainDetail({ chain, isBest, isVoting, onVote }: ChainDetailProps) {
+// пока цепочка ещё CANDIDATE (у собранной отклики уже не меняются, PROJECT.md §4.5). На PROPOSED
+// и дальше над списком — пилюля «Цепочка собрана» и бейдж «N/M согласий», в шапке каждой
+// строки — пилюля голоса второго раунда, внизу — действие (SOFT-LOCK §8).
+export function ChainDetail({
+  chain,
+  isBest,
+  isVoting,
+  onVote,
+  onConfirm,
+  onProceed,
+}: ChainDetailProps) {
+  const { token } = theme.useToken();
   const links = chainLinks(chain);
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
+  const assembled = isAssembled(chain.status);
+  const hardLocked = isHardLocked(chain.status);
+  // голос привязан к цели голосования, а не к голосующему: решение участника позиции p лежит
+  // в vote позиции (p + 1) % length (SOFT-LOCK §3.3); на CANDIDATE сдвига нет — там это отклики
+  const showConfirmPills = chain.status !== 'CANDIDATE';
   const receiveLink = links.find((link) => link.position === chain.receivesFromPosition);
   const receiveCandidates = receiveLink?.candidates ?? [];
 
@@ -63,12 +88,18 @@ export function ChainDetail({ chain, isBest, isVoting, onVote }: ChainDetailProp
   );
 
   return (
-    <>
+    <div className="chain-detail">
       {isBest ? (
         // обёртка обязательна: прямые дети .chain-detail-page__body растягиваются на всю
         // ширину колонки, а плашка должна остаться по ширине текста
         <div className="chain-detail__best">
           <BestChainBadge />
+        </div>
+      ) : null}
+      {assembled ? (
+        <div className="chain-detail__head">
+          <p className="chain-detail__ready">Цепочка собрана</p>
+          <ConsentBadge count={approvedVotes(chain)} total={chain.length} />
         </div>
       ) : null}
       <ul className="chain-detail__participants">
@@ -78,6 +109,8 @@ export function ChainDetail({ chain, isBest, isVoting, onVote }: ChainDetailProp
             link={link}
             isMine={me?.position === link.position}
             isReceiveLink={link.position === chain.receivesFromPosition}
+            canVote={canVote}
+            confirmVote={showConfirmPills ? confirmVoteAt(chain, link.position) : undefined}
             selectedRequestId={selectedRequestId}
             onSelectCandidate={setOverrideRequestId}
           />
@@ -97,8 +130,36 @@ export function ChainDetail({ chain, isBest, isVoting, onVote }: ChainDetailProp
             {active ? 'Откликнуться' : 'Отозвать отклик'}
           </Button>
         </div>
+      ) : needsMyAction(chain) ? (
+        <Button
+          className="chain-detail__action"
+          type="primary"
+          size="large"
+          block
+          onClick={onConfirm}
+        >
+          Требуются действия
+        </Button>
+      ) : chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
+        <p className="chain-detail__confirmed" role="status">
+          Вы подтвердили · ждём остальных
+        </p>
+      ) : hardLocked ? (
+        <Button
+          className="chain-detail__action"
+          size="large"
+          block
+          style={{
+            backgroundColor: token.colorSuccess,
+            borderColor: token.colorSuccess,
+            color: '#FFFFFF',
+          }}
+          onClick={onProceed}
+        >
+          Перейти к сделке
+        </Button>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -106,6 +167,8 @@ interface ChainLinkRowProps {
   link: ChainLink;
   isMine: boolean;
   isReceiveLink: boolean;
+  canVote: boolean;
+  confirmVote?: VoteValue | null;
   selectedRequestId: number | null;
   onSelectCandidate: (requestId: number) => void;
 }
@@ -114,6 +177,8 @@ function ChainLinkRow({
   link,
   isMine,
   isReceiveLink,
+  canVote,
+  confirmVote,
   selectedRequestId,
   onSelectCandidate,
 }: ChainLinkRowProps) {
@@ -131,11 +196,13 @@ function ChainLinkRow({
           emoji={isMine ? undefined : alias.emoji}
         />
         <span className="chain-detail__participant-name">{label}</span>
+        {confirmVote !== undefined ? <ConfirmVotePill vote={confirmVote} /> : null}
       </div>
 
       {candidates.length === 1 ? (
         <ChainLinkItem
           participant={candidates[0]}
+          canVote={canVote}
           selected={isReceiveLink && candidates[0].requestId === selectedRequestId}
           onSelect={isReceiveLink ? () => onSelectCandidate(candidates[0].requestId) : undefined}
         />
@@ -146,6 +213,7 @@ function ChainLinkRow({
             <li key={candidate.requestId} className="chain-detail__candidate">
               <ChainLinkItem
                 participant={candidate}
+                canVote={canVote}
                 selected={candidate.requestId === selectedRequestId}
                 onSelect={() => onSelectCandidate(candidate.requestId)}
               />
@@ -162,17 +230,29 @@ function ChainLinkRow({
   );
 }
 
+// пилюля голоса второго раунда в шапке строки звена (SOFT-LOCK §8); null — вакансия после отказа
+function ConfirmVotePill({ vote }: { vote: VoteValue | null }) {
+  const meta = vote === null ? VACANCY_META : CONFIRM_VOTE_META[vote];
+  return (
+    <span className={`chain-detail__confirm chain-detail__confirm--${meta.tone}`}>
+      {meta.label}
+    </span>
+  );
+}
+
 interface ChainLinkItemProps {
   participant: ChainParticipant;
+  canVote: boolean;
   selected: boolean;
   onSelect?: () => void;
 }
 
 // Одна запись кандидата в звене: миниатюра, товар и «что хочет взамен», статус отклика.
 // На получаемом звене запись выбираемая (radio-строка) — действие применяется к выбранной
-// из нижнего блока; на остальных звеньях запись только для просмотра.
-function ChainLinkItem({ participant, selected, onSelect }: ChainLinkItemProps) {
-  const voteMeta = participant.vote ? VOTE_META[participant.vote] : null;
+// из нижнего блока; на остальных звеньях запись только для просмотра. Пилюли первого раунда
+// на собранной цепочке не показываются — там у vote другой смысл (SOFT-LOCK §8).
+function ChainLinkItem({ participant, canVote, selected, onSelect }: ChainLinkItemProps) {
+  const voteMeta = canVote && participant.vote ? VOTE_META[participant.vote] : null;
   const className = `chain-detail__item${selected ? ' chain-detail__item--selected' : ''}${
     onSelect ? ' chain-detail__item--selectable' : ''
   }`;
@@ -206,7 +286,7 @@ function ChainLinkItem({ participant, selected, onSelect }: ChainLinkItemProps) 
       </div>
       {voteMeta ? (
         <span className={`chain-detail__response chain-detail__response--${voteMeta.tone}`}>
-          {voteMeta.glyph} {voteMeta.label}
+          {voteMeta.label}
         </span>
       ) : null}
     </div>

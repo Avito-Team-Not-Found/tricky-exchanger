@@ -49,6 +49,6 @@ export function getItemImageError(file: { type: string; size: number }): string 
 
 export const ITEM_STATUS_META: Record<ItemStatus, { label: string; tone: StatusTone }> = {
   ACTIVE: { label: 'Активен', tone: 'success' },
-  UNAVAILABLE: { label: 'Недоступен', tone: 'warning' },
+  UNAVAILABLE: { label: 'Зарезервирован', tone: 'warning' },
   ARCHIVED: { label: 'В архиве', tone: 'neutral' },
 };

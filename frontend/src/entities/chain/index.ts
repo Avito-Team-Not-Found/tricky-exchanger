@@ -1,14 +1,25 @@
 export {
+  approvedVotes,
   bestChainId,
   chainLinks,
+  CONFIRM_VOTE_META,
+  confirmVoteAt,
+  HARD_LOCK_MESSAGE,
+  isAssembled,
+  isHardLocked,
+  myConfirmVote,
   myParticipant,
+  needsMyAction,
   receivesItem,
+  VACANCY_META,
   VOTE_META,
   type Chain,
   type ChainLink,
   type ChainParticipant,
   type ChainStatus,
   type ChainVoteResult,
+  type ConfirmResult,
+  type ConfirmVoteMeta,
   type DeclineResult,
   type ExchangeOption,
   type ExchangeOptions,
@@ -19,6 +30,7 @@ export {
 } from './model';
 export { participantAlias, type ParticipantAlias } from './alias';
 export {
+  confirmChain,
   declineChain,
   fetchChain,
   fetchExchangeOptions,
@@ -27,4 +39,11 @@ export {
   voteForRequest,
   withdrawVote,
 } from './api';
-export { useChain, useExchangeOptions, useIsBestChain, useReplacements } from './hooks';
+export {
+  chainQueryOptions,
+  useChain,
+  useChains,
+  useExchangeOptions,
+  useIsBestChain,
+  useReplacements,
+} from './hooks';

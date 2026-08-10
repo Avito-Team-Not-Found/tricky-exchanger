@@ -1,10 +1,17 @@
-import { Button } from 'antd';
+import { theme, Button } from 'antd';
 
-import { type ExchangeOption, type ExchangeOptions } from '@entities/chain';
+import {
+  HARD_LOCK_MESSAGE,
+  isHardLocked,
+  type ExchangeOption,
+  type ExchangeOptions,
+  type VoteValue,
+} from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
 
 import { BestChainBadge } from './BestChainBadge';
+import { ConsentBadge } from './ConsentBadge';
 
 import './ChainCard.scss';
 
@@ -13,20 +20,60 @@ interface ChainCardProps {
   option: ExchangeOption;
   isBest: boolean;
   isVoting: boolean;
+  locked?: boolean;
+  // число согласий второго раунда: на FROZEN всегда = length, на PROPOSED — из деталей цепочки
+  // (exchange-options его не отдаёт); undefined — бейдж не рисуем, пока счётчик неизвестен
+  approvedCount?: number;
   onOpen: () => void;
   onVote: (active: boolean) => void;
+  onConfirm: (chainId: number) => void;
 }
 
 // Карточка варианта обмена (макет 4.6): один конкретный получаемый товар из пула кандидатов
-// следующего звена. Действие — «Откликнуться» / «Отозвать отклик» по option.vote; отозвать можно
-// только pending-отклик (DELETE их снимает лишь у кандидатной цепочки, PROJECT.md §4.5), у
-// собранной цепочки действие скрыто, место бейджа занимает пилюля «Цепочка собрана».
-export function ChainCard({ options, option, isBest, isVoting, onOpen, onVote }: ChainCardProps) {
+// следующего звена. На кандидатной цепочке действие — «Откликнуться» / «Отозвать отклик» по
+// option.vote; на PROPOSED — «Требуются действия» (подтверждение второго раунда); на
+// FROZEN/IN_PROGRESS — «Перейти к сделке», плашка жёсткой блокировки и бейдж «N/M согласий»
+// (SOFT-LOCK §5.1–5.5). Мой голос второго раунда на этом экране — vote единственного receiveOption
+// (SOFT-LOCK §3.3).
+export function ChainCard({
+  options,
+  option,
+  isBest,
+  isVoting,
+  locked,
+  approvedCount,
+  onOpen,
+  onVote,
+  onConfirm,
+}: ChainCardProps) {
+  const { token } = theme.useToken();
   const canVote = options.status === 'CANDIDATE';
   const canAct = canVote && (!option.vote || option.vote === 'pending');
+  const hardLocked = isHardLocked(options.status);
+  // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя (§3.3);
+  // на CANDIDATE то же поле — отклик первого раунда, myVote им не считается
+  const myVote: VoteValue | undefined = options.status === 'PROPOSED' ? option.vote : undefined;
+  const confirmed = myVote === 'approved';
+  const needsAction = options.status === 'PROPOSED' && !confirmed;
+
+  const className = [
+    'chain-card',
+    needsAction || hardLocked ? 'chain-card--highlight' : '',
+    locked ? 'chain-card--dimmed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <article className="chain-card" onClick={onOpen}>
+    <article className={className} onClick={onOpen} aria-disabled={locked || undefined}>
+      {approvedCount !== undefined ? (
+        <ConsentBadge
+          className="chain-card__consent"
+          count={approvedCount}
+          total={options.length}
+        />
+      ) : null}
+
       <div className="chain-card__photo">
         {option.imageUrl ? (
           <img className="chain-card__photo-img" src={option.imageUrl} alt={option.title} />
@@ -53,30 +100,65 @@ export function ChainCard({ options, option, isBest, isVoting, onOpen, onVote }:
         )}
       </div>
 
+      {hardLocked ? <p className="chain-card__lock">{HARD_LOCK_MESSAGE}</p> : null}
+
       {canAct ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
           {option.vote === 'pending' ? (
             <Button
-              className="chain-card__action"
               type="primary"
               danger
               block
+              size="large"
               loading={isVoting}
+              disabled={locked}
               onClick={() => onVote(false)}
             >
               Отозвать отклик
             </Button>
           ) : (
             <Button
-              className="chain-card__action"
               type="primary"
               block
+              size="large"
               loading={isVoting}
+              disabled={locked}
               onClick={() => onVote(true)}
             >
               Откликнуться
             </Button>
           )}
+        </div>
+      ) : confirmed ? (
+        <p className="chain-card__confirmed" role="status">
+          Вы подтвердили · ждём остальных
+        </p>
+      ) : needsAction ? (
+        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
+          <Button
+            type="primary"
+            block
+            size="large"
+            disabled={locked}
+            onClick={() => onConfirm(options.chainId)}
+          >
+            Требуются действия
+          </Button>
+        </div>
+      ) : hardLocked ? (
+        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
+          <Button
+            block
+            size="large"
+            style={{
+              backgroundColor: token.colorSuccess,
+              borderColor: token.colorSuccess,
+              color: '#FFFFFF',
+            }}
+            onClick={onOpen}
+          >
+            Перейти к сделке
+          </Button>
         </div>
       ) : null}
     </article>

@@ -3,6 +3,7 @@ import { apiClient } from '@shared/api';
 import type {
   Chain,
   ChainVoteResult,
+  ConfirmResult,
   DeclineResult,
   ExchangeOptions,
   ReplacementOption,
@@ -51,7 +52,13 @@ export async function selectReplacement(
   return data;
 }
 
-// Собственный отказ актора от замены: при открытой вакансии бэкенд расформировывает цепочку (TZ §3.3)
+// повторное подтверждение участия в собранной цепочке (второй раунд, SOFT-LOCK §3.1.3)
+export async function confirmChain(chainId: number): Promise<ConfirmResult> {
+  const { data } = await apiClient.post<ConfirmResult>(`/chains/${chainId}/confirm`);
+  return data;
+}
+
+// отказ от участия в собранной цепочке (второй раунд, SOFT-LOCK §3.2)
 export async function declineChain(chainId: number): Promise<DeclineResult> {
   const { data } = await apiClient.post<DeclineResult>(`/chains/${chainId}/decline`);
   return data;

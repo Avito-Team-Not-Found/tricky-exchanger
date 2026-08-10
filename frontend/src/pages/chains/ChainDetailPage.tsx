@@ -1,7 +1,7 @@
 import { Alert, Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainItemView } from '@features/chains';
+import { ChainItemView, useChainConfirm } from '@features/chains';
 
 import { receivesItem, useChain, useIsBestChain, useReplacements } from '@entities/chain';
 
@@ -19,6 +19,7 @@ export function ChainDetailPage() {
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
   const { isBest, isLoading: isBestLoading } = useIsBestChain(chain);
+  const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
   // баннер входа в замену — единственный корректный признак вакансии (TZ §2): в теле цепочки
   // отличий после отказа не видно
   const { data: replacements = [], isLoading: isReplacementsLoading } = useReplacements(chainId, {
@@ -67,6 +68,8 @@ export function ChainDetailPage() {
               chain={chain}
               isBest={isBest}
               onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
+              onConfirm={() => openConfirm(chain.id)}
+              onProceed={() => navigate(`/chains/${chain.id}`)}
             />
           </>
         )}

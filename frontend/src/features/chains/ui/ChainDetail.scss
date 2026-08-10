@@ -1,3 +1,12 @@
+// контейнер схемы: растягивается на всю высоту экрана, чтобы кнопка действия прижалась к низу (макет 4.8)
+.chain-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--spacing-lg);
+}
+
+// плашка лучшей цепочки над схемой (макет 4.8, SCRUM-53): выравнивается по ширине текста
 .chain-detail__best {
   display: flex;
 }
@@ -9,6 +18,33 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+// пилюля «Цепочка собрана» и бейдж согласий над списком при PROPOSED и дальше (SOFT-LOCK §8);
+// align-self: flex-start не даёт бейджам растянуться на всю ширину колонки
+.chain-detail__head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.chain-detail__ready {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-success);
+  white-space: nowrap;
+}
+
+// действие второго раунда внизу экрана (SOFT-LOCK §8); margin-top: auto прижимает к низу
+.chain-detail__action {
+  margin-top: auto;
 }
 
 // строка звена: подложка и рамка только у текущего пользователя (макет 4.8)
@@ -38,6 +74,55 @@
   color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// пилюля голоса второго раунда в шапке звена: та же стилистика, что у chain-detail__response,
+// но прижата к правому краю строки-шапки (SOFT-LOCK §8)
+.chain-detail__confirm {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  white-space: nowrap;
+}
+
+.chain-detail__confirm--success {
+  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
+  color: var(--color-status-success);
+}
+
+.chain-detail__confirm--error {
+  background: color-mix(in srgb, var(--color-status-error) 15%, transparent);
+  color: var(--color-status-error);
+}
+
+.chain-detail__confirm--warning {
+  background: color-mix(in srgb, var(--color-status-warning) 15%, transparent);
+  color: var(--color-status-warning);
+}
+
+.chain-detail__confirm--neutral {
+  background: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
+  color: var(--color-text-secondary);
+}
+
+// подтвердил, ждём остальных: статусная строка вместо кнопки внизу (SOFT-LOCK §8)
+.chain-detail__confirmed {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-success);
   white-space: nowrap;
 }
 
@@ -122,11 +207,13 @@
   white-space: nowrap;
 }
 
-// статус отклика — пилюля с 15%-й заливкой тона и текстом того же цвета (макет 4.8)
+// статус отклика — пилюля с 15%-й заливкой тона и текстом того же цвета (макет 4.8);
+// margin-left: auto прижимает её к правому краю строки
 .chain-detail__response {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
+  margin-left: auto;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-full);
   font-size: var(--font-size-caption);
@@ -182,11 +269,11 @@
 }
 
 @media (min-width: 768px) {
-  // на широком экране строка звена читается одной строкой: кто — слева, что предлагает — справа
+  // на широком экране строка звена читается одной строкой: имя участника и сразу за ним —
+  // что он отдаёт/хочет, без пустоты между ними
   .chain-detail__participant {
     flex-direction: row;
     align-items: center;
-    justify-content: space-between;
     gap: var(--spacing-lg);
   }
 
@@ -195,7 +282,7 @@
   }
 
   .chain-detail__item {
-    justify-content: flex-end;
+    flex: 1;
     flex-wrap: nowrap;
     min-width: 0;
   }
