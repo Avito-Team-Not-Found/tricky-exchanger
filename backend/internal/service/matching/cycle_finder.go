@@ -39,7 +39,7 @@ type FrontierLoader interface {
 type CycleFinder struct {
 	loader      FrontierLoader
 	outgoingK   int
-	capHint     int // только начальная ёмкость слайса драфтов, НЕ лимит на число результатов
+	maxDrafts   int
 	threshold   float64
 	minAverage  float64
 	maxScoreGap float64
@@ -65,7 +65,7 @@ func NewCycleFinder(loader FrontierLoader, outgoingK, capHint int, threshold flo
 	return &CycleFinder{
 		loader:      loader,
 		outgoingK:   outgoingK,
-		capHint:     capHint,
+		maxDrafts:   capHint,
 		threshold:   threshold,
 		minAverage:  threshold,
 		maxScoreGap: 1,
@@ -128,10 +128,13 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 	if startOwnerID != "" {
 		visitedOwners[startOwnerID] = true
 	}
-	drafts := make([]entity.ChainDraft, 0, f.capHint)
+	drafts := make([]entity.ChainDraft, 0, f.maxDrafts)
 
 	var dfs func(currentRequestID int64, cosines []float64)
 	dfs = func(currentRequestID int64, cosines []float64) {
+		if len(drafts) >= f.maxDrafts {
+			return
+		}
 		if len(path) >= minCycleLength {
 			if closing, ok := closers[currentRequestID]; ok {
 				edgeCosines := append(append([]float64(nil), cosines...), closing.Score)
@@ -168,6 +171,9 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 		}
 
 		for _, edge := range adjacency[currentRequestID] {
+			if len(drafts) >= f.maxDrafts {
+				return
+			}
 			if edge.FromRequestID != currentRequestID ||
 				edge.ToRequestID == startRequestID ||
 				visitedClusters[edge.ToClusterID] ||

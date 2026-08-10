@@ -251,6 +251,11 @@ func (r *fakeRepository) CountApprovedVoters(_ context.Context, _ database.Tx, _
 	return r.approvedCount, nil
 }
 
+func (r *fakeRepository) CountApprovedVotersExcept(_ context.Context, _ database.Tx, _, _ int64) (int, error) {
+	r.approvedCountCalls++
+	return r.approvedCount, nil
+}
+
 func (r *fakeRepository) MarkRequestLocked(_ context.Context, _ database.Tx, _ int64) error {
 	r.lockRequestCalls++
 	return nil
@@ -380,6 +385,23 @@ func TestDeclineRollsBackBeforeOtherParticipantsConfirm(t *testing.T) {
 	repository := &fakeRepository{
 		status: entity.ChainStatusProposed, length: 5, approvedCount: 1,
 		edgeRequestID: 10, edgeTargetID: 20, declineAvailable: true,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	available, status, err := service.Decline(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Decline() error = %v", err)
+	}
+	if available || status != entity.ChainStatusCandidate || repository.fastReplacementEligible {
+		t.Fatalf("Decline() = available %v, status %s, fast replacement %v", available, status, repository.fastReplacementEligible)
+	}
+}
+
+func TestDeclineDoesNotCountDecliningParticipantsApproval(t *testing.T) {
+	repository := &fakeRepository{
+		status: entity.ChainStatusProposed, length: 3,
+		edgeRequestID: 10, edgeTargetID: 20,
+		declineAvailable: true, approvedCount: 1,
 	}
 	service := chainservice.NewService(repository, fakeTransactionManager{})
 

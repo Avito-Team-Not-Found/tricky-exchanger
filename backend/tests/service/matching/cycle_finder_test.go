@@ -215,6 +215,32 @@ func TestCycleFinderReturnsAllUniqueDrafts(t *testing.T) {
 	}
 }
 
+func TestCycleFinderHonorsMaxDrafts(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {
+				edge(1, 101, 2, 102, 0.9),
+				edge(1, 101, 3, 103, 0.9),
+				edge(1, 101, 4, 104, 0.9),
+			},
+		},
+		closers: []entity.CandidateEdge{
+			edge(2, 102, 1, 101, 0.9),
+			edge(3, 103, 1, 101, 0.9),
+			edge(4, 104, 1, 101, 0.9),
+		},
+	}
+	finder := matching.NewCycleFinder(loader, 20, 1, 0.5)
+
+	drafts, err := finder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(drafts) != 1 {
+		t.Fatalf("draft count = %d, want configured maximum 1", len(drafts))
+	}
+}
+
 func TestCycleFinderTreatsRequestsOfOneClusterAsOneVertex(t *testing.T) {
 	loader := &fakeFrontierLoader{
 		outgoing: map[int64][]entity.CandidateEdge{

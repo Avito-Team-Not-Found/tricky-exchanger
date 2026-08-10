@@ -49,6 +49,14 @@ func (s *Service) Synchronize(ctx context.Context, tx database.Tx, offerID int64
 	if s.repository == nil || s.searcher == nil {
 		return entity.ErrClusterNotConfigured
 	}
+	// Cluster membership is derived from the currently committed neighbourhood.
+	// Serialize synchronization so two equal requests cannot both observe an
+	// empty neighbourhood and create separate singleton clusters.
+	if tx != nil {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(742913005)`); err != nil {
+			return err
+		}
+	}
 
 	vectors, err := s.repository.LoadVectors(ctx, tx, offerID)
 	if err != nil {

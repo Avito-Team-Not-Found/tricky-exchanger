@@ -211,8 +211,9 @@ const queryOutgoingFrontier = `
 // У заявки, замыкающей цикл, заданная wanted_category также должна совпадать
 // с категорией отдаваемого товара выбранного участника стартового кластера.
 const queryIncomingToStart = `
-	WITH start_cluster AS MATERIALIZED (
-		SELECT start_member.cluster_id
+	WITH start_request AS MATERIALIZED (
+		SELECT start.id, start.user_id, start_item.embedding, start_item.category,
+		       start_member.cluster_id
 		FROM exchange_offers AS start
 		JOIN items AS start_item ON start_item.id = start.offered_item_id
 		JOIN cluster_members AS start_member ON start_member.request_id = start.id
@@ -224,39 +225,24 @@ const queryIncomingToStart = `
 	SELECT candidate.id AS from_request_id,
 	       candidate_member.cluster_id AS from_cluster_id,
 	       candidate.user_id::text AS from_owner_id,
-	       target.request_id AS to_request_id,
-	       start_cluster.cluster_id AS to_cluster_id,
-	       target.owner_id,
-	       target.score
-	FROM start_cluster
+	       start_request.id AS to_request_id,
+	       start_request.cluster_id AS to_cluster_id,
+	       start_request.user_id::text AS owner_id,
+	       1 - (candidate.want_embedding <=> start_request.embedding) AS score
+	FROM start_request
 	JOIN exchange_offers AS candidate ON candidate.status = 'ACTIVE'
 	JOIN items AS candidate_item ON candidate_item.id = candidate.offered_item_id
 	JOIN cluster_members AS candidate_member ON candidate_member.request_id = candidate.id
-	JOIN LATERAL (
-		SELECT start_member.request_id,
-		       start.user_id::text AS owner_id,
-		       start_item.category,
-		       1 - (candidate.want_embedding <=> start_item.embedding) AS score
-		FROM cluster_members AS start_member
-		JOIN exchange_offers AS start ON start.id = start_member.request_id
-		JOIN items AS start_item ON start_item.id = start.offered_item_id
-		WHERE start_member.cluster_id = start_cluster.cluster_id
-		  AND start.status = 'ACTIVE'
-		  AND start_item.status = 'ACTIVE'
-		  AND start_item.embedding IS NOT NULL
-		  AND start.user_id <> candidate.user_id
-		ORDER BY candidate.want_embedding <=> start_item.embedding, start.id
-		LIMIT 1
-	) AS target ON true
-	WHERE candidate_member.cluster_id <> start_cluster.cluster_id
+	WHERE candidate_member.cluster_id <> start_request.cluster_id
+	  AND candidate.user_id <> start_request.user_id
 	  AND candidate_item.status = 'ACTIVE'
 	  AND candidate.want_embedding IS NOT NULL
 	  AND (
 		  COALESCE(candidate.wanted_category, '') = ''
-		  OR COALESCE(target.category, '') IS NOT DISTINCT FROM candidate.wanted_category
+		  OR COALESCE(start_request.category, '') IS NOT DISTINCT FROM candidate.wanted_category
 	  )
-	  AND target.score >= $3
-	ORDER BY target.score DESC, candidate.id
+	  AND 1 - (candidate.want_embedding <=> start_request.embedding) >= $3
+	ORDER BY score DESC, candidate.id
 	LIMIT $2
 `
 
