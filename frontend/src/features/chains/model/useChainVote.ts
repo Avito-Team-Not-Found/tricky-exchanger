@@ -73,6 +73,7 @@ export function useChainVote(onConflict?: () => void) {
       okText: 'Да, отозвать',
       okButtonProps: { danger: true },
       cancelText: 'Нет',
+      centered: true,
       onOk: () => mutation.mutate({ ...target, active: false }),
     });
   }

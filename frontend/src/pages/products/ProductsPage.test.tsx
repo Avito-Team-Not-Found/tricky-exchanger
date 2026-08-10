@@ -77,7 +77,7 @@ describe('ProductsPage', () => {
     expect(screen.getByText('Кухонный комбайн')).toBeInTheDocument();
     expect(screen.getByText('Пылесос')).toBeInTheDocument();
     expect(screen.getByText('Активен')).toBeInTheDocument();
-    expect(screen.getByText('Недоступен')).toBeInTheDocument();
+    expect(screen.getByText('Зарезервирован')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Кухонный комбайн/ }));
     expect(await screen.findByText('edit screen')).toBeInTheDocument();

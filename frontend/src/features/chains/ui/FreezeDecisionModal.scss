@@ -1,0 +1,37 @@
+.freeze-decision {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  text-align: center;
+}
+
+.freeze-decision__title {
+  margin: 0;
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+.freeze-decision__subtitle {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body);
+  color: var(--color-text-secondary);
+}
+
+.freeze-decision__question {
+  margin: 0;
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+// «Да», «Нет» и «Отмена» — block-кнопки в столбик (макет 4.6, SOFT-LOCK §6.1)
+.freeze-decision__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}

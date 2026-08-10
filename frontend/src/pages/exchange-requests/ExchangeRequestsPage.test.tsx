@@ -91,7 +91,7 @@ describe('ExchangeRequestsPage', () => {
     mockedUseRequests.mockReturnValue(queryOk(requests));
     renderWithProviders(<ExchangeRequestsPage />);
 
-    for (const label of ['Активен', 'В процессе', 'Заблокирован', 'Завершён', 'Выполняется']) {
+    for (const label of ['Активен', 'В процессе', 'Зарезервирован', 'Завершён', 'Выполняется']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
