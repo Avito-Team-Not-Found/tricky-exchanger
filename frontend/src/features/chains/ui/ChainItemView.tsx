@@ -1,10 +1,20 @@
-import { Button } from 'antd';
+import { theme, Button } from 'antd';
 
-import { receivesItem, type Chain } from '@entities/chain';
+import {
+  approvedVotes,
+  HARD_LOCK_MESSAGE,
+  isAssembled,
+  isHardLocked,
+  myConfirmVote,
+  needsMyAction,
+  receivesItem,
+  type Chain,
+} from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
 
 import { BestChainBadge } from './BestChainBadge';
+import { ConsentBadge } from './ConsentBadge';
 
 import './ChainItemView.scss';
 
@@ -12,15 +22,28 @@ interface ChainItemViewProps {
   chain: Chain;
   isBest: boolean;
   onOpenParticipants: () => void;
+  onConfirm: () => void;
+  onProceed: () => void;
 }
 
 // Экран цепочки (макет 4.7): товар, который пользователь получит в обмене, его описание
 // и переход к схеме участников (макет 4.8). Пока цепочка CANDIDATE, получаемое звено — пул
 // кандидатов: товар однозначен только когда кандидат один (собранная цепочка, §3.1).
-export function ChainItemView({ chain, isBest, onOpenParticipants }: ChainItemViewProps) {
+// На PROPOSED внизу — «Требуются действия» (или «Вы подтвердили · ждём остальных», если голос
+// уже поставлен), на FROZEN/IN_PROGRESS — плашка блокировки, бейдж «M/M согласий»
+// и «Перейти к сделке» (SOFT-LOCK §7).
+export function ChainItemView({
+  chain,
+  isBest,
+  onOpenParticipants,
+  onConfirm,
+  onProceed,
+}: ChainItemViewProps) {
+  const { token } = theme.useToken();
   const received = receivesItem(chain);
   const single = received.length === 1 ? received[0] : null;
-  const isAssembled = chain.status !== 'CANDIDATE';
+  const assembled = isAssembled(chain.status);
+  const hardLocked = isHardLocked(chain.status);
 
   return (
     <div className="chain-item">
@@ -46,13 +69,18 @@ export function ChainItemView({ chain, isBest, onOpenParticipants }: ChainItemVi
           <span className="chain-item__count">
             {chain.length} {pluralize(chain.length)} в цепочке
           </span>
-          {isAssembled ? (
-            <span className="chain-item__ready">Цепочка собрана</span>
+          {assembled ? (
+            <span className="chain-item__badges">
+              <span className="chain-item__ready">Цепочка собрана</span>
+              <ConsentBadge count={approvedVotes(chain)} total={chain.length} />
+            </span>
           ) : (
             <ProbabilityBadge score={chain.score} />
           )}
         </div>
       </div>
+
+      {hardLocked ? <p className="chain-item__lock">{HARD_LOCK_MESSAGE}</p> : null}
 
       {single?.offeredItemDescription ? (
         <section className="chain-item__section">
@@ -61,9 +89,40 @@ export function ChainItemView({ chain, isBest, onOpenParticipants }: ChainItemVi
         </section>
       ) : null}
 
-      <Button className="chain-item__details" size="large" block onClick={onOpenParticipants}>
-        Посмотреть всю цепочку
-      </Button>
+      <div className="chain-item__actions">
+        <Button className="chain-item__details" size="large" block onClick={onOpenParticipants}>
+          Посмотреть всю цепочку
+        </Button>
+        {needsMyAction(chain) ? (
+          <Button
+            className="chain-item__action"
+            type="primary"
+            size="large"
+            block
+            onClick={onConfirm}
+          >
+            Требуются действия
+          </Button>
+        ) : chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
+          <p className="chain-item__confirmed" role="status">
+            Вы подтвердили · ждём остальных
+          </p>
+        ) : hardLocked ? (
+          <Button
+            className="chain-item__action"
+            size="large"
+            block
+            style={{
+              backgroundColor: token.colorSuccess,
+              borderColor: token.colorSuccess,
+              color: '#FFFFFF',
+            }}
+            onClick={onProceed}
+          >
+            Перейти к сделке
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

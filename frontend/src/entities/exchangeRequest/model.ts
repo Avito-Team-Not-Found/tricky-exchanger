@@ -41,7 +41,7 @@ export interface UpdateRequestPayload {
 export const REQUEST_STATUS_META: Record<RequestStatus, { label: string; tone: StatusTone }> = {
   ACTIVE: { label: 'Активен', tone: 'success' },
   IN_PROPOSAL: { label: 'В процессе', tone: 'warning' },
-  LOCKED: { label: 'Заблокирован', tone: 'neutral' },
+  LOCKED: { label: 'Зарезервирован', tone: 'neutral' },
   DONE: { label: 'Завершён', tone: 'neutral' },
   IN_PROGRESS: { label: 'Выполняется', tone: 'neutral' },
 };

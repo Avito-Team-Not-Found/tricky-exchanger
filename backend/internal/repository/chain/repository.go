@@ -561,10 +561,10 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 		return fmt.Errorf("iterate chain participants: %w", err)
 	}
 	rows.Close()
-	return r.loadViewerVotes(ctx, chains)
+	return r.loadParticipantVotes(ctx, chains)
 }
 
-func (r *Postgres) loadViewerVotes(ctx context.Context, chains []entity.Chain) error {
+func (r *Postgres) loadParticipantVotes(ctx context.Context, chains []entity.Chain) error {
 	chainIDs := make([]int64, len(chains))
 	byID := make(map[int64]*entity.Chain, len(chains))
 	for i := range chains {
@@ -578,7 +578,7 @@ func (r *Postgres) loadViewerVotes(ctx context.Context, chains []entity.Chain) e
 		WHERE chain_id = ANY($1::bigint[])
 	`, chainIDs)
 	if err != nil {
-		return fmt.Errorf("load viewer votes: %w", err)
+		return fmt.Errorf("load participant votes: %w", err)
 	}
 	defer rows.Close()
 
@@ -589,7 +589,7 @@ func (r *Postgres) loadViewerVotes(ctx context.Context, chains []entity.Chain) e
 			return fmt.Errorf("scan viewer vote: %w", err)
 		}
 		chain := byID[chainID]
-		if chain == nil || chain.CurrentRequestID != requestID {
+		if chain == nil {
 			continue
 		}
 		for i := range chain.Participants {
@@ -600,7 +600,7 @@ func (r *Postgres) loadViewerVotes(ctx context.Context, chains []entity.Chain) e
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate viewer votes: %w", err)
+		return fmt.Errorf("iterate participant votes: %w", err)
 	}
 	return nil
 }
