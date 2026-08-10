@@ -293,13 +293,79 @@ describe('useReplacementSelection', () => {
     expect(result.current.stage).toBe('waiting');
   });
 
+  // Отказ приглашённого не меняет статус цепочки: сервер снова открывает вакансию на его позиции,
+  // и без этого экран навсегда застревал на «Ждём ответа кандидата» — пул при этом уже не пуст.
+  it('returns to selecting when the invited candidate declined and the vacancy reopened', async () => {
+    mockedSelect.mockResolvedValue({ chainId: 1, requestId: 42, status: 'PROPOSED' });
+    const { result, rerender } = await renderSelecting();
+
+    await act(async () => {
+      result.current.invite();
+    });
+    await waitFor(() => expect(result.current.stage).toBe('waiting'));
+
+    // приглашённый отказался — на его позиции снова вакансия, в пуле уже другие кандидаты
+    const other: ReplacementOption = { ...OPTION, requestId: 99, title: 'Фотоаппарат плёночный' };
+    mockedUseReplacements.mockReturnValue({
+      data: [other],
+      isLoading: false,
+      isError: false,
+      refetch: refetchOptions,
+    } as never);
+    rerender();
+
+    expect(result.current.stage).toBe('selecting');
+    await waitFor(() => expect(replacementInvited.get(1)).toBeNull());
+  });
+
+  // сразу после PUT инвалидация ещё не приехала, и пул остаётся прежним — приглашённый в нём есть.
+  // Принять это за новую вакансию значит выбросить актора обратно в выбор кандидата.
+  it('keeps waiting while the pool still holds the invited candidate', async () => {
+    mockedSelect.mockResolvedValue({ chainId: 1, requestId: 42, status: 'PROPOSED' });
+    const { result, rerender } = await renderSelecting();
+
+    await act(async () => {
+      result.current.invite();
+    });
+    await waitFor(() => expect(result.current.stage).toBe('waiting'));
+
+    rerender();
+
+    expect(result.current.stage).toBe('waiting');
+    expect(replacementInvited.get(1)).not.toBeNull();
+  });
+
+  // после перезагрузки карточка приглашённого берётся из сохранённой записи, а не из памяти:
+  // иначе экран ожидания показывает «пустую» замену
+  it('restores the invited candidate card after a reload', async () => {
+    mockedSelect.mockResolvedValue({ chainId: 1, requestId: 42, status: 'PROPOSED' });
+    const first = await renderSelecting();
+
+    await act(async () => {
+      first.result.current.invite();
+    });
+    await waitFor(() => expect(first.result.current.invitedOption).toEqual(OPTION));
+    first.unmount();
+
+    mockedUseReplacements.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      refetch: refetchOptions,
+    } as never);
+    const { result } = renderHook(() => useReplacementSelection(1), { wrapper });
+
+    expect(result.current.stage).toBe('waiting');
+    expect(result.current.invitedOption).toEqual(OPTION);
+  });
+
   // иначе следующая замена по той же цепочке открылась бы сразу на чужом экране ожидания
   it('forgets the invitation once the chain leaves PROPOSED', async () => {
-    replacementInvited.set(1);
+    replacementInvited.set(1, OPTION);
     // кандидат отказался — цепочка вернулась в CANDIDATE, флаг протух
     mockChainQuery(makeChain({ status: 'CANDIDATE' }));
     const { unmount } = await renderSelecting();
-    await waitFor(() => expect(replacementInvited.get(1)).toBe(false));
+    await waitFor(() => expect(replacementInvited.get(1)).toBeNull());
     unmount();
 
     mockChainQuery(makeChain({ status: 'PROPOSED' }));

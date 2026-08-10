@@ -64,10 +64,14 @@ export function useExchangeOptions(offerId?: number) {
 
 // Ключ намеренно вложен в ['chains'], чтобы инвалидация по префиксу (useChainVote,
 // useReplacementSelection) задевала и пул замен: список кандидатов протухающий (TZ §1).
-export function useReplacements(chainId?: number, options: { enabled?: boolean } = {}) {
+export function useReplacements(
+  chainId?: number,
+  options: { enabled?: boolean; refetchInterval?: number | false } = {},
+) {
   return useQuery({
     queryKey: ['chains', chainId, 'replacements'],
     queryFn: () => fetchReplacements(chainId as number),
     enabled: Boolean(chainId) && options.enabled !== false,
+    refetchInterval: options.refetchInterval ?? false,
   });
 }

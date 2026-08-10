@@ -25,9 +25,8 @@ export function useReplacementSelection(chainId?: number) {
   const navigate = useNavigate();
   const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
-  // флаг переживает перезагрузку: иначе экран ожидания превращается обратно в выбор кандидата
+  // запись переживает перезагрузку: иначе экран ожидания превращается обратно в выбор кандидата
   const [invited, setInvited] = useState(() => replacementInvited.get(chainId));
-  const [invitedOption, setInvitedOption] = useState<ReplacementOption | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // синхронный барьер повторного PUT: isPending становится true только после ререндера (TZ §7.2)
   const inviteInFlight = useRef(false);
@@ -42,17 +41,23 @@ export function useReplacementSelection(chainId?: number) {
     refetch: refetchChain,
   } = useChain(chainId, {
     refetchInterval: (current) =>
-      invited && current?.status === 'PROPOSED' ? WAITING_POLL_INTERVAL : false,
+      invited !== null && current?.status === 'PROPOSED' ? WAITING_POLL_INTERVAL : false,
   });
 
   // пул кандидатов существует только пока цепочка PROPOSED; при FROZEN/CANDIDATE/BROKEN запрос
-  // не нужен вовсе (вернул бы 409) — экран там рендерится по статусу цепочки
+  // не нужен вовсе (вернул бы 409) — экран там рендерится по статусу цепочки.
+  // В ожидании пул опрашивается наравне с цепочкой: отказ приглашённого статус цепочки не меняет,
+  // и вновь открывшуюся вакансию видно только по нему (см. vacancyReopened).
   const {
     data: options = [],
     isLoading: isListLoading,
     isError: isListError,
     refetch: refetchOptions,
-  } = useReplacements(chainId, { enabled: chain?.status === 'PROPOSED' });
+  } = useReplacements(chainId, {
+    enabled: chain?.status === 'PROPOSED',
+    refetchInterval:
+      invited !== null && chain?.status === 'PROPOSED' ? WAITING_POLL_INTERVAL : false,
+  });
 
   // Как только цепочка увидена вне PROPOSED, вакансии больше нет и сохранённый флаг протух:
   // снимаем его, чтобы следующая замена по этой же цепочке начиналась с выбора кандидата,
@@ -64,10 +69,29 @@ export function useReplacementSelection(chainId?: number) {
     }
   }, [chainId, chainStatus]);
 
+  // Приглашённый кандидат может отказаться сам. Цепочку это не откатывает: сервер снова открывает
+  // вакансию на его позиции (быстрая замена), статус остаётся PROPOSED — и по нему это состояние
+  // неотличимо от «ждём ответа». Единственный признак — пул: пока приглашение в силе, вакансии нет
+  // и пул пуст, а непустой пул означает, что позиция снова свободна и выбирать нужно заново.
+  // Приглашённого в свежем пуле уже нет (он занял позицию в цепочке), поэтому его наличие в списке
+  // читается как «данные ещё от прошлого выбора» и приглашение не отменяет — иначе гонка
+  // с инвалидацией сразу после PUT выбрасывала бы актора обратно в 'selecting'.
+  const invitedRequestId = invited?.requestId ?? null;
+  const vacancyReopened =
+    invited !== null &&
+    chain?.status === 'PROPOSED' &&
+    options.length > 0 &&
+    !options.some((option) => option.requestId === invitedRequestId);
+  // экран уходит в 'selecting' по вычисленному признаку, а не по состоянию: эффект лишь снимает
+  // протухшую запись, чтобы перезагрузка не вернула актора на «Ждём ответа кандидата»
+  useEffect(() => {
+    if (vacancyReopened) replacementInvited.clear(chainId);
+  }, [chainId, vacancyReopened]);
+
   const isChainNotFound = isAxiosError(chainError) && chainError.response?.status === 404;
   const stage: ReplacementStage = isChainNotFound
     ? 'rolledBack'
-    : replacementStage(chain?.status, invited);
+    : replacementStage(chain?.status, invited !== null && !vacancyReopened);
   const isLoading = isListLoading || isChainLoading;
   // 404 цепочки — не ошибка загрузки, а штатный откат («Замена не состоялась»)
   // Ошибка пула валит экран только там, где пул вообще нужен: запрос остаётся включённым весь
@@ -86,10 +110,11 @@ export function useReplacementSelection(chainId?: number) {
   const selectedOption = options.find((option) => option.requestId === selectedId) ?? null;
 
   const inviteMutation = useMutation({
-    mutationFn: (requestId: number) => selectReplacement(chainId as number, requestId),
-    onSuccess: () => {
-      setInvited(true);
-      replacementInvited.set(chainId);
+    mutationFn: (option: ReplacementOption) =>
+      selectReplacement(chainId as number, option.requestId),
+    onSuccess: (_result, option) => {
+      setInvited({ requestId: option.requestId, option });
+      replacementInvited.set(chainId, option);
       // и карточка цепочки, и пул замен лежат под ['chains'] — одна инвалидация покрывает оба
       queryClient.invalidateQueries({ queryKey: ['chains'] });
       // список вариантов заявки живёт под своим ключом со staleTime 60s: без инвалидации
@@ -133,10 +158,8 @@ export function useReplacementSelection(chainId?: number) {
 
   function invite() {
     if (inviteInFlight.current || selectedOption === null) return;
-    const option = selectedOption;
     inviteInFlight.current = true;
-    inviteMutation.mutate(option.requestId, {
-      onSuccess: () => setInvitedOption(option),
+    inviteMutation.mutate(selectedOption, {
       onSettled: () => {
         inviteInFlight.current = false;
       },
@@ -193,6 +216,8 @@ export function useReplacementSelection(chainId?: number) {
     isAbandoning: abandonMutation.isPending,
     stage,
     chain,
-    invitedOption,
+    // карточка приглашённого переживает перезагрузку вместе с записью: без неё экран ожидания
+    // после возврата на страницу показывал бы «пустую» замену
+    invitedOption: vacancyReopened ? null : (invited?.option ?? null),
   };
 }
