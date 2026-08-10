@@ -2,8 +2,10 @@ package user
 
 import (
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
@@ -28,7 +30,10 @@ func (r *Repository) Create(ctx context.Context, user *entity.User) error {
 
 	_, err := r.pool.Exec(ctx, q, user.ID, user.FullName, user.Email, user.PasswordHash, user.CreatedAt)
 	if err != nil {
-		return repository.DBError(err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 
 	return nil
@@ -45,7 +50,13 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*entity.User
 	var u entity.User
 	err := r.pool.QueryRow(ctx, q, email).Scan(&u.ID, &u.FullName, &u.Email, &u.PasswordHash, &u.CreatedAt)
 	if err != nil {
-		return nil, repository.DBError(err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
+		}
+		return nil, repository.ErrNotFound
 	}
 
 	return &u, nil
@@ -62,7 +73,13 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*entity.User, e
 	var u entity.User
 	err := r.pool.QueryRow(ctx, q, id).Scan(&u.ID, &u.FullName, &u.Email, &u.PasswordHash, &u.CreatedAt)
 	if err != nil {
-		return nil, repository.DBError(err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
+		}
+		return nil, repository.ErrNotFound
 	}
 
 	return &u, nil
@@ -79,7 +96,10 @@ func (r *Repository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordH
 
 	tag, err := r.pool.Exec(ctx, q, id, passwordHash)
 	if err != nil {
-		return repository.DBError(err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return repository.ErrNotFound

@@ -3,11 +3,12 @@ package item
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
@@ -38,7 +39,10 @@ func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 		vectorLiteral(item.Embedding), item.Status,
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("insert item: %w", repository.DBError(err))
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 
 	return nil
@@ -55,7 +59,13 @@ func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) 
 
 	item, err := scanItem(r.pool.QueryRow(ctx, q, id))
 	if err != nil {
-		return nil, fmt.Errorf("get item: %w", repository.DBError(err))
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
+		}
+		return nil, repository.ErrNotFound
 	}
 
 	return item, nil
@@ -75,7 +85,10 @@ func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pag
 
 	rows, err := r.pool.Query(ctx, q, ownerID, pageSize, (page-1)*pageSize)
 	if err != nil {
-		return nil, 0, fmt.Errorf("list items by owner: %w", repository.DBError(err))
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, 0, mappedErr
+		}
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -87,13 +100,19 @@ func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pag
 			&it.ID, &it.OwnerUserID, &it.Title, &it.Description, &it.Category, &it.ImageURL,
 			&it.Status, &it.CreatedAt, &it.UpdatedAt, &total,
 		); err != nil {
-			return nil, 0, fmt.Errorf("scan item list row: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, 0, mappedErr
+			}
+			return nil, 0, err
 		}
 		items = append(items, &it)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, 0, fmt.Errorf("iterate item list: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, 0, mappedErr
+		}
+		return nil, 0, err
 	}
 
 	return items, total, nil
@@ -120,7 +139,13 @@ func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 		optionalVectorLiteral(item.Embedding),
 	).Scan(&item.UpdatedAt)
 	if err != nil {
-		return fmt.Errorf("update item: %w", repository.DBError(err))
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
+		}
+		return repository.ErrNotFound
 	}
 
 	return nil
@@ -138,7 +163,10 @@ func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status entity.Ite
 
 	tag, err := r.pool.Exec(ctx, q, id, status)
 	if err != nil {
-		return fmt.Errorf("update item status: %w", repository.DBError(err))
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return repository.ErrNotFound
@@ -159,7 +187,10 @@ func (r *Postgres) UpdateImageURL(ctx context.Context, id int64, url string) err
 
 	tag, err := r.pool.Exec(ctx, q, id, url)
 	if err != nil {
-		return fmt.Errorf("update item image url: %w", repository.DBError(err))
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return repository.ErrNotFound
@@ -174,7 +205,10 @@ func (r *Postgres) CategoryExists(ctx context.Context, categoryID int64) (bool, 
 
 	var exists bool
 	if err := r.pool.QueryRow(ctx, q, categoryID).Scan(&exists); err != nil {
-		return false, fmt.Errorf("check category exists: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, mappedErr
+		}
+		return false, err
 	}
 
 	return exists, nil
@@ -195,7 +229,10 @@ func (r *Postgres) HasActiveHardReservation(ctx context.Context, itemID int64) (
 
 	var exists bool
 	if err := r.pool.QueryRow(ctx, q, itemID).Scan(&exists); err != nil {
-		return false, fmt.Errorf("check living offer on item: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, mappedErr
+		}
+		return false, err
 	}
 	return exists, nil
 }
