@@ -13,6 +13,7 @@ import (
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
 )
 
@@ -111,7 +112,10 @@ func saveCandidate(ctx context.Context, tx database.Tx, draft entity.ChainDraft)
 	signature := chainSignature(clusterIDs)
 
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, signature); err != nil {
-		return fmt.Errorf("lock candidate chain signature: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 
 	var exists bool
@@ -129,7 +133,10 @@ func saveCandidate(ctx context.Context, tx database.Tx, draft entity.ChainDraft)
 			  ) = $1::bigint[]
 		)
 	`, clusterIDs, len(clusterIDs)).Scan(&exists); err != nil {
-		return fmt.Errorf("check candidate chain duplicate: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if exists {
 		return nil
@@ -141,12 +148,18 @@ func saveCandidate(ctx context.Context, tx database.Tx, draft entity.ChainDraft)
 		VALUES ('CANDIDATE', $1, $2)
 		RETURNING id
 	`, draft.Score, len(draft.Participants)).Scan(&chainID); err != nil {
-		return fmt.Errorf("insert candidate chain: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 
 	query, arguments := participantsInsert(chainID, draft)
 	if _, err := tx.Exec(ctx, query, arguments...); err != nil {
-		return fmt.Errorf("insert chain participants: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -290,7 +303,10 @@ func (r *Postgres) ListForOffer(ctx context.Context, userID string, offerID int6
 			  AND status <> 'REMOVED'
 		)
 	`, offerID, userID).Scan(&owned); err != nil {
-		return nil, fmt.Errorf("verify exchange offer owner: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	if !owned {
 		return nil, entity.ErrExchangeOfferNotFound
@@ -335,11 +351,14 @@ func (r *Postgres) LockForVote(
 		WHERE id = $1
 		FOR UPDATE
 	`, chainID).Scan(&status, &length)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", 0, entity.ErrChainNotFound
-	}
 	if err != nil {
-		return "", 0, fmt.Errorf("lock chain for vote: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return "", 0, mappedErr
+			}
+			return "", 0, err
+		}
+		return "", 0, entity.ErrChainNotFound
 	}
 	return status, length, nil
 }
@@ -355,20 +374,26 @@ func (r *Postgres) ValidateVoteParticipants(
 ) error {
 	var sourcePosition int
 	err := tx.QueryRow(ctx, validateVoteSourceQuery, chainID, requestID, userID).Scan(&sourcePosition)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ErrChainVoteForbidden
-	}
 	if err != nil {
-		return fmt.Errorf("validate vote source: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
+		}
+		return entity.ErrChainVoteForbidden
 	}
 
 	var targetPosition int
 	err = tx.QueryRow(ctx, validateVoteTargetQuery, chainID, targetRequestID).Scan(&targetPosition)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ErrInvalidVoteTarget
-	}
 	if err != nil {
-		return fmt.Errorf("validate vote target: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
+		}
+		return entity.ErrInvalidVoteTarget
 	}
 	if chainLength <= 0 || targetPosition != (sourcePosition+1)%chainLength {
 		return entity.ErrInvalidVoteTarget
@@ -398,11 +423,14 @@ func (r *Postgres) GetVote(
 		  AND vote.target_request_id = $3
 		  AND source.user_id = $4
 	`, chainID, requestID, targetRequestID, userID).Scan(&vote.Vote, &vote.VotedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ChainVote{}, entity.ErrChainVoteForbidden
-	}
 	if err != nil {
-		return entity.ChainVote{}, fmt.Errorf("get chain vote: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return entity.ChainVote{}, mappedErr
+			}
+			return entity.ChainVote{}, err
+		}
+		return entity.ChainVote{}, entity.ErrChainVoteForbidden
 	}
 	return vote, nil
 }
@@ -424,7 +452,10 @@ func (r *Postgres) UpsertPendingVote(
 		RETURNING voted_at
 	`, chainID, requestID, targetRequestID).Scan(&votedAt)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("upsert chain vote: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return time.Time{}, mappedErr
+		}
+		return time.Time{}, err
 	}
 	return votedAt, nil
 }
@@ -444,7 +475,10 @@ func (r *Postgres) DeletePendingVote(
 		  AND vote = 'pending'
 	`, chainID, requestID, targetRequestID)
 	if err != nil {
-		return fmt.Errorf("delete pending chain vote: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -457,7 +491,10 @@ func (r *Postgres) ListPendingVoteEdges(
 ) ([]entity.VoteEdge, error) {
 	rows, err := tx.Query(ctx, listPendingVoteEdgesQuery, chainID)
 	if err != nil {
-		return nil, fmt.Errorf("list pending vote edges: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -465,12 +502,18 @@ func (r *Postgres) ListPendingVoteEdges(
 	for rows.Next() {
 		var edge entity.VoteEdge
 		if err := rows.Scan(&edge.RequestID, &edge.TargetRequestID, &edge.Position); err != nil {
-			return nil, fmt.Errorf("scan pending vote edge: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		edges = append(edges, edge)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate pending vote edges: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return edges, nil
 }
@@ -492,6 +535,9 @@ func (r *Postgres) Propose(
 			  AND position = $2
 		`, chainID, position, requestID)
 		if err != nil {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return fmt.Errorf("pin chain participant at position %d: %w", position, mappedErr)
+			}
 			return fmt.Errorf("pin chain participant at position %d: %w", position, err)
 		}
 		if result.RowsAffected() != 1 {
@@ -509,7 +555,10 @@ func (r *Postgres) Propose(
 		  AND status = 'CANDIDATE'
 	`, chainID, confirmationDeadline)
 	if err != nil {
-		return fmt.Errorf("propose chain: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotCandidate
@@ -521,7 +570,10 @@ func (r *Postgres) Propose(
 		WHERE id = ANY($1::bigint[])
 		  AND status IN ('ACTIVE', 'IN_PROPOSAL')
 	`, requestIDsByPosition); err != nil {
-		return fmt.Errorf("lock proposed requests: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -530,7 +582,10 @@ func (r *Postgres) Propose(
 		WHERE chain_id = $1
 		  AND vote <> 'pending'
 	`, chainID); err != nil {
-		return fmt.Errorf("reset votes to pending: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 
 	return nil
@@ -582,7 +637,10 @@ func (r *Postgres) ExpireProposalIfDue(ctx context.Context, tx database.Tx, chai
 func (r *Postgres) loadVisibleChains(ctx context.Context, userID string, chainID, offerID int64) ([]entity.Chain, error) {
 	rows, err := r.pool.Query(ctx, loadVisibleChainsQuery, userID, chainID, offerID)
 	if err != nil {
-		return nil, fmt.Errorf("list visible chains: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -602,12 +660,18 @@ func (r *Postgres) loadVisibleChains(ctx context.Context, userID string, chainID
 			&chain.CurrentRequestID,
 			&chain.CurrentPosition,
 		); err != nil {
-			return nil, fmt.Errorf("scan visible chain: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		chains = append(chains, chain)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate visible chains: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return chains, nil
 }
@@ -640,7 +704,10 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 		ORDER BY cp.chain_id, cp.position, member.request_id
 	`, chainIDs)
 	if err != nil {
-		return fmt.Errorf("load chain participants: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	defer rows.Close()
 
@@ -661,14 +728,20 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 			&participant.CreatedAt,
 			&participant.ImageURL,
 		); err != nil {
-			return fmt.Errorf("scan chain participant: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
 		}
 		if chain := byID[participant.ChainID]; chain != nil {
 			chain.Participants = append(chain.Participants, participant)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate chain participants: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	rows.Close()
 	return r.loadParticipantVotes(ctx, chains)
@@ -688,7 +761,10 @@ func (r *Postgres) loadParticipantVotes(ctx context.Context, chains []entity.Cha
 		WHERE chain_id = ANY($1::bigint[])
 	`, chainIDs)
 	if err != nil {
-		return fmt.Errorf("load participant votes: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	defer rows.Close()
 
@@ -696,7 +772,10 @@ func (r *Postgres) loadParticipantVotes(ctx context.Context, chains []entity.Cha
 		var chainID, requestID, targetRequestID int64
 		var vote entity.VoteValue
 		if err := rows.Scan(&chainID, &requestID, &targetRequestID, &vote); err != nil {
-			return fmt.Errorf("scan viewer vote: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
 		}
 		chain := byID[chainID]
 		if chain == nil {
@@ -710,7 +789,10 @@ func (r *Postgres) loadParticipantVotes(ctx context.Context, chains []entity.Cha
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate participant votes: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -722,7 +804,10 @@ func (r *Postgres) MarkRequestInProposal(ctx context.Context, tx database.Tx, re
 		SET status = 'IN_PROPOSAL', updated_at = NOW()
 		WHERE id = $1 AND status IN ('ACTIVE', 'IN_PROPOSAL')
 	`, requestID); err != nil {
-		return fmt.Errorf("mark request in proposal: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -740,7 +825,10 @@ func (r *Postgres) RestoreActiveIfNoPendingVotes(ctx context.Context, tx databas
 			WHERE v.request_id = eo.id AND v.vote = 'pending'
 		  )
 	`, requestID); err != nil {
-		return fmt.Errorf("restore request active: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -756,7 +844,10 @@ func (r *Postgres) LoadScoreFeatures(
 		ORDER BY position
 	`, chainID)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("load score features: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, nil, nil, mappedErr
+		}
+		return nil, nil, nil, err
 	}
 	defer rows.Close()
 
@@ -767,14 +858,20 @@ func (r *Postgres) LoadScoreFeatures(
 		var c, rel float64
 		var size int
 		if err := rows.Scan(&c, &rel, &size); err != nil {
-			return nil, nil, nil, fmt.Errorf("scan score feature: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, nil, nil, mappedErr
+			}
+			return nil, nil, nil, err
 		}
 		cosines = append(cosines, c)
 		reliability = append(reliability, rel)
 		sizes = append(sizes, size)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, nil, nil, fmt.Errorf("iterate score features: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, nil, nil, mappedErr
+		}
+		return nil, nil, nil, err
 	}
 	return cosines, reliability, sizes, nil
 }
@@ -791,7 +888,10 @@ func (r *Postgres) CountPendingVoters(ctx context.Context, tx database.Tx, chain
 		  ON target.chain_id = vote.chain_id AND target.request_id = vote.target_request_id
 		WHERE vote.chain_id = $1 AND vote.vote = 'pending'
 	`, chainID).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count pending voters: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return 0, mappedErr
+		}
+		return 0, err
 	}
 	return count, nil
 }
@@ -803,7 +903,10 @@ func (r *Postgres) UpdateScore(ctx context.Context, tx database.Tx, chainID int6
 		SET score = $2, version = version + 1, updated_at = NOW()
 		WHERE id = $1
 	`, chainID, score); err != nil {
-		return fmt.Errorf("update chain score: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -817,7 +920,10 @@ func (r *Postgres) ConfirmParticipant(ctx context.Context, tx database.Tx, chain
 		DO UPDATE SET vote = 'approved', voted_at = NOW()
 	`, chainID, requestID, targetRequestID)
 	if err != nil {
-		return fmt.Errorf("confirm participant vote: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -832,7 +938,10 @@ func (r *Postgres) MarkParticipantThinking(ctx context.Context, tx database.Tx, 
 		DO UPDATE SET vote = 'thinking', voted_at = NOW()
 	`, chainID, requestID, targetRequestID)
 	if err != nil {
-		return fmt.Errorf("mark participant thinking: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -850,14 +959,20 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 		WHERE cp.chain_id = $1 AND cp.request_id <> $2 AND eo.status = 'ACTIVE'
 		  AND NOT EXISTS (SELECT 1 FROM votes v WHERE v.chain_id = cp.chain_id AND v.request_id = cp.request_id)
 	`, chainID, requestID).Scan(&openReplacements); err != nil {
-		return false, "", fmt.Errorf("count open replacements: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, "", mappedErr
+		}
+		return false, "", err
 	}
 	if openReplacements > 0 {
 		if _, err := tx.Exec(ctx, `
 			UPDATE exchange_offers SET status = 'ACTIVE', updated_at = NOW()
 			WHERE id IN (SELECT request_id FROM chain_participants WHERE chain_id = $1)
 		`, chainID); err != nil {
-			return false, "", fmt.Errorf("release aborted proposal requests: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return false, "", mappedErr
+			}
+			return false, "", err
 		}
 		if err := r.DeleteChain(ctx, tx, chainID); err != nil {
 			return false, "", err
@@ -870,10 +985,13 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 		SELECT cluster_id FROM chain_participants
 		WHERE chain_id = $1 AND request_id = $2
 	`, chainID, requestID).Scan(&clusterID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, "", entity.ErrChainVoteForbidden
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return false, "", mappedErr
+			}
+			return false, "", err
 		}
-		return false, "", fmt.Errorf("load declined participant cluster: %w", err)
+		return false, "", entity.ErrChainVoteForbidden
 	}
 
 	var hasOwnVote bool
@@ -886,10 +1004,16 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 	}
 
 	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1 AND request_id = $2`, chainID, requestID); err != nil {
-		return false, "", fmt.Errorf("delete declined participant vote: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, "", mappedErr
+		}
+		return false, "", err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE exchange_offers SET status = 'ACTIVE', updated_at = NOW() WHERE id = $1`, requestID); err != nil {
-		return false, "", fmt.Errorf("release declined request: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, "", mappedErr
+		}
+		return false, "", err
 	}
 
 	var replacementAvailable bool
@@ -923,8 +1047,11 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 			  AND 1 - (candidate_item.embedding <=> previous_offer.want_embedding) >= $4
 			  AND 1 - (next_item.embedding <=> candidate.want_embedding) >= $4
 		)
-		`, clusterID, requestID, chainID, r.matchingThreshold).Scan(&replacementAvailable); err != nil {
-			return false, "", fmt.Errorf("check fast replacement: %w", err)
+		`, clusterID, requestID, chainID).Scan(&replacementAvailable); err != nil {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return false, "", mappedErr
+			}
+			return false, "", err
 		}
 	}
 	if replacementAvailable {
@@ -945,20 +1072,29 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 			  AND other_chain.status IN ('PROPOSED', 'FROZEN', 'IN_PROGRESS')
 		  )
 	`, chainID); err != nil {
-		return false, "", fmt.Errorf("rollback proposed requests: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, "", mappedErr
+		}
+		return false, "", err
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE votes
 		SET vote = 'pending', voted_at = NOW()
 		WHERE chain_id = $1 AND vote IN ('approved', 'thinking')
 	`, chainID); err != nil {
-		return false, "", fmt.Errorf("reset proposal confirmations: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, "", mappedErr
+		}
+		return false, "", err
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE chains SET status = 'CANDIDATE', version = version + 1, updated_at = NOW()
 		WHERE id = $1 AND status = 'PROPOSED'
 	`, chainID); err != nil {
-		return false, "", fmt.Errorf("rollback proposed chain: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, "", mappedErr
+		}
+		return false, "", err
 	}
 	return false, entity.ChainStatusCandidate, nil
 }
@@ -1020,7 +1156,10 @@ func (r *Postgres) ListReplacementOptions(ctx context.Context, userID string, ch
 		ORDER BY COALESCE(position.reliability, 0.75) DESC, candidate.updated_at, candidate.id
 	`, chainID, userID, r.matchingThreshold)
 	if err != nil {
-		return nil, fmt.Errorf("list replacement options: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 	options := make([]entity.ReplacementOption, 0)
@@ -1028,12 +1167,18 @@ func (r *Postgres) ListReplacementOptions(ctx context.Context, userID string, ch
 		var option entity.ReplacementOption
 		if err := rows.Scan(&option.RequestID, &option.OfferedItemID, &option.Title, &option.Description,
 			&option.WantedDescription, &option.ImageURL, &option.Reliability, &option.RespondedAt); err != nil {
-			return nil, fmt.Errorf("scan replacement option: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		options = append(options, option)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate replacement options: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return options, nil
 }
@@ -1058,11 +1203,14 @@ func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID
 		  AND next_cp.position = (vacancy.position + 1) % c.length
 		LIMIT 1
 	`, chainID, userID).Scan(&position, &length, &oldRequestID, &actorRequestID, &nextRequestID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ErrChainVoteForbidden
-	}
 	if err != nil {
-		return fmt.Errorf("load replacement context: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
+		}
+		return entity.ErrChainVoteForbidden
 	}
 	_ = length
 
@@ -1094,27 +1242,42 @@ func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID
 				  WHERE current.chain_id = $1 AND current.request_id = candidate.id
 			  )
 		)
-	`, chainID, oldRequestID, replacementRequestID, actorRequestID, nextRequestID, position, r.matchingThreshold).Scan(&valid); err != nil {
-		return fmt.Errorf("validate replacement request: %w", err)
+	`, chainID, oldRequestID, replacementRequestID).Scan(&valid); err != nil {
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if !valid {
 		return entity.ErrInvalidVoteTarget
 	}
 
 	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1 AND request_id = $2`, chainID, actorRequestID); err != nil {
-		return fmt.Errorf("remove previous replacement edge: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO votes (chain_id, request_id, target_request_id, vote, voted_at)
 		VALUES ($1, $2, $3, 'approved', NOW())
 	`, chainID, actorRequestID, replacementRequestID); err != nil {
-		return fmt.Errorf("transfer approved replacement edge: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE chain_participants SET request_id = $3 WHERE chain_id = $1 AND position = $2`, chainID, position, replacementRequestID); err != nil {
-		return fmt.Errorf("pin replacement participant: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE exchange_offers SET status = 'IN_PROPOSAL', updated_at = NOW() WHERE id = $1`, replacementRequestID); err != nil {
-		return fmt.Errorf("lock replacement request: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -1131,7 +1294,10 @@ func (r *Postgres) CountApprovedVoters(ctx context.Context, tx database.Tx, chai
 		  ON target.chain_id = vote.chain_id AND target.request_id = vote.target_request_id
 		WHERE vote.chain_id = $1 AND vote.vote = 'approved'
 	`, chainID).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count approved voters: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return 0, mappedErr
+		}
+		return 0, err
 	}
 	return count, nil
 }
@@ -1160,7 +1326,10 @@ func (r *Postgres) MarkRequestLocked(ctx context.Context, tx database.Tx, reques
 		WHERE id = $1 AND status IN ('IN_PROPOSAL', 'ACTIVE', 'LOCKED')
 	`, requestID)
 	if err != nil {
-		return fmt.Errorf("mark request locked: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotProposed
@@ -1179,7 +1348,10 @@ func (r *Postgres) FreezeChain(ctx context.Context, tx database.Tx, chainID int6
 		WHERE id = $1 AND status = 'PROPOSED'
 	`, chainID, deadline)
 	if err != nil {
-		return fmt.Errorf("freeze chain: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotProposed
@@ -1199,7 +1371,10 @@ func (r *Postgres) LockRequestsInChain(ctx context.Context, tx database.Tx, chai
 		)
 		  AND eo.status IN ('IN_PROPOSAL', 'ACTIVE')
 	`, chainID); err != nil {
-		return fmt.Errorf("lock requests in chain: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -1216,7 +1391,10 @@ func (r *Postgres) MarkItemsUnavailable(ctx context.Context, tx database.Tx, cha
 			WHERE cp.chain_id = $1
 		)
 	`, chainID); err != nil {
-		return fmt.Errorf("mark items unavailable: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -1230,7 +1408,10 @@ func (r *Postgres) LoadChainRequestIDs(ctx context.Context, tx database.Tx, chai
 		ORDER BY cp.position
 	`, chainID)
 	if err != nil {
-		return nil, fmt.Errorf("load chain request ids: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -1238,12 +1419,18 @@ func (r *Postgres) LoadChainRequestIDs(ctx context.Context, tx database.Tx, chai
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan chain request id: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate chain request ids: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return ids, nil
 }
@@ -1259,18 +1446,27 @@ func (r *Postgres) LockRequestsForFreeze(ctx context.Context, tx database.Tx, re
 		FOR UPDATE
 	`, requestIDs)
 	if err != nil {
-		return fmt.Errorf("lock requests for freeze: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var requestID int64
 		if err := rows.Scan(&requestID); err != nil {
-			return fmt.Errorf("scan locked request: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate locked requests: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -1286,11 +1482,14 @@ func (r *Postgres) LoadRequestLiveChainStatus(ctx context.Context, tx database.T
 		ORDER BY CASE WHEN c.status = 'FROZEN' THEN 0 ELSE 1 END
 		LIMIT 1
 	`, requestID).Scan(&status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ChainStatusCandidate, nil
-	}
 	if err != nil {
-		return entity.ChainStatus(""), fmt.Errorf("load request live chain status: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return entity.ChainStatus(""), mappedErr
+			}
+			return entity.ChainStatus(""), err
+		}
+		return entity.ChainStatusCandidate, nil
 	}
 	return status, nil
 }
@@ -1312,11 +1511,14 @@ func (r *Postgres) FindParticipantEdge(ctx context.Context, tx database.Tx, chai
 		ORDER BY source_participant.position
 		LIMIT 1
 	`, chainID, userID).Scan(&requestID, &targetID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, 0, entity.ErrChainVoteForbidden
-	}
 	if err != nil {
-		return 0, 0, fmt.Errorf("find participant edge: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return 0, 0, mappedErr
+			}
+			return 0, 0, err
+		}
+		return 0, 0, entity.ErrChainVoteForbidden
 	}
 	return requestID, targetID, nil
 }
@@ -1337,11 +1539,14 @@ func (r *Postgres) MarkRequestInProgress(
 		WHERE cp.chain_id = $1 AND cp.request_id = $2
 		FOR UPDATE OF eo
 	`, chainID, requestID).Scan(&status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", entity.ErrHandoffRequestInvalid
-	}
 	if err != nil {
-		return "", fmt.Errorf("lock handoff request: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return "", mappedErr
+			}
+			return "", err
+		}
+		return "", entity.ErrHandoffRequestInvalid
 	}
 
 	switch status {
@@ -1351,7 +1556,10 @@ func (r *Postgres) MarkRequestInProgress(
 			SET status = 'IN_PROGRESS', updated_at = NOW()
 			WHERE id = $1
 		`, requestID); err != nil {
-			return "", fmt.Errorf("mark request in progress: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return "", mappedErr
+			}
+			return "", err
 		}
 		return entity.RequestStatusInProgress, nil
 	case entity.RequestStatusInProgress, entity.RequestStatusDone:
@@ -1369,7 +1577,10 @@ func (r *Postgres) StartChain(ctx context.Context, tx database.Tx, chainID int64
 		WHERE id = $1 AND status = 'FROZEN'
 	`, chainID)
 	if err != nil {
-		return fmt.Errorf("start chain fulfillment: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotReadyForHandoff
@@ -1400,11 +1611,14 @@ func (r *Postgres) FindReceiptRequestStatus(
 		  AND recipient_offer.user_id = $3
 		FOR UPDATE OF source_offer
 	`, chainID, requestID, userID).Scan(&status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", entity.ErrChainReceiptForbidden
-	}
 	if err != nil {
-		return "", fmt.Errorf("find receipt request: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return "", mappedErr
+			}
+			return "", err
+		}
+		return "", entity.ErrChainReceiptForbidden
 	}
 	return status, nil
 }
@@ -1418,7 +1632,10 @@ func (r *Postgres) MarkRequestDone(ctx context.Context, tx database.Tx, requestI
 		WHERE id = $1 AND status = 'IN_PROGRESS'
 	`, requestID)
 	if err != nil {
-		return fmt.Errorf("mark request done: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if result.RowsAffected() == 1 {
 		return nil
@@ -1426,7 +1643,10 @@ func (r *Postgres) MarkRequestDone(ctx context.Context, tx database.Tx, requestI
 
 	var status entity.RequestStatus
 	if err := tx.QueryRow(ctx, `SELECT status FROM exchange_offers WHERE id = $1`, requestID).Scan(&status); err != nil {
-		return fmt.Errorf("load completed request status: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if status == entity.RequestStatusDone {
 		return nil
@@ -1445,7 +1665,10 @@ func (r *Postgres) AllChainRequestsDone(ctx context.Context, tx database.Tx, cha
 		WHERE cp.chain_id = $1
 	`, chainID).Scan(&complete)
 	if err != nil {
-		return false, fmt.Errorf("check completed chain requests: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return false, mappedErr
+		}
+		return false, err
 	}
 	return complete, nil
 }
@@ -1459,7 +1682,10 @@ func (r *Postgres) CompleteChain(ctx context.Context, tx database.Tx, chainID in
 		WHERE id = $1 AND status = 'IN_PROGRESS'
 	`, chainID)
 	if err != nil {
-		return fmt.Errorf("complete chain: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotReadyForHandoff
@@ -1480,7 +1706,10 @@ func (r *Postgres) ListChainsContainingRequest(ctx context.Context, tx database.
 		WHERE member.request_id = $1 AND chain.status = 'CANDIDATE'
 	`, requestID)
 	if err != nil {
-		return nil, fmt.Errorf("list chains containing request: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -1488,12 +1717,18 @@ func (r *Postgres) ListChainsContainingRequest(ctx context.Context, tx database.
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan affected chain id: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		ids = append(ids, id)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate affected chain ids: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return ids, nil
 }
@@ -1501,13 +1736,22 @@ func (r *Postgres) ListChainsContainingRequest(ctx context.Context, tx database.
 // DeleteChain удаляет цепочку целиком каскадом: голоса, участники, саму цепочку.
 func (r *Postgres) DeleteChain(ctx context.Context, tx database.Tx, chainID int64) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1`, chainID); err != nil {
-		return fmt.Errorf("delete chain votes: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM chain_participants WHERE chain_id = $1`, chainID); err != nil {
-		return fmt.Errorf("delete chain participants: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM chains WHERE id = $1`, chainID); err != nil {
-		return fmt.Errorf("delete chain: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -1518,12 +1762,18 @@ func (r *Postgres) DeleteRequestParticipation(ctx context.Context, tx database.T
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM votes WHERE request_id = $1 OR target_request_id = $1
 	`, requestID); err != nil {
-		return fmt.Errorf("delete request votes: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM chain_participants WHERE request_id = $1
 	`, requestID); err != nil {
-		return fmt.Errorf("delete request chain participation: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -1548,20 +1798,29 @@ func (r *Postgres) ReleaseUnselectedFromChain(ctx context.Context, tx database.T
 		ORDER BY v.request_id
 	`, chainID)
 	if err != nil {
-		return nil, fmt.Errorf("list unselected chain requests: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	released := make([]int64, 0)
 	for rows.Next() {
 		var requestID int64
 		if err := rows.Scan(&requestID); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("scan unselected chain request: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		released = append(released, requestID)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, fmt.Errorf("iterate unselected chain requests: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	rows.Close()
 
@@ -1579,7 +1838,10 @@ func (r *Postgres) ReleaseUnselectedFromChain(ctx context.Context, tx database.T
 			)
 		  )
 	`, chainID); err != nil {
-		return nil, fmt.Errorf("delete unselected chain votes: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 
 	for _, requestID := range released {
@@ -1602,7 +1864,10 @@ func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx dat
 			  AND (frozen.request_id = v.request_id OR frozen.request_id = v.target_request_id)
 		  )
 	`, chainID); err != nil {
-		return nil, fmt.Errorf("delete competitor votes: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 
 	// Запоминаем, какие конкурирующие цепочки затронуты (до удаления участников).
@@ -1615,19 +1880,28 @@ func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx dat
 			WHERE cp_outside.chain_id <> $1
 		`, chainID)
 		if err != nil {
-			return nil, fmt.Errorf("list affected competitor chains: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		defer rows.Close()
 		ids := make([]int64, 0)
 		for rows.Next() {
 			var id int64
 			if err := rows.Scan(&id); err != nil {
-				return nil, fmt.Errorf("scan affected chain id: %w", err)
+				if mappedErr, ok := repository.DBErrToErr(err); ok {
+					return nil, mappedErr
+				}
+				return nil, err
 			}
 			ids = append(ids, id)
 		}
 		if err := rows.Err(); err != nil {
-			return nil, fmt.Errorf("iterate affected chain ids: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		return ids, nil
 	}()
@@ -1646,7 +1920,10 @@ func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx dat
 			  AND frozen.request_id = cp.request_id
 		  )
 	`, chainID); err != nil {
-		return nil, fmt.Errorf("remove frozen participants from competitor chains: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 
 	return affected, nil

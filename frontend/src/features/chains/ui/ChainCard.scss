@@ -109,13 +109,14 @@
   gap: var(--spacing-sm);
 }
 
-// бейдж согласий на замороженной карточке — пилюля в правом верхнем углу (SOFT-LOCK §5.4);
+// бейдж согласий на замороженной карточке — пилюля в правом верхнем углу фото (SOFT-LOCK §5.4);
+// top/right = spacing-lg даёт отступ 8px от краёв картинки (padding карточки — spacing-md);
 // z-index поднимает её над фото: оба элемента positioned, и без него фото, идущее в DOM позже,
 // перекрыло бы бейдж
 .chain-card__consent {
   position: absolute;
-  top: var(--spacing-md);
-  right: var(--spacing-md);
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
   z-index: 1;
 }
 

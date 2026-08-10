@@ -4,13 +4,13 @@ package cluster
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 	clusterservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/cluster"
 )
 
@@ -63,7 +63,10 @@ func (r *Postgres) ListActiveMembers(ctx context.Context, clusterID int64) ([]en
 
 	rows, err := r.pool.Query(ctx, query, clusterID)
 	if err != nil {
-		return nil, fmt.Errorf("list active cluster members: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -80,12 +83,18 @@ func (r *Postgres) ListActiveMembers(ctx context.Context, clusterID int64) ([]en
 			&offer.CreatedAt,
 			&offer.UpdatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("scan active cluster member: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		members = append(members, offer)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate active cluster members: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return members, nil
 }
@@ -104,12 +113,15 @@ func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int6
 		FROM exchange_offers AS eo
 		JOIN items AS i ON i.id = eo.offered_item_id
 		WHERE eo.id = $1 AND eo.status = 'ACTIVE'
-	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &category, &wantedCategory)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return clusterservice.OfferVectors{}, entity.ErrExchangeOfferNotFound
-	}
+	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &category)
 	if err != nil {
-		return clusterservice.OfferVectors{}, fmt.Errorf("load offer vectors for clustering: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return clusterservice.OfferVectors{}, mappedErr
+			}
+			return clusterservice.OfferVectors{}, err
+		}
+		return clusterservice.OfferVectors{}, entity.ErrExchangeOfferNotFound
 	}
 	if offerEmbedding == nil || wantEmbedding == nil {
 		return clusterservice.OfferVectors{}, entity.ErrOfferEmbeddingMissing
@@ -130,11 +142,14 @@ func (r *Postgres) DeleteMembership(ctx context.Context, tx database.Tx, offerID
 		WHERE request_id = $1
 		RETURNING cluster_id
 	`, offerID).Scan(&clusterID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
 	if err != nil {
-		return nil, fmt.Errorf("remove offer from previous cluster: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
+		}
+		return nil, nil
 	}
 	return &clusterID, nil
 }
@@ -206,11 +221,14 @@ func (r *Postgres) FindClusterForCandidates(
 		threshold,
 		directionMargin,
 	).Scan(&clusterID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
 	if err != nil {
-		return nil, fmt.Errorf("find cluster for similar offers: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
+		}
+		return nil, nil
 	}
 	return &clusterID, nil
 }
@@ -224,7 +242,10 @@ func (r *Postgres) Create(ctx context.Context, tx database.Tx) (int64, error) {
 		RETURNING id
 	`).Scan(&clusterID)
 	if err != nil {
-		return 0, fmt.Errorf("create cluster: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return 0, mappedErr
+		}
+		return 0, err
 	}
 	return clusterID, nil
 }
@@ -235,7 +256,10 @@ func (r *Postgres) AddMember(ctx context.Context, tx database.Tx, clusterID, off
 		INSERT INTO cluster_members (cluster_id, request_id)
 		VALUES ($1, $2)
 	`, clusterID, offerID); err != nil {
-		return fmt.Errorf("add offer to cluster: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -250,11 +274,17 @@ func (r *Postgres) Refresh(ctx context.Context, tx database.Tx, clusterID int64)
 		)
 	`
 	if _, err := tx.Exec(ctx, deleteQuery, clusterID); err != nil {
-		return fmt.Errorf("delete empty cluster: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 
 	if _, err := tx.Exec(ctx, refreshClusterQuery, clusterID); err != nil {
-		return fmt.Errorf("refresh cluster centroid: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }

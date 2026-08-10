@@ -17,23 +17,26 @@
 
 ## Запуск одной командой
 
-Весь проект (БД + миграции + бэкенд) поднимается одной командой через
-docker-compose:
+Весь проект (БД + миграции + MinIO + TEI + backend + **frontend**) поднимается одной командой из корня репозитория:
 
 ```bash
 cp .env.example .env   # при необходимости отредактируйте переменные
-make up
+make up                # = docker compose up -d --build
 ```
 
-`make up` эквивалентен `docker compose up -d --build` и поднимает три сервиса
-по цепочке зависимостей:
+После старта:
+
+- UI: http://localhost:3000
+- API: http://localhost:8080
+
+`make up` поднимает сервисы по цепочке зависимостей:
 
 1. `db` — PostgreSQL с pgvector, поднимается и ждёт `healthcheck` (`pg_isready`).
 2. `migrate` — официальный образ `migrate/migrate`, применяет все `.sql`-миграции
    из `backend/migrations` к базе после того, как `db` стал healthy, и завершается.
-3. `app` — сам бэкенд, стартует только после того, как `migrate` успешно завершился
-   (`depends_on: condition: service_completed_successfully`), то есть всегда
-   подключается к уже готовой схеме.
+3. `minio` / `minio-init`, `tei` — хранилище фото и embeddings.
+4. `app` — backend, стартует после успешных migrate/minio-init и healthy TEI.
+5. `frontend` — nginx со статикой + прокси `/api` и `/s3`.
 
 Остановить и полностью удалить контейнеры и volume с данными БД:
 

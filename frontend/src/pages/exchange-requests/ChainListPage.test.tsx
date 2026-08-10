@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   confirmChain,
@@ -14,7 +14,7 @@ import {
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems, type Item } from '@entities/item';
 
-import { renderWithProviders } from '@shared/testing/renderWithProviders';
+import { createTestQueryClient, renderWithProviders } from '@shared/testing/renderWithProviders';
 
 import { ChainListPage } from './ChainListPage';
 
@@ -125,6 +125,11 @@ describe('ChainListPage', () => {
     mockedUseItems.mockReturnValue(queryOk({ items: [offeredItem], total: 1 }));
     // детали PROPOSED-цепочек подтягиваются для бейджа согласий — по умолчанию без данных
     mockedUseChains.mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    // тесты таймера фиксируют дату через vi.setSystemTime — возвращаем настоящий Date.now()
+    vi.useRealTimers();
   });
 
   it('renders the request summary and one card per receive option', () => {
@@ -377,6 +382,91 @@ describe('ChainListPage', () => {
     renderWithProviders(<ChainListPage />);
 
     expect(screen.getByText('1/2 согласий')).toBeInTheDocument();
+  });
+
+  // дедлайн ответа по PROPOSED-цепочке приходит из детали (GET /chains/{id}), exchange-options
+  // его не отдаёт: таймер «Осталось … на ответ» виден на собранной карточке (макет 4.6, TimerRow)
+  it('shows the response deadline on a proposed card from the chain details', () => {
+    vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(
+      queryOk([
+        makeOptions({
+          status: 'PROPOSED',
+          length: 2,
+          receiveOptions: [
+            {
+              clusterId: 2,
+              requestId: 202,
+              itemId: 2,
+              title: 'Фотоаппарат',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+      ]),
+    );
+    mockedUseChains.mockReturnValue([
+      {
+        data: {
+          id: 1,
+          status: 'PROPOSED',
+          length: 2,
+          currentPosition: 1,
+          receivesFromPosition: 2,
+          freezeDeadlineAt: '2026-08-12T09:58:00Z',
+          participants: [],
+        },
+        isPending: false,
+        isError: false,
+      },
+    ] as never);
+
+    renderWithProviders(<ChainListPage />);
+
+    expect(screen.getByText('Осталось 47 ч 58 мин на ответ')).toBeInTheDocument();
+  });
+
+  // exchange-options не откатывает просроченный PROPOSED — это делает только GET /chains/{id}.
+  // Пока список не перезапрошен, карточка держит живые кнопки второго раунда и confirm ловит 410
+  it('refetches the offer list once the chain detail has expired the proposal', async () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(queryOk([makeOptions({ status: 'PROPOSED' })]));
+    mockedUseChains.mockReturnValue([
+      {
+        data: {
+          id: 1,
+          // деталь уже откатила цепочку, а список всё ещё считает её собранной
+          status: 'CANDIDATE',
+          length: 2,
+          currentPosition: 1,
+          receivesFromPosition: 2,
+          freezeDeadlineAt: null,
+          participants: [],
+        },
+        isPending: false,
+        isError: false,
+      },
+    ] as never);
+
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+
+    renderWithProviders(<ChainListPage />, { client });
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['exchange-options'] }),
+    );
+  });
+
+  it('hides the deadline row on candidate cards', () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(queryOk([makeOptions()]));
+
+    renderWithProviders(<ChainListPage />);
+
+    expect(screen.queryByText(/Осталось .* на ответ/)).not.toBeInTheDocument();
   });
 
   // после «Я подумаю» карточка показывает предупреждение и inline-«Да»/«Нет» без модалки (SOFT-LOCK §5.2)
