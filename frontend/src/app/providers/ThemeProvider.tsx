@@ -57,12 +57,18 @@ const sharedComponents: ThemeConfig['components'] = {
 
 // antd для трека берёт colorBgLayout, а для активного сегмента — colorBgElevated, т.е. наоборот макету
 // (Penpot: активный seg #FFFFFF на треке #F7F9FC) — без переопределения активный таб сливается с карточкой
+// скелетон — блоки bg-card с полосой border-default (DESIGN.md §2.14): дефолтные полупрозрачные
+// заливки antd в тёмной теме заметно светлее карточек и выпадают из фона страницы
 const themeComponents: Record<ThemeMode, ThemeConfig['components']> = {
   light: {
     ...sharedComponents,
     Segmented: { ...sharedComponents.Segmented, trackBg: '#F7F9FC', itemSelectedBg: '#FFFFFF' },
+    Skeleton: { gradientFromColor: '#F7F9FC', gradientToColor: '#D9D9D9' },
   },
-  dark: sharedComponents,
+  dark: {
+    ...sharedComponents,
+    Skeleton: { gradientFromColor: '#1F1F1F', gradientToColor: '#3A3A3A' },
+  },
 };
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
