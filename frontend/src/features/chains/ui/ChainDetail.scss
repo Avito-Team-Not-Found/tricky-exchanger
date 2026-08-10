@@ -6,11 +6,6 @@
   gap: var(--spacing-lg);
 }
 
-// плашка лучшей цепочки над схемой (макет 4.8, SCRUM-53): выравнивается по ширине текста
-.chain-detail__best {
-  display: flex;
-}
-
 .chain-detail__participants {
   display: flex;
   flex-direction: column;

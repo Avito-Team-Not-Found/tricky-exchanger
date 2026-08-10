@@ -216,17 +216,6 @@ describe('ChainListPage', () => {
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
   });
 
-  it('marks the cards of the chain with the highest score as the best one', () => {
-    mockedUseRequest.mockReturnValue(queryOk(request));
-    mockedUseOptions.mockReturnValue(
-      queryOk([makeOptions({ score: 0.55 }), makeOptions({ chainId: 2, score: 0.91 })]),
-    );
-
-    renderWithProviders(<ChainListPage />);
-
-    expect(screen.getAllByText('Лучшая цепочка для этого товара')).toHaveLength(2);
-  });
-
   // бэкенд отдаёт цепочки по дате создания — экран обязан показать их по убыванию вероятности
   it('orders the cards by descending probability, not by the backend order', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
@@ -242,16 +231,6 @@ describe('ChainListPage', () => {
 
     const titles = screen.getAllByText(/(Сильный|Слабый) вариант/).map((node) => node.textContent);
     expect(titles).toEqual(['Сильный вариант', 'Слабый вариант']);
-  });
-
-  // у заявки чаще всего ровно одна цепочка — плашка должна появляться и на ней
-  it('marks the only chain as the best one', () => {
-    mockedUseRequest.mockReturnValue(queryOk(request));
-    mockedUseOptions.mockReturnValue(queryOk([makeOptions()]));
-
-    renderWithProviders(<ChainListPage />);
-
-    expect(screen.getAllByText('Лучшая цепочка для этого товара')).toHaveLength(2);
   });
 
   // на собранной цепочке место кнопки отклика занимает подтверждение второго раунда (SOFT-LOCK §5.1)

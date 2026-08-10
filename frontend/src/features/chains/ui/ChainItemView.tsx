@@ -13,14 +13,12 @@ import {
 
 import { ProbabilityBadge } from '@shared/ui';
 
-import { BestChainBadge } from './BestChainBadge';
 import { ConsentBadge } from './ConsentBadge';
 
 import './ChainItemView.scss';
 
 interface ChainItemViewProps {
   chain: Chain;
-  isBest: boolean;
   onOpenParticipants: () => void;
   onConfirm: () => void;
   onProceed: () => void;
@@ -34,7 +32,6 @@ interface ChainItemViewProps {
 // и «Перейти к сделке» (SOFT-LOCK §7).
 export function ChainItemView({
   chain,
-  isBest,
   onOpenParticipants,
   onConfirm,
   onProceed,
@@ -60,7 +57,6 @@ export function ChainItemView({
       </div>
 
       <div className="chain-item__head">
-        {isBest ? <BestChainBadge /> : null}
         <h2 className="chain-item__title">
           {single?.offeredItemTitle ??
             `Получаете: ${received.length} ${pluralizeVariants(received.length)}`}
