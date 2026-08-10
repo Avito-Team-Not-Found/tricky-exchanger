@@ -21,6 +21,7 @@ func TestCreateEmbedsThenPersistsAndRebuildsMatching(t *testing.T) {
 	created, err := service.Create(context.Background(), "user-1", offerservice.CreateInput{
 		OfferedItemID:     42,
 		WantedDescription: "  кофемашина  ",
+		WantedCategory:    "Бытовая техника",
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -48,6 +49,7 @@ func TestUpdatePropagatesVersionAndRebuildsMatching(t *testing.T) {
 	updated, err := service.Update(context.Background(), "user-1", 7, offerservice.UpdateInput{
 		OfferedItemID:     44,
 		WantedDescription: "ноутбук",
+		WantedCategory:    "Ноутбуки",
 		Version:           2,
 	})
 	if err != nil {

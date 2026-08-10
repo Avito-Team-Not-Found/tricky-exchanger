@@ -38,7 +38,7 @@ const loadVisibleChainsQuery = `
 		  AND (
 			(c.status = 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL'))
 			OR (c.status <> 'CANDIDATE' AND member.request_id = cp.request_id
-				AND eo.status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED', 'IN_PROGRESS', 'DONE'))
+				AND eo.status IN ('IN_PROPOSAL', 'LOCKED', 'IN_PROGRESS', 'DONE'))
 		  )
 		ORDER BY cp.position
 		LIMIT 1
@@ -730,7 +730,9 @@ func (r *Postgres) MarkParticipantThinking(ctx context.Context, tx database.Tx, 
 
 // DeclineParticipant removes the participant's confirmation and releases its
 // request. A replacement is allowed only when every other participant has
-// confirmed. Otherwise the proposal is rolled back to CANDIDATE.
+// confirmed and the declining participant has an own vote in the chain. An
+// invited replacement has no own vote yet; its refusal rolls the proposal back
+// to CANDIDATE instead of opening an unsupported second replacement round.
 func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chainID, requestID int64, fastReplacementEligible bool) (bool, entity.ChainStatus, error) {
 	var openReplacements int
 	if err := tx.QueryRow(ctx, `
@@ -765,6 +767,15 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 		return false, "", fmt.Errorf("load declined participant cluster: %w", err)
 	}
 
+	var hasOwnVote bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM votes WHERE chain_id = $1 AND request_id = $2
+		)
+	`, chainID, requestID).Scan(&hasOwnVote); err != nil {
+		return false, "", fmt.Errorf("check declined participant vote: %w", err)
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1 AND request_id = $2`, chainID, requestID); err != nil {
 		return false, "", fmt.Errorf("delete declined participant vote: %w", err)
 	}
@@ -773,7 +784,7 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 	}
 
 	var replacementAvailable bool
-	if fastReplacementEligible {
+	if fastReplacementEligible && hasOwnVote {
 		if err := tx.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1
@@ -1271,12 +1282,17 @@ func (r *Postgres) CompleteChain(ctx context.Context, tx database.Tx, chainID in
 	return nil
 }
 
-// ListChainsContainingRequest возвращает цепочки, где заявка участвует как представитель.
+// ListChainsContainingRequest returns candidate chains whose position contains
+// the request, including the request as an alternative member of that
+// position's cluster. Live proposals and frozen deals must never be removed by
+// candidate rebuilding.
 func (r *Postgres) ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT DISTINCT cp.chain_id
 		FROM chain_participants AS cp
-		WHERE cp.request_id = $1
+		JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
+		JOIN chains AS chain ON chain.id = cp.chain_id
+		WHERE member.request_id = $1 AND chain.status = 'CANDIDATE'
 	`, requestID)
 	if err != nil {
 		return nil, fmt.Errorf("list chains containing request: %w", err)

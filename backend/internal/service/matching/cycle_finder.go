@@ -46,8 +46,9 @@ type CycleFinder struct {
 }
 
 type cycleVertex struct {
-	clusterID               int64
-	representativeRequestID int64
+	clusterID int64
+	requestID int64
+	ownerID   string
 }
 
 // NewCycleFinder создаёт поиск циклов с безопасными значениями по умолчанию.
@@ -104,7 +105,7 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 		return nil, err
 	}
 
-	closers, startClusterID := f.indexClosers(startRequestID, closingEdges)
+	closers, startClusterID, startOwnerID := f.indexClosers(startRequestID, closingEdges)
 	if len(closers) == 0 || startClusterID == 0 {
 		return []entity.ChainDraft{}, nil
 	}
@@ -113,28 +114,33 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 	if err != nil {
 		return nil, err
 	}
-	if len(adjacency[startClusterID]) == 0 {
+	if len(adjacency[startRequestID]) == 0 {
 		return []entity.ChainDraft{}, nil
 	}
 
 	path := []cycleVertex{{
-		clusterID:               startClusterID,
-		representativeRequestID: startRequestID,
+		clusterID: startClusterID,
+		requestID: startRequestID,
+		ownerID:   startOwnerID,
 	}}
 	visitedClusters := map[int64]bool{startClusterID: true}
+	visitedOwners := make(map[string]bool)
+	if startOwnerID != "" {
+		visitedOwners[startOwnerID] = true
+	}
 	drafts := make([]entity.ChainDraft, 0, f.capHint)
 
-	var dfs func(currentClusterID int64, cosines []float64)
-	dfs = func(currentClusterID int64, cosines []float64) {
+	var dfs func(currentRequestID int64, cosines []float64)
+	dfs = func(currentRequestID int64, cosines []float64) {
 		if len(path) >= minCycleLength {
-			if closing, ok := closers[currentClusterID]; ok {
+			if closing, ok := closers[currentRequestID]; ok {
 				edgeCosines := append(append([]float64(nil), cosines...), closing.Score)
 				if f.acceptsQuality(edgeCosines) {
 					participants := make([]entity.ChainDraftParticipant, len(path))
 					for position, vertex := range path {
 						participants[position] = entity.ChainDraftParticipant{
 							ClusterID: vertex.clusterID,
-							RequestID: vertex.representativeRequestID,
+							RequestID: vertex.requestID,
 						}
 					}
 
@@ -161,27 +167,35 @@ func (f *CycleFinder) Find(ctx context.Context, tx database.Tx, startRequestID i
 			return
 		}
 
-		for _, edge := range adjacency[currentClusterID] {
-			if edge.FromClusterID != currentClusterID ||
+		for _, edge := range adjacency[currentRequestID] {
+			if edge.FromRequestID != currentRequestID ||
 				edge.ToRequestID == startRequestID ||
-				visitedClusters[edge.ToClusterID] {
+				visitedClusters[edge.ToClusterID] ||
+				(edge.ToOwnerID != "" && visitedOwners[edge.ToOwnerID]) {
 				continue
 			}
 
 			visitedClusters[edge.ToClusterID] = true
+			if edge.ToOwnerID != "" {
+				visitedOwners[edge.ToOwnerID] = true
+			}
 			path = append(path, cycleVertex{
-				clusterID:               edge.ToClusterID,
-				representativeRequestID: edge.ToRequestID,
+				clusterID: edge.ToClusterID,
+				requestID: edge.ToRequestID,
+				ownerID:   edge.ToOwnerID,
 			})
 
-			dfs(edge.ToClusterID, append(cosines, edge.Score))
+			dfs(edge.ToRequestID, append(cosines, edge.Score))
 
 			path = path[:len(path)-1]
+			if edge.ToOwnerID != "" {
+				delete(visitedOwners, edge.ToOwnerID)
+			}
 			delete(visitedClusters, edge.ToClusterID)
 		}
 	}
 
-	dfs(startClusterID, nil)
+	dfs(startRequestID, nil)
 	return drafts, nil
 }
 
@@ -209,12 +223,14 @@ func (f *CycleFinder) acceptsQuality(scores []float64) bool {
 func (f *CycleFinder) indexClosers(
 	startRequestID int64,
 	edges []entity.CandidateEdge,
-) (map[int64]entity.CandidateEdge, int64) {
+) (map[int64]entity.CandidateEdge, int64, string) {
 	closers := make(map[int64]entity.CandidateEdge, len(edges))
 	var startClusterID int64
+	var startOwnerID string
 
 	for _, edge := range edges {
-		if edge.FromRequestID == edge.ToRequestID ||
+		if edge.ToRequestID != startRequestID ||
+			edge.FromRequestID == edge.ToRequestID ||
 			edge.FromClusterID == 0 ||
 			edge.ToClusterID == 0 ||
 			edge.FromClusterID == edge.ToClusterID ||
@@ -223,15 +239,16 @@ func (f *CycleFinder) indexClosers(
 		}
 		if startClusterID == 0 {
 			startClusterID = edge.ToClusterID
+			startOwnerID = edge.ToOwnerID
 		}
 		if edge.ToClusterID != startClusterID {
 			continue
 		}
-		if previous, exists := closers[edge.FromClusterID]; !exists || edge.Score > previous.Score {
-			closers[edge.FromClusterID] = edge
+		if previous, exists := closers[edge.FromRequestID]; !exists || edge.Score > previous.Score {
+			closers[edge.FromRequestID] = edge
 		}
 	}
-	return closers, startClusterID
+	return closers, startClusterID, startOwnerID
 }
 
 func (f *CycleFinder) loadLocalGraph(
@@ -241,7 +258,7 @@ func (f *CycleFinder) loadLocalGraph(
 ) (map[int64][]entity.CandidateEdge, error) {
 	adjacency := make(map[int64][]entity.CandidateEdge)
 	frontier := []int64{startRequestID}
-	expandedClusters := make(map[int64]bool)
+	expandedRequests := make(map[int64]bool)
 
 	// Четырёх раскрытий frontier достаточно для путей из пяти кластеров.
 	for level := 0; level < maxCycleLength-1 && len(frontier) > 0; level++ {
@@ -274,41 +291,39 @@ func (f *CycleFinder) loadLocalGraph(
 				continue
 			}
 
-			key := [2]int64{edge.FromClusterID, edge.ToClusterID}
+			key := [2]int64{edge.FromRequestID, edge.ToRequestID}
 			if previous, exists := bestEdges[key]; !exists || edge.Score > previous.Score {
 				bestEdges[key] = edge
 			}
 		}
 
-		nextByCluster := make(map[int64]entity.CandidateEdge, len(bestEdges))
+		nextRequests := make(map[int64]bool, len(bestEdges))
 		for _, edge := range bestEdges {
-			if expandedClusters[edge.FromClusterID] {
+			if expandedRequests[edge.FromRequestID] {
 				continue
 			}
-			adjacency[edge.FromClusterID] = append(adjacency[edge.FromClusterID], edge)
-			if edge.ToRequestID != startRequestID && !expandedClusters[edge.ToClusterID] {
-				if previous, exists := nextByCluster[edge.ToClusterID]; !exists || edge.Score > previous.Score {
-					nextByCluster[edge.ToClusterID] = edge
-				}
+			adjacency[edge.FromRequestID] = append(adjacency[edge.FromRequestID], edge)
+			if edge.ToRequestID != startRequestID && !expandedRequests[edge.ToRequestID] {
+				nextRequests[edge.ToRequestID] = true
 			}
 		}
 
-		for fromClusterID := range adjacency {
-			sort.SliceStable(adjacency[fromClusterID], func(i, j int) bool {
-				if adjacency[fromClusterID][i].Score != adjacency[fromClusterID][j].Score {
-					return adjacency[fromClusterID][i].Score > adjacency[fromClusterID][j].Score
+		for fromRequestID := range adjacency {
+			sort.SliceStable(adjacency[fromRequestID], func(i, j int) bool {
+				if adjacency[fromRequestID][i].Score != adjacency[fromRequestID][j].Score {
+					return adjacency[fromRequestID][i].Score > adjacency[fromRequestID][j].Score
 				}
-				return adjacency[fromClusterID][i].ToClusterID < adjacency[fromClusterID][j].ToClusterID
+				return adjacency[fromRequestID][i].ToRequestID < adjacency[fromRequestID][j].ToRequestID
 			})
 		}
 
-		nextFrontier := make([]int64, 0, len(nextByCluster))
-		for _, edge := range nextByCluster {
-			nextFrontier = append(nextFrontier, edge.ToRequestID)
+		nextFrontier := make([]int64, 0, len(nextRequests))
+		for requestID := range nextRequests {
+			nextFrontier = append(nextFrontier, requestID)
 		}
 		sort.Slice(nextFrontier, func(i, j int) bool { return nextFrontier[i] < nextFrontier[j] })
 		for _, edge := range bestEdges {
-			expandedClusters[edge.FromClusterID] = true
+			expandedRequests[edge.FromRequestID] = true
 		}
 		frontier = nextFrontier
 	}

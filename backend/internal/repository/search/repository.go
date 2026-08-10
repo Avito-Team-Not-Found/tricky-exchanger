@@ -137,20 +137,21 @@ const querySimilarOffers = `
 		  AND i.status = 'ACTIVE'
 		  AND eo.id <> $3
 		  AND COALESCE(i.category, '') IS NOT DISTINCT FROM COALESCE($4, '')
+		  AND COALESCE(eo.wanted_category, '') IS NOT DISTINCT FROM COALESCE($5, '')
 		  AND i.embedding IS NOT NULL
 		  AND eo.want_embedding IS NOT NULL
 		ORDER BY i.embedding <=> $1::vector
-		LIMIT $6
+		LIMIT $7
 	)
 	SELECT request_id, item_id, owner_id,
 	       LEAST(offer_score, want_score) AS score
 	FROM nearest_by_offer
-	WHERE offer_score >= $5
-	  AND want_score >= $5
+	WHERE offer_score >= $6
+	  AND want_score >= $6
 	  AND (
 		$4 <> ''
 		OR (offer_score + want_score) / 2 >=
-		   (offer_to_want_score + want_to_offer_score) / 2 + $7
+		   (offer_to_want_score + want_to_offer_score) / 2 + $8
 	  )
 	ORDER BY offer_score + want_score DESC, request_id
 `
@@ -168,8 +169,10 @@ const queryOutgoingFrontier = `
 	)
 	SELECT source.id AS from_request_id,
 	       source_member.cluster_id AS from_cluster_id,
+	       source.user_id::text AS from_owner_id,
 	       candidate.request_id AS to_request_id,
 	       candidate.cluster_id AS to_cluster_id,
+	       candidate.owner_id,
 	       candidate.score
 	FROM source_clusters AS source_cluster
 	JOIN cluster_members AS source_member ON source_member.cluster_id = source_cluster.cluster_id
@@ -178,6 +181,7 @@ const queryOutgoingFrontier = `
 	JOIN LATERAL (
 		SELECT target.id AS request_id,
 		       target_member.cluster_id,
+		       target.user_id::text AS owner_id,
 		       1 - (target_item.embedding <=> source.want_embedding) AS score
 		FROM exchange_offers AS target
 		JOIN items AS target_item ON target_item.id = target.offered_item_id
@@ -219,8 +223,10 @@ const queryIncomingToStart = `
 	)
 	SELECT candidate.id AS from_request_id,
 	       candidate_member.cluster_id AS from_cluster_id,
+	       candidate.user_id::text AS from_owner_id,
 	       target.request_id AS to_request_id,
 	       start_cluster.cluster_id AS to_cluster_id,
+	       target.owner_id,
 	       target.score
 	FROM start_cluster
 	JOIN exchange_offers AS candidate ON candidate.status = 'ACTIVE'
@@ -228,6 +234,7 @@ const queryIncomingToStart = `
 	JOIN cluster_members AS candidate_member ON candidate_member.request_id = candidate.id
 	JOIN LATERAL (
 		SELECT start_member.request_id,
+		       start.user_id::text AS owner_id,
 		       start_item.category,
 		       1 - (candidate.want_embedding <=> start_item.embedding) AS score
 		FROM cluster_members AS start_member
@@ -296,13 +303,23 @@ func (s *Search) FindSimilarOffers(
 	offer string,
 	want string,
 	category string,
+	wantedCategory string,
 	excludeOfferID int64,
 	threshold float64,
 	directionMargin float64,
 	k int,
 ) ([]entity.Candidate, error) {
 	rows, err := s.pool.Query(
-		ctx, querySimilarOffers, offer, want, excludeOfferID, category, threshold, k, directionMargin,
+		ctx,
+		querySimilarOffers,
+		offer,
+		want,
+		excludeOfferID,
+		category,
+		wantedCategory,
+		threshold,
+		k,
+		directionMargin,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("search similar offers: %w", err)
@@ -371,8 +388,10 @@ func collectCandidateEdges(rows pgx.Rows) ([]entity.CandidateEdge, error) {
 		if err := rows.Scan(
 			&edge.FromRequestID,
 			&edge.FromClusterID,
+			&edge.FromOwnerID,
 			&edge.ToRequestID,
 			&edge.ToClusterID,
+			&edge.ToOwnerID,
 			&edge.Score,
 		); err != nil {
 			return nil, fmt.Errorf("scan candidate edge: %w", err)

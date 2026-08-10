@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,6 +71,30 @@ func TestListRequiresAuthenticatedUser(t *testing.T) {
 
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestCreateRequiresWantedCategory(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := offerhandler.NewHandler(&handlerFakeService{})
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c.Set("userID", uuid.New())
+		c.Next()
+	})
+	engine.POST("/exchange-offers", handler.Create)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/exchange-offers",
+		strings.NewReader(`{"offeredItemId":1,"wantedDescription":"iPhone"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusUnprocessableEntity, recorder.Body.String())
 	}
 }
 

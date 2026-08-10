@@ -1,7 +1,7 @@
 import { Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainItemView } from '@features/chains';
+import { ChainItemView, useChainConfirm } from '@features/chains';
 
 import { receivesItem, useChain, useIsBestChain } from '@entities/chain';
 
@@ -19,6 +19,7 @@ export function ChainDetailPage() {
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
   const { isBest, isLoading: isBestLoading } = useIsBestChain(chain);
+  const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
   const isLoading = isChainLoading || isBestLoading;
 
   const received = chain ? receivesItem(chain) : [];
@@ -45,6 +46,8 @@ export function ChainDetailPage() {
             chain={chain}
             isBest={isBest}
             onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
+            onConfirm={() => openConfirm(chain.id)}
+            onProceed={() => navigate(`/chains/${chain.id}`)}
           />
         )}
       </div>

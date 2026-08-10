@@ -6,10 +6,15 @@ import type {
   ConfirmResult,
   DeclineResult,
   ExchangeOptions,
-  ReplacementOption,
-  SelectReplacementResult,
   VotePayload,
+  VoteValue,
 } from './model';
+
+// ответ POST /chains/{id}/think: явное «я подумаю» — голос thinking на сервере (SOFT-LOCK §3.2)
+export interface ThinkResult {
+  chainId: number;
+  vote: VoteValue;
+}
 
 export async function fetchChain(chainId: number): Promise<Chain> {
   const { data } = await apiClient.get<Chain>(`/chains/${chainId}`);
@@ -36,22 +41,6 @@ export async function withdrawVote(chainId: number, payload: VotePayload): Promi
   await apiClient.delete(`/chains/${chainId}/votes`, { params: payload });
 }
 
-export async function fetchReplacements(chainId: number): Promise<ReplacementOption[]> {
-  // ответ — плоский массив, не {data: [...]} (TZ §3.1)
-  const { data } = await apiClient.get<ReplacementOption[]>(`/chains/${chainId}/replacements`);
-  return data;
-}
-
-export async function selectReplacement(
-  chainId: number,
-  requestId: number,
-): Promise<SelectReplacementResult> {
-  const { data } = await apiClient.put<SelectReplacementResult>(`/chains/${chainId}/replacement`, {
-    requestId,
-  });
-  return data;
-}
-
 // повторное подтверждение участия в собранной цепочке (второй раунд, SOFT-LOCK §3.1.3)
 export async function confirmChain(chainId: number): Promise<ConfirmResult> {
   const { data } = await apiClient.post<ConfirmResult>(`/chains/${chainId}/confirm`);
@@ -61,5 +50,11 @@ export async function confirmChain(chainId: number): Promise<ConfirmResult> {
 // отказ от участия в собранной цепочке (второй раунд, SOFT-LOCK §3.2)
 export async function declineChain(chainId: number): Promise<DeclineResult> {
   const { data } = await apiClient.post<DeclineResult>(`/chains/${chainId}/decline`);
+  return data;
+}
+
+// явное «я подумаю»: решение откладывается, но голос уже не pending (второй раунд, SOFT-LOCK §3.2)
+export async function thinkChain(chainId: number): Promise<ThinkResult> {
+  const { data } = await apiClient.post<ThinkResult>(`/chains/${chainId}/think`);
   return data;
 }

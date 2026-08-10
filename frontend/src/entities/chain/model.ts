@@ -3,7 +3,8 @@ import type { StatusTone } from '@shared/ui';
 export type ChainStatus =
   'CANDIDATE' | 'PROPOSED' | 'FROZEN' | 'IN_PROGRESS' | 'COMPLETED' | 'BROKEN';
 
-export type VoteValue = 'pending' | 'approved' | 'rejected';
+// 'thinking' — явное «я подумаю» второго раунда (SOFT-LOCK §3.2), четвёртое значение VoteValue
+export type VoteValue = 'pending' | 'approved' | 'rejected' | 'thinking';
 
 export interface ChainParticipant {
   clusterId: number;
@@ -76,26 +77,6 @@ export interface ChainVoteResult {
   chainStatus: ChainStatus;
 }
 
-// Кандидат на замену выбывшего участника: заявка из того же псевдокластера, уже отфильтрованная
-// и отсортированная сервером (TZ §3.1). Список не собирается на клиенте ни из каких других источников.
-export interface ReplacementOption {
-  requestId: number;
-  offeredItemId: number;
-  title: string;
-  description: string;
-  wantedDescription: string;
-  // фото может отсутствовать вовсе (omitempty) — поле опционально, а не только null
-  imageUrl?: string | null;
-  reliability: number;
-  respondedAt: string;
-}
-
-export interface SelectReplacementResult {
-  chainId: number;
-  requestId: number;
-  status: ChainStatus;
-}
-
 // ответ POST /chains/{id}/confirm: статус цепочки после подтверждения участника (SOFT-LOCK §3.1.3)
 export interface ConfirmResult {
   chainId: number;
@@ -117,7 +98,7 @@ export interface ChainLink {
 }
 
 // статус отклика не передаётся одним лишь цветом — подпись текстом обязательна. Только первый
-// раунд: значения второго раунда в словаре не нужны (Partial не требует ветки)
+// раунд: thinking — значение второго раунда, в словаре ему места нет (Partial не требует ветки)
 export const VOTE_META: Partial<Record<VoteValue, ConfirmVoteMeta>> = {
   pending: { label: 'Ожидаем', tone: 'warning' },
   approved: { label: 'Отклик принят', tone: 'success' },
@@ -133,6 +114,7 @@ export interface ConfirmVoteMeta {
 
 export const CONFIRM_VOTE_META: Record<VoteValue, ConfirmVoteMeta> = {
   approved: { label: 'Согласился', tone: 'success' },
+  thinking: { label: 'Думает', tone: 'warning' },
   pending: { label: 'Ожидает ответа', tone: 'warning' },
   rejected: { label: 'Отказался', tone: 'error' },
 };
@@ -223,8 +205,8 @@ export function approvedVotes(chain: Chain): number {
 }
 
 // Собранной цепочке ещё нужно моё решение второго раунда (SOFT-LOCK §4): пока голос не approved —
-// кнопка «Требуются действия» остаётся. После подтверждения действий нет — остаётся статусная
-// строка «Вы подтвердили · ждём остальных»
+// ни pending, ни thinking — кнопка «Требуются действия» (или inline-«Да»/«Нет») остаётся.
+// После подтверждения действий нет — остаётся статусная строка «Вы подтвердили · ждём остальных»
 export function needsMyAction(chain: Chain): boolean {
   return chain.status === 'PROPOSED' && myConfirmVote(chain) !== 'approved';
 }

@@ -127,6 +127,25 @@
   z-index: 1;
 }
 
+// предупреждение «Примите решение…» перед inline-кнопками «Да»/«Нет» (SOFT-LOCK §5.2)
+.chain-card__hurry {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-warning);
+}
+
+// «Да»/«Нет» в ряд 50/50 на карточке в режиме «подумаю» (макет 4.6 — Я подумаю)
+.chain-card__inline {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.chain-card__inline .ant-btn {
+  flex: 1;
+}
+
 // подтвердил, ждём остальных: статусная строка вместо кнопки (SOFT-LOCK §5.3)
 .chain-card__confirmed {
   margin: 0;

@@ -24,7 +24,9 @@ type Candidate struct {
 type CandidateEdge struct {
 	FromRequestID int64
 	FromClusterID int64
+	FromOwnerID   string
 	ToRequestID   int64
 	ToClusterID   int64
+	ToOwnerID     string
 	Score         float64
 }

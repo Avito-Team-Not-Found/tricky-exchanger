@@ -30,6 +30,7 @@ func TestCreateTrimsAndPersistsActiveItem(t *testing.T) {
 	created, err := service.Create(context.Background(), ownerID, itemservice.CreateInput{
 		Title:       "  PlayStation 5  ",
 		Description: "  в отличном состоянии  ",
+		Category:    "Игры и приставки",
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)

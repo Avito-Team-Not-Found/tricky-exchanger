@@ -211,31 +211,29 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
         </Form.Item>
       </section>
 
-      <div className="request-form__actions">
+      <Button
+        className="request-form__submit"
+        type="primary"
+        htmlType="submit"
+        size="large"
+        block
+        loading={submitting}
+        disabled={!canSubmit}
+      >
+        {isEdit ? 'Сохранить запрос' : 'Создать запрос'}
+      </Button>
+      {isEdit && !readOnly ? (
         <Button
-          className="request-form__submit"
-          type="primary"
-          htmlType="submit"
-          size="large"
+          className="request-form__remove"
+          danger
           block
-          loading={submitting}
-          disabled={!canSubmit}
+          loading={removeRequest.isPending}
+          disabled={submitting}
+          onClick={confirmRemove}
         >
-          {isEdit ? 'Сохранить запрос' : 'Создать запрос'}
+          Удалить запрос
         </Button>
-        {isEdit && !readOnly ? (
-          <Button
-            className="request-form__remove"
-            danger
-            block
-            loading={removeRequest.isPending}
-            disabled={submitting}
-            onClick={confirmRemove}
-          >
-            Удалить запрос
-          </Button>
-        ) : null}
-      </div>
+      ) : null}
     </Form>
   );
 }

@@ -95,12 +95,16 @@ func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int6
 	var offerEmbedding *string
 	var wantEmbedding *string
 	var category string
+	var wantedCategory string
 	err := tx.QueryRow(ctx, `
-		SELECT i.embedding::text, eo.want_embedding::text, COALESCE(i.category, '')
+		SELECT i.embedding::text,
+		       eo.want_embedding::text,
+		       COALESCE(i.category, ''),
+		       COALESCE(eo.wanted_category, '')
 		FROM exchange_offers AS eo
 		JOIN items AS i ON i.id = eo.offered_item_id
 		WHERE eo.id = $1 AND eo.status = 'ACTIVE'
-	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &category)
+	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &category, &wantedCategory)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return clusterservice.OfferVectors{}, entity.ErrExchangeOfferNotFound
 	}
@@ -114,6 +118,7 @@ func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int6
 		OfferEmbedding: *offerEmbedding,
 		WantEmbedding:  *wantEmbedding,
 		Category:       category,
+		WantedCategory: wantedCategory,
 	}, nil
 }
 
@@ -170,8 +175,9 @@ func (r *Postgres) FindClusterForCandidates(
 			  AND member_item.status = 'ACTIVE'
 			  AND (
 				COALESCE(member_item.category, '') IS DISTINCT FROM $4
-				OR 1 - (member_item.embedding <=> $2::vector) < $5
-				OR 1 - (member_offer.want_embedding <=> $3::vector) < $5
+				OR COALESCE(member_offer.wanted_category, '') IS DISTINCT FROM $5
+				OR 1 - (member_item.embedding <=> $2::vector) < $6
+				OR 1 - (member_offer.want_embedding <=> $3::vector) < $6
 				OR (
 					$4 = ''
 					AND (
@@ -180,7 +186,7 @@ func (r *Postgres) FindClusterForCandidates(
 					) / 2 < (
 						(1 - (member_item.embedding <=> $3::vector)) +
 						(1 - (member_offer.want_embedding <=> $2::vector))
-					) / 2 + $6
+					) / 2 + $7
 				)
 			  )
 		)
@@ -196,6 +202,7 @@ func (r *Postgres) FindClusterForCandidates(
 		vectors.OfferEmbedding,
 		vectors.WantEmbedding,
 		vectors.Category,
+		vectors.WantedCategory,
 		threshold,
 		directionMargin,
 	).Scan(&clusterID)
