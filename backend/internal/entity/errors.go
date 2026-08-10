@@ -35,6 +35,7 @@ var (
 	ErrChainNotCandidate  = errors.New("chain no longer accepts candidate responses")
 
 	ErrChainNotProposed         = errors.New("цепочка больше не принимает подтверждения")
+	ErrChainConfirmationExpired = errors.New("срок подтверждения цепочки истёк")
 	ErrChainNotFrozen           = errors.New("цепочка ещё не заморожена")
 	ErrRequestInTwoFrozenChains = errors.New("запрос не может состоять в двух замороженных цепочках")
 	ErrChainNotReadyForHandoff  = errors.New("цепочка не готова к передаче товаров")

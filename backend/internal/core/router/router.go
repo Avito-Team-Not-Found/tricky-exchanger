@@ -92,7 +92,7 @@ func New(
 		}
 
 		// Временный callback для локального MVP. Перед внешним запуском
-		// обязательно защитить подписью исходящего события Avito.
+		// на будущее защитим сейчас сделано для понимания как будет происходить подтверждение отправки
 		integrations := api.Group("/integrations")
 		integrations.POST("/avito/handoffs", chainH.Handoff)
 

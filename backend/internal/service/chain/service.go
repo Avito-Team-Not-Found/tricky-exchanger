@@ -3,6 +3,7 @@ package chain
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
@@ -11,8 +12,9 @@ import (
 )
 
 const (
-	minClusters = 2
-	maxClusters = 5
+	minClusters     = 2
+	maxClusters     = 5
+	confirmationTTL = 24 * time.Hour
 )
 
 // Service сохраняет найденные варианты цепочек и выдаёт доступные пользователю цепочки.
@@ -110,7 +112,27 @@ func (s *Service) Get(ctx context.Context, userID string, chainID int64) (entity
 	if s.repository == nil {
 		return entity.Chain{}, entity.ErrChainRepositoryNotConfigured
 	}
+	if err := s.expireProposalSilently(ctx, chainID); err != nil {
+		return entity.Chain{}, err
+	}
 	return s.repository.Get(ctx, userID, chainID)
+}
+
+func (s *Service) expireProposalSilently(ctx context.Context, chainID int64) error {
+	if s.transactions == nil {
+		return entity.ErrChainRepositoryNotConfigured
+	}
+	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		_, err := s.repository.ExpireProposalIfDue(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Vote records an idempotent response and atomically proposes a chain when the
@@ -172,7 +194,7 @@ func (s *Service) Vote(ctx context.Context, userID string, chainID int64, input 
 		if len(cycle) == 0 {
 			return s.refreshScore(ctx, tx, chainID, entity.ChainStatusCandidate, ranker.EventRespond)
 		}
-		if err := s.repository.Propose(ctx, tx, chainID, cycle); err != nil {
+		if err := s.repository.Propose(ctx, tx, chainID, cycle, time.Now().Add(confirmationTTL)); err != nil {
 			return err
 		}
 		result.ChainStatus = entity.ChainStatusProposed
@@ -406,10 +428,19 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 	}
 
 	var resultStatus entity.ChainStatus
+	var proposalExpired bool
 	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
 		status, length, err := s.repository.LockForVote(ctx, tx, chainID)
 		if err != nil {
 			return err
+		}
+		expired, err := s.repository.ExpireProposalIfDue(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if expired {
+			proposalExpired = true
+			return nil
 		}
 
 		// Идемпотентный возврат: если цепочка уже заморожена — успех.
@@ -467,6 +498,9 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 	if err != nil {
 		return entity.ChainStatus(""), err
 	}
+	if proposalExpired {
+		return entity.ChainStatus(""), entity.ErrChainConfirmationExpired
+	}
 	return resultStatus, nil
 }
 
@@ -479,10 +513,19 @@ func (s *Service) Think(ctx context.Context, userID string, chainID int64) error
 	if chainID <= 0 {
 		return entity.ErrInvalidVoteTarget
 	}
-	return s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+	var proposalExpired bool
+	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
 		status, _, err := s.repository.LockForVote(ctx, tx, chainID)
 		if err != nil {
 			return err
+		}
+		expired, err := s.repository.ExpireProposalIfDue(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if expired {
+			proposalExpired = true
+			return nil
 		}
 		if status != entity.ChainStatusProposed {
 			return entity.ErrChainNotProposed
@@ -493,6 +536,13 @@ func (s *Service) Think(ctx context.Context, userID string, chainID int64) error
 		}
 		return s.repository.MarkParticipantThinking(ctx, tx, chainID, requestID, targetID)
 	})
+	if err != nil {
+		return err
+	}
+	if proposalExpired {
+		return entity.ErrChainConfirmationExpired
+	}
+	return nil
 }
 
 // Decline releases the participant's request. Fast replacement is allowed only
@@ -507,10 +557,19 @@ func (s *Service) Decline(ctx context.Context, userID string, chainID int64) (bo
 	}
 	var replacementAvailable bool
 	resultStatus := entity.ChainStatusCandidate
+	var proposalExpired bool
 	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
 		status, chainLength, err := s.repository.LockForVote(ctx, tx, chainID)
 		if err != nil {
 			return err
+		}
+		expired, err := s.repository.ExpireProposalIfDue(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if expired {
+			proposalExpired = true
+			return nil
 		}
 		if status != entity.ChainStatusProposed {
 			return entity.ErrChainNotProposed
@@ -530,6 +589,9 @@ func (s *Service) Decline(ctx context.Context, userID string, chainID int64) (bo
 		}
 		return nil
 	})
+	if proposalExpired && err == nil {
+		err = entity.ErrChainConfirmationExpired
+	}
 	return replacementAvailable, resultStatus, err
 }
 
@@ -539,6 +601,9 @@ func (s *Service) ListReplacements(ctx context.Context, userID string, chainID i
 	}
 	if chainID <= 0 {
 		return nil, entity.ErrInvalidVoteTarget
+	}
+	if err := s.expireProposalSilently(ctx, chainID); err != nil {
+		return nil, err
 	}
 	return s.repository.ListReplacementOptions(ctx, userID, chainID)
 }
@@ -550,16 +615,32 @@ func (s *Service) SelectReplacement(ctx context.Context, userID string, chainID,
 	if chainID <= 0 || replacementRequestID <= 0 {
 		return entity.ErrInvalidVoteTarget
 	}
-	return s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+	var proposalExpired bool
+	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
 		status, _, err := s.repository.LockForVote(ctx, tx, chainID)
 		if err != nil {
 			return err
+		}
+		expired, err := s.repository.ExpireProposalIfDue(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if expired {
+			proposalExpired = true
+			return nil
 		}
 		if status != entity.ChainStatusProposed {
 			return entity.ErrChainNotProposed
 		}
 		return s.repository.SelectReplacement(ctx, tx, userID, chainID, replacementRequestID)
 	})
+	if err != nil {
+		return err
+	}
+	if proposalExpired {
+		return entity.ErrChainConfirmationExpired
+	}
+	return nil
 }
 
 // Handoff records an external confirmation that the item from requestID was

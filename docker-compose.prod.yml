@@ -1,0 +1,191 @@
+# Production stack: pull pre-built images from GHCR (see .github/workflows/deploy.yml).
+# On the server: copy this file + Caddyfile + backend/migrations + .env
+# (see .env.deploy.example), then compose pull / migrate / up.
+#
+# Required env: see .env.deploy.example
+# (DB_*, JWT_SECRET, MinIO, SMTP, DOCKER_IMAGE_PREFIX, IMAGE_TAG).
+#
+# image: — то, что тянет CI с GHCR.
+# build: — запасной путь для ручной сборки на VPS (compose build),
+#          в автодеплое не используется (там только pull).
+
+services:
+  db:
+    container_name: menyayka-db
+    image: pgvector/pgvector:0.8.6-pg18
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks:
+      - menyayka-network
+
+  migrate:
+    container_name: menyayka-migrate
+    image: migrate/migrate:v4.18.3
+    volumes:
+      - ./backend/migrations:/migrations:ro
+    command:
+      [
+        "-path=/migrations",
+        "-database=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable",
+        "up",
+      ]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - menyayka-network
+    restart: "no"
+
+  minio:
+    container_name: menyayka-minio
+    image: minio/minio:RELEASE.2025-04-08T15-41-24Z
+    environment:
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    volumes:
+      - minio_data:/home/shared
+    command: minio server /home/shared --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - menyayka-network
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-04-08T15-39-49Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET:-items}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ACCESS_KEY} $${MINIO_SECRET_KEY} &&
+      mc mb --ignore-existing local/$${MINIO_BUCKET}
+      "
+    restart: on-failure
+    networks:
+      - menyayka-network
+
+  tei:
+    container_name: menyayka-tei
+    image: ${TEI_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:cpu-1.9}
+    command: ["--model-id", "intfloat/multilingual-e5-small", "--huggingface-hub-cache", "/data"]
+    volumes:
+      - teidata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/health >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+    networks:
+      - menyayka-network
+
+  backend:
+    container_name: menyayka-backend
+    image: ${DOCKER_IMAGE_PREFIX}/backend:${IMAGE_TAG}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      tei:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      - SERVER_PORT=8080
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_ENCRYPTION=${SMTP_ENCRYPTION:-tls}
+      - TEI_URL=http://tei:80
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-tei}
+      - VECTOR_DIM=${VECTOR_DIM:-384}
+      - EMBEDDING_TIMEOUT=${EMBEDDING_TIMEOUT:-5s}
+      - MAX_INPUT_LENGTH=${MAX_INPUT_LENGTH:-1500}
+      - MATCHING_TOPK=${MATCHING_TOPK:-20}
+      - MATCHING_THRESHOLD=${MATCHING_THRESHOLD:-0.5}
+      - CLUSTER_TOPK=${CLUSTER_TOPK:-50}
+      - CLUSTER_SIMILARITY_THRESHOLD=${CLUSTER_SIMILARITY_THRESHOLD:-0.9}
+      - VECTOR_METRIC=${VECTOR_METRIC:-cosine}
+      - CLUSTER_DIRECTION_MARGIN=${CLUSTER_DIRECTION_MARGIN:-0.05}
+      - CYCLE_MIN_AVERAGE_SCORE=${CYCLE_MIN_AVERAGE_SCORE:-0.5}
+      - CYCLE_MAX_SCORE_GAP=${CYCLE_MAX_SCORE_GAP:-1}
+      - CYCLE_OUTGOING_K=${CYCLE_OUTGOING_K:-20}
+      - CYCLE_MAX_DRAFTS=${CYCLE_MAX_DRAFTS:-10}
+      - MINIO_ENDPOINT=minio:9000
+      # Браузер: https://menyayka.tech/s3/items/... (Caddy handle_path /s3)
+      - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT:-menyayka.tech/s3}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET:-items}
+      - MINIO_USE_SSL=false
+      - MINIO_PUBLIC_USE_SSL=true
+    restart: unless-stopped
+    networks:
+      - menyayka-network
+
+  frontend:
+    container_name: menyayka-frontend
+    image: ${DOCKER_IMAGE_PREFIX}/frontend:${IMAGE_TAG}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+    restart: unless-stopped
+    networks:
+      - menyayka-network
+
+  caddy:
+    container_name: menyayka-caddy
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    networks:
+      - menyayka-network
+
+volumes:
+  pgdata:
+  teidata:
+  minio_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  menyayka-network:
+    driver: bridge

@@ -194,6 +194,10 @@ func (h *Handler) Get(c *gin.Context) {
 			api.SendError(c, http.StatusNotFound, err.Error())
 			return
 		}
+		if errors.Is(err, entity.ErrChainConfirmationExpired) {
+			api.SendError(c, http.StatusGone, err.Error())
+			return
+		}
 		api.SendError(c, http.StatusInternalServerError, "internal server error")
 		return
 	}
@@ -416,6 +420,8 @@ func (h *Handler) Confirm(c *gin.Context) {
 			api.SendError(c, http.StatusConflict, err.Error())
 		case errors.Is(err, entity.ErrChainVoteForbidden):
 			api.SendError(c, http.StatusForbidden, err.Error())
+		case errors.Is(err, entity.ErrChainConfirmationExpired):
+			api.SendError(c, http.StatusGone, err.Error())
 		default:
 			log.Printf("confirm chain failed: %v", err)
 			api.SendError(c, http.StatusInternalServerError, "internal server error")

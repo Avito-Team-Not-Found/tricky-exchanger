@@ -482,6 +482,7 @@ func (r *Postgres) Propose(
 	tx database.Tx,
 	chainID int64,
 	requestIDsByPosition []int64,
+	confirmationDeadline time.Time,
 ) error {
 	for position, requestID := range requestIDsByPosition {
 		result, err := tx.Exec(ctx, `
@@ -501,11 +502,12 @@ func (r *Postgres) Propose(
 	result, err := tx.Exec(ctx, `
 		UPDATE chains
 		SET status = 'PROPOSED',
+		    freeze_deadline_at = $2,
 		    version = version + 1,
 		    updated_at = NOW()
 		WHERE id = $1
 		  AND status = 'CANDIDATE'
-	`, chainID)
+	`, chainID, confirmationDeadline)
 	if err != nil {
 		return fmt.Errorf("propose chain: %w", err)
 	}
@@ -532,6 +534,49 @@ func (r *Postgres) Propose(
 	}
 
 	return nil
+}
+
+// ExpireProposalIfDue лениво снимает просроченную мягкую блокировку.
+// Условие на дедлайн не даёт нескольким одновременным запросам откатить цепочку повторно.
+func (r *Postgres) ExpireProposalIfDue(ctx context.Context, tx database.Tx, chainID int64) (bool, error) {
+	result, err := tx.Exec(ctx, `
+		UPDATE chains
+		SET status = 'CANDIDATE',
+		    freeze_deadline_at = NULL,
+		    version = version + 1,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND status = 'PROPOSED'
+		  AND freeze_deadline_at <= NOW()
+	`, chainID)
+	if err != nil {
+		return false, fmt.Errorf("expire proposed chain: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return false, nil
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers AS eo
+		SET status = 'ACTIVE', updated_at = NOW()
+		WHERE eo.id IN (
+			SELECT cp.request_id
+			FROM chain_participants AS cp
+			WHERE cp.chain_id = $1
+		)
+		  AND eo.status IN ('IN_PROPOSAL', 'LOCKED')
+	`, chainID); err != nil {
+		return false, fmt.Errorf("release expired proposal requests: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE votes
+		SET vote = 'pending', voted_at = NOW()
+		WHERE chain_id = $1
+		  AND vote IN ('approved', 'thinking')
+	`, chainID); err != nil {
+		return false, fmt.Errorf("reset expired proposal confirmations: %w", err)
+	}
+	return true, nil
 }
 
 func (r *Postgres) loadVisibleChains(ctx context.Context, userID string, chainID, offerID int64) ([]entity.Chain, error) {

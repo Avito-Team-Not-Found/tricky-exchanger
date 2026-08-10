@@ -102,6 +102,8 @@ type fakeRepository struct {
 	edges                   []entity.VoteEdge
 	existingVote            entity.ChainVote
 	proposed                []int64
+	proposalDeadline        time.Time
+	proposalExpired         bool
 	upsertCalls             int
 	deleteCalls             int
 	markInProposal          int
@@ -187,9 +189,14 @@ func (r *fakeRepository) ListPendingVoteEdges(_ context.Context, _ database.Tx, 
 	return r.edges, nil
 }
 
-func (r *fakeRepository) Propose(_ context.Context, _ database.Tx, _ int64, requestIDs []int64) error {
+func (r *fakeRepository) Propose(_ context.Context, _ database.Tx, _ int64, requestIDs []int64, deadline time.Time) error {
 	r.proposed = append([]int64(nil), requestIDs...)
+	r.proposalDeadline = deadline
 	return nil
+}
+
+func (r *fakeRepository) ExpireProposalIfDue(_ context.Context, _ database.Tx, _ int64) (bool, error) {
+	return r.proposalExpired, nil
 }
 
 func (r *fakeRepository) MarkRequestInProposal(_ context.Context, _ database.Tx, _ int64) error {
@@ -536,6 +543,22 @@ func TestConfirmRejectsCandidateChain(t *testing.T) {
 	}
 }
 
+func TestConfirmExpiresOverdueProposal(t *testing.T) {
+	repository := &fakeRepository{
+		status: entity.ChainStatusProposed, length: 2,
+		proposalExpired: true,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	_, err := service.Confirm(context.Background(), "user-1", 7)
+	if !errors.Is(err, entity.ErrChainConfirmationExpired) {
+		t.Fatalf("Confirm() error = %v, want %v", err, entity.ErrChainConfirmationExpired)
+	}
+	if repository.lockRequestCalls != 0 {
+		t.Fatal("expired proposal must not accept a confirmation")
+	}
+}
+
 func TestConfirmFrozenRetryRequiresParticipant(t *testing.T) {
 	repository := &fakeRepository{
 		status:  entity.ChainStatusFrozen,
@@ -684,6 +707,9 @@ func TestVoteProposesOnlyClosedPendingCycle(t *testing.T) {
 		if repository.proposed[i] != want[i] {
 			t.Fatalf("proposed cycle = %v, want %v", repository.proposed, want)
 		}
+	}
+	if repository.proposalDeadline.Before(time.Now()) {
+		t.Fatal("proposed chain must have a future confirmation deadline")
 	}
 }
 

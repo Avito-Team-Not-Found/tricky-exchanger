@@ -1,0 +1,66 @@
+// Общие блоки экранов сделки (макет 4.9): hero-шапка состояния и низ с кнопками действий.
+// Каждый экран сделки держит одинаковый низ (кнопка действия + «Посмотреть детали цепочки»).
+.deal-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) 0;
+  text-align: center;
+}
+
+.deal-hero__icon {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.2;
+}
+
+.deal-hero__title {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+.deal-hero__text {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-body);
+  color: var(--color-text-secondary);
+}
+
+// «Все товары доставлены» — зелёный блок из макета 4.9: заливка тона 12% и радиус как у остальных
+// плашек сделки, чтобы успех читался и без иконки/текста (DESIGN.md §1.8)
+.deal-hero--success {
+  padding: var(--spacing-lg);
+  background: color-mix(in srgb, var(--color-status-success) 12%, transparent);
+  border-radius: var(--radius-md);
+}
+
+// низ экрана сделки: margin-top: auto прижимает кнопки к низу, когда контент не заполняет высоту
+.deal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: auto;
+}
+
+.deal-actions__hint {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-heading);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+// на десктопе не растягиваем экран сделки на всю высоту вьюпорта: иначе margin-top: auto прижимал
+// бы кнопки к низу очень высокого окна, а между контентом и кнопками оставалась бы пустота
+// (макеты 4.9 только мобильные)
+@media (min-width: 1024px) {
+  .deal-ship,
+  .deal-transit,
+  .deal-done {
+    flex: 0 0 auto;
+  }
+}

@@ -50,6 +50,9 @@ type Config struct {
 	MinIOSecretKey      string
 	MinIOBucket         string
 	MinIOUseSSL         bool
+	// MinIOPublicUseSSL — схема публичных image_url (через Caddy HTTPS).
+	// Если env не задан, совпадает с MinIOUseSSL.
+	MinIOPublicUseSSL bool
 
 	// Matching* — настройки векторного поиска кандидатов (задача SCRUM-24).
 	// pgvector даёт только Top-/пороговых семантических кандидатов; поиск циклов и
@@ -116,6 +119,7 @@ func Load() (*Config, error) {
 		MinIOSecretKey:      envOrDefault("MINIO_SECRET_KEY", ""),
 		MinIOBucket:         envOrDefault("MINIO_BUCKET", "items"),
 		MinIOUseSSL:         envOrDefault("MINIO_USE_SSL", "false") == "true",
+		MinIOPublicUseSSL:   envOrDefault("MINIO_PUBLIC_USE_SSL", envOrDefault("MINIO_USE_SSL", "false")) == "true",
 	}, nil
 }
 
