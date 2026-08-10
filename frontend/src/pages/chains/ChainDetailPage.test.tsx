@@ -119,9 +119,43 @@ describe('ChainDetailPage', () => {
     renderWithProviders(<ChainDetailPage />);
 
     expect(
-      screen.getByText('🔒 Товар жёстко заблокирован: изменить или удалить заявку нельзя'),
+      screen.getByText('Товар жёстко заблокирован: изменить или удалить заявку нельзя'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
+  });
+
+  it('shows the consent badge with the approved count on a proposed chain', () => {
+    const chain = makeChain({ status: 'PROPOSED' });
+    chain.participants[0].vote = 'pending';
+    chain.participants[1].vote = 'approved';
+    mockedUseChain.mockReturnValue(queryOk(chain));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('1/2 согласий')).toBeInTheDocument();
+  });
+
+  it('shows M/M consents on a frozen chain', () => {
+    const chain = makeChain({ status: 'FROZEN' });
+    chain.participants[0].vote = 'approved';
+    chain.participants[1].vote = 'approved';
+    mockedUseChain.mockReturnValue(queryOk(chain));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('2/2 согласий')).toBeInTheDocument();
+  });
+
+  it('replaces the action with the confirmed line once my vote is approved', () => {
+    const chain = makeChain({ status: 'PROPOSED' });
+    chain.participants[0].vote = 'pending';
+    chain.participants[1].vote = 'approved';
+    mockedUseChain.mockReturnValue(queryOk(chain));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('Вы подтвердили · ждём остальных')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 

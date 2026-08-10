@@ -4,7 +4,14 @@ import { useNavigate, useParams } from 'react-router';
 
 import { useChainConfirm, useChainVote, ChainCard } from '@features/chains';
 
-import { isAssembled, isHardLocked, useExchangeOptions } from '@entities/chain';
+import {
+  approvedVotes,
+  isAssembled,
+  isHardLocked,
+  useChains,
+  useExchangeOptions,
+  type ExchangeOptions,
+} from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems } from '@entities/item';
 
@@ -24,7 +31,7 @@ export function ChainListPage() {
   const optionsQuery = useExchangeOptions(requestId);
   const itemsQuery = useItems();
   const { confirmVote, isVoting } = useChainVote();
-  const { openConfirm } = useChainConfirm();
+  const { openConfirm, confirmNow, openDecline, isConfirming } = useChainConfirm();
 
   const request = requestQuery.data;
   const options = optionsQuery.data ?? [];
@@ -33,6 +40,22 @@ export function ChainListPage() {
   const hasAssembled = options.some((entry) => isAssembled(entry.status));
   // деталь заявки не отдаёт снимок отдаваемого товара — берём его из кеша товаров
   const offeredItem = itemsQuery.data?.items.find((item) => item.id === request?.offeredItemId);
+
+  // exchange-options не отдаёт число согласий второго раунда: для PROPOSED-цепочек оно
+  // считается из participants[].vote детали (GET /chains/{id}) — см. approvedCountFor
+  const proposedChainIds = options
+    .filter((entry) => entry.status === 'PROPOSED')
+    .map((entry) => entry.chainId);
+  const proposedQueries = useChains(proposedChainIds);
+  const approvedByChain = new Map<number, number>();
+  proposedQueries.forEach((query, index) => {
+    if (query.data) approvedByChain.set(proposedChainIds[index], approvedVotes(query.data));
+  });
+
+  function approvedCountFor(entry: ExchangeOptions): number | undefined {
+    if (isHardLocked(entry.status)) return entry.length;
+    return approvedByChain.get(entry.chainId);
+  }
 
   if (requestQuery.isLoading || optionsQuery.isLoading || itemsQuery.isLoading) {
     return (
@@ -112,9 +135,13 @@ export function ChainListPage() {
                 options={entry}
                 option={option}
                 isVoting={isVoting}
+                isConfirming={isConfirming}
                 locked={hasAssembled && !isAssembled(entry.status)}
+                approvedCount={approvedCountFor(entry)}
                 onOpen={() => navigate(`/chains/${entry.chainId}`)}
                 onConfirm={(chainId) => openConfirm(chainId)}
+                onConfirmNow={(chainId) => confirmNow(chainId)}
+                onDecline={(chainId) => openDecline(chainId)}
                 onVote={(active) =>
                   confirmVote(
                     {

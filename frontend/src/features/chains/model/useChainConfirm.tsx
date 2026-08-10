@@ -7,14 +7,17 @@ import { isAxiosError } from 'axios';
 import {
   confirmChain,
   declineChain,
+  thinkChain,
   type ChainStatus,
   type ConfirmResult,
   type DeclineResult,
+  type ThinkResult,
 } from '@entities/chain';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
 import { FreezeDecisionModal } from '../ui/FreezeDecisionModal';
+import { ThinkDecisionModal } from '../ui/ThinkDecisionModal';
 
 // Отказ не всегда ломает цепочку: сервер откатывает её в CANDIDATE, оставляет PROPOSED
 // с вакансией под замену или распускает совсем (SOFT-LOCK §3.2) — исход виден только из ответа
@@ -45,6 +48,15 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     onError: (error) => handleError(error, 'Не удалось подтвердить участие'),
   });
 
+  const thinkMutation = useMutation<ThinkResult, Error, number>({
+    mutationFn: (chainId) => thinkChain(chainId),
+    // тоста нет: результат виден на карточке (§5.2), предвосхищать серверный голос нельзя
+    onSuccess: () => {
+      invalidate();
+    },
+    onError: (error) => handleError(error, 'Не удалось отложить решение'),
+  });
+
   const declineMutation = useMutation<DeclineResult, Error, number>({
     mutationFn: (chainId) => declineChain(chainId),
     onSuccess: (data) => {
@@ -71,6 +83,14 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
 
   function handleError(error: Error, fallback: string) {
     invalidate();
+    // дедлайн истёк: цепочку откатил сервер, подтверждать нечего — предупреждение и перезагрузка,
+    // карточка перерисуется в статус, который вернул бэкенд (SOFT-LOCK §10.1)
+    if (isAxiosError(error) && error.response?.status === 410) {
+      closeDecision();
+      message.warning('Время на ответ истекло, цепочка распалась');
+      refetch?.();
+      return;
+    }
     message.error(
       getErrorMessage(
         error,
@@ -120,6 +140,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
             await mutation.mutateAsync(chainId);
           }}
           onDecline={() => openDecline(chainId)}
+          onThink={() => openThink(chainId)}
           onClose={closeDecision}
         />
       ),
@@ -127,5 +148,32 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     });
   }
 
-  return { openConfirm };
+  // «Пока вы думаете» (SOFT-LOCK §6.2): отдельная модалка поверх первой; «Вернуться» возвращает
+  // к «Готовность к сделке», а не просто закрывает её — решение по цепочке ещё не принято
+  function openThink(chainId: number) {
+    closeDecision();
+    decision.current = modal.confirm({
+      icon: null,
+      centered: true,
+      width: 280,
+      content: (
+        <ThinkDecisionModal
+          onConfirm={async () => {
+            await thinkMutation.mutateAsync(chainId);
+          }}
+          onBack={() => openConfirm(chainId)}
+          onClose={closeDecision}
+        />
+      ),
+      footer: null,
+    });
+  }
+
+  return {
+    openConfirm,
+    // «Да» на карточке в режиме «подумаю» подтверждает без повторной модалки (SOFT-LOCK §5.2)
+    confirmNow: (chainId: number) => mutation.mutate(chainId),
+    openDecline,
+    isConfirming: mutation.isPending,
+  };
 }

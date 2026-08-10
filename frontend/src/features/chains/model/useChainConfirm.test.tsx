@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   confirmChain,
   declineChain,
+  thinkChain,
   type ConfirmResult,
   type DeclineResult,
 } from '@entities/chain';
@@ -20,11 +21,12 @@ import { useChainConfirm } from './useChainConfirm';
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, confirmChain: vi.fn(), declineChain: vi.fn() };
+  return { ...actual, confirmChain: vi.fn(), declineChain: vi.fn(), thinkChain: vi.fn() };
 });
 
 const mockedConfirm = vi.mocked(confirmChain);
 const mockedDecline = vi.mocked(declineChain);
+const mockedThink = vi.mocked(thinkChain);
 
 let queryClient = createTestQueryClient();
 
@@ -179,7 +181,7 @@ describe('useChainConfirm', () => {
     const { result } = renderHook(() => useChainConfirm(), { wrapper });
 
     act(() => result.current.openConfirm(1));
-    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click(await screen.findByRole('button', { name: 'Отказ' }));
 
     expect(
       await screen.findByText(
@@ -195,7 +197,7 @@ describe('useChainConfirm', () => {
     const { result } = renderHook(() => useChainConfirm(), { wrapper });
 
     act(() => result.current.openConfirm(1));
-    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click(await screen.findByRole('button', { name: 'Отказ' }));
     await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
 
     await waitFor(() => expect(mockedDecline).toHaveBeenCalledWith(1));
@@ -206,7 +208,7 @@ describe('useChainConfirm', () => {
     const { result } = renderHook(() => useChainConfirm(), { wrapper });
 
     act(() => result.current.openConfirm(1));
-    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click(await screen.findByRole('button', { name: 'Отказ' }));
     await user.click((await screen.findAllByRole('button', { name: 'Отмена' })).at(-1)!);
 
     expect(mockedDecline).not.toHaveBeenCalled();
@@ -226,7 +228,7 @@ describe('useChainConfirm', () => {
       const { result, unmount } = renderHook(() => useChainConfirm(), { wrapper });
 
       act(() => result.current.openConfirm(1));
-      await user.click(await screen.findByRole('button', { name: 'Нет' }));
+      await user.click(await screen.findByRole('button', { name: 'Отказ' }));
       await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
 
       expect(await screen.findByText(expected)).toBeInTheDocument();
@@ -242,7 +244,7 @@ describe('useChainConfirm', () => {
     const { result } = renderHook(() => useChainConfirm(vi.fn(), onNotFound), { wrapper });
 
     act(() => result.current.openConfirm(1));
-    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click(await screen.findByRole('button', { name: 'Отказ' }));
     await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
 
     await waitFor(() => expect(onNotFound).toHaveBeenCalled());
@@ -255,10 +257,95 @@ describe('useChainConfirm', () => {
     const { result } = renderHook(() => useChainConfirm(refetch), { wrapper });
 
     act(() => result.current.openConfirm(1));
-    await user.click(await screen.findByRole('button', { name: 'Нет' }));
+    await user.click(await screen.findByRole('button', { name: 'Отказ' }));
     await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
 
     expect(await screen.findByText('Не удалось отказаться от участия')).toBeInTheDocument();
     expect(refetch).toHaveBeenCalled();
+  });
+
+  it('opens the think modal from the decision modal and posts /think on «Да»', async () => {
+    mockedThink.mockResolvedValue({ chainId: 1, vote: 'thinking' });
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Я подумаю' }));
+
+    expect(await screen.findByText('Вы уверены?')).toBeInTheDocument();
+    expect(
+      screen.getByText('Пока вы думаете, ваше место в цепочке могут занять другие участники.'),
+    ).toBeInTheDocument();
+
+    // предыдущая модалка ещё в DOM на zoom-leave — берём «Да» из последней (новой) модалки
+    await user.click((await screen.findAllByRole('button', { name: 'Да' })).at(-1)!);
+    await waitFor(() => expect(mockedThink).toHaveBeenCalledWith(1));
+  });
+
+  it('returns to the decision modal from the think modal without a request', async () => {
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Я подумаю' }));
+    await user.click(await screen.findByRole('button', { name: 'Вернуться' }));
+
+    // старая и переоткрытая модалки на мгновение обе в DOM (jsdom не доигрывает zoom-leave)
+    expect((await screen.findAllByText('Все участники найдены')).length).toBeGreaterThan(0);
+    expect(mockedThink).not.toHaveBeenCalled();
+  });
+
+  it('posts /think directly from the think modal and stays closed on success', async () => {
+    mockedThink.mockResolvedValue({ chainId: 1, vote: 'thinking' });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Я подумаю' }));
+    await user.click((await screen.findAllByRole('button', { name: 'Да' })).at(-1)!);
+
+    await waitFor(() => {
+      const keys = invalidate.mock.calls.map(([options]) => options?.queryKey);
+      expect(keys).toContainEqual(['chains']);
+      expect(keys).toContainEqual(['exchange-options']);
+    });
+  });
+
+  it('does not turn on the thinking mode when think fails with a conflict', async () => {
+    const refetch = vi.fn();
+    mockedThink.mockRejectedValue(axiosError(409));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(refetch), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Я подумаю' }));
+    await user.click((await screen.findAllByRole('button', { name: 'Да' })).at(-1)!);
+
+    expect(await screen.findByText('Цепочка изменилась: обновите варианты')).toBeInTheDocument();
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('treats an expired deadline as a warning and refreshes the data', async () => {
+    const refetch = vi.fn();
+    mockedConfirm.mockRejectedValue(axiosError(410));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(refetch), { wrapper });
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Да' }));
+
+    expect(
+      await screen.findByText('Время на ответ истекло, цепочка распалась'),
+    ).toBeInTheDocument();
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('confirms directly without the modal on the inline «Да»', async () => {
+    mockedConfirm.mockResolvedValue(PROPOSED);
+    const { result } = renderHook(() => useChainConfirm(), { wrapper });
+
+    act(() => result.current.confirmNow(1));
+    await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
   });
 });

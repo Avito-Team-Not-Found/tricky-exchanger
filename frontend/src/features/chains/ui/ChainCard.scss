@@ -1,4 +1,5 @@
 .chain-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
@@ -108,11 +109,55 @@
   white-space: nowrap;
 }
 
-// в карточке ровно одно действие, поэтому кнопка всегда во всю ширину (макет 4.6)
+// в карточке ровно одно действие, поэтому кнопка всегда во всю ширину (макет 4.6);
+// ширину даёт block-проп кнопки, flex-basis в колонке обнулил бы её высоту
 .chain-card__actions {
   display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 
-.chain-card__actions .chain-card__action {
+// бейдж согласий на замороженной карточке — пилюля в правом верхнем углу (SOFT-LOCK §5.4);
+// z-index поднимает её над фото: оба элемента positioned, и без него фото, идущее в DOM позже,
+// перекрыло бы бейдж
+.chain-card__consent {
+  position: absolute;
+  top: var(--spacing-md);
+  right: var(--spacing-md);
+  z-index: 1;
+}
+
+// предупреждение «Примите решение…» перед inline-кнопками «Да»/«Нет» (SOFT-LOCK §5.2)
+.chain-card__hurry {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-warning);
+}
+
+// «Да»/«Нет» в ряд 50/50 на карточке в режиме «подумаю» (макет 4.6 — Я подумаю)
+.chain-card__inline {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.chain-card__inline .ant-btn {
   flex: 1;
+}
+
+// подтвердил, ждём остальных: статусная строка вместо кнопки (SOFT-LOCK §5.3)
+.chain-card__confirmed {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-success);
+  white-space: nowrap;
 }

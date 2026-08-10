@@ -72,6 +72,27 @@
   white-space: nowrap;
 }
 
+// пилюля «Цепочка собрана» + бейдж согласий в правом краю мета-строки (SOFT-LOCK §7)
+.chain-item__badges {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+// подтвердил, ждём остальных: статусная строка вместо второй кнопки (SOFT-LOCK §7)
+.chain-item__confirmed {
+  margin: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-success);
+  white-space: nowrap;
+}
+
 // плашка жёсткой блокировки — Caption text-secondary сразу под мета-строкой (SOFT-LOCK §7)
 .chain-item__lock {
   margin: 0;

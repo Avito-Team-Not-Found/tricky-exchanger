@@ -1,10 +1,16 @@
 export {
+  approvedVotes,
   chainLinks,
+  CONFIRM_VOTE_META,
+  confirmVoteAt,
   HARD_LOCK_MESSAGE,
   isAssembled,
   isHardLocked,
+  myConfirmVote,
   myParticipant,
+  needsMyAction,
   receivesItem,
+  VACANCY_META,
   VOTE_META,
   type Chain,
   type ChainLink,
@@ -12,6 +18,7 @@ export {
   type ChainStatus,
   type ChainVoteResult,
   type ConfirmResult,
+  type ConfirmVoteMeta,
   type DeclineResult,
   type ExchangeOption,
   type ExchangeOptions,
@@ -24,7 +31,9 @@ export {
   declineChain,
   fetchChain,
   fetchExchangeOptions,
+  thinkChain,
   voteForRequest,
   withdrawVote,
 } from './api';
-export { useChain, useExchangeOptions } from './hooks';
+export { chainQueryOptions, useChain, useChains, useExchangeOptions } from './hooks';
+export type { ThinkResult } from './api';

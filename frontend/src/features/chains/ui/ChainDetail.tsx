@@ -1,18 +1,27 @@
 import { theme, Button } from 'antd';
 
 import {
+  approvedVotes,
   chainLinks,
+  CONFIRM_VOTE_META,
+  confirmVoteAt,
   isAssembled,
   isHardLocked,
+  myConfirmVote,
   myParticipant,
+  needsMyAction,
   participantAlias,
+  VACANCY_META,
   VOTE_META,
   type Chain,
   type ChainParticipant,
   type ChainLink,
+  type VoteValue,
 } from '@entities/chain';
 
 import { Avatar } from '@shared/ui';
+
+import { ConsentBadge } from './ConsentBadge';
 
 import './ChainDetail.scss';
 
@@ -28,7 +37,8 @@ interface ChainDetailProps {
 // карточкой товара, несколько — свёрнутым списком «N вариантов» (§3.1); отклик доступен только
 // на кандидатах позиции receivesFromPosition — за них голосует текущий пользователь, и только
 // пока цепочка ещё CANDIDATE (у собранной отклики уже не меняются, PROJECT.md §4.5). На PROPOSED
-// и дальше над списком — пилюля «Цепочка собрана», внизу — действие второго раунда (SOFT-LOCK §8).
+// и дальше над списком — пилюля «Цепочка собрана» и бейдж «N/M согласий», в шапке каждой
+// строки — пилюля голоса второго раунда, внизу — действие (SOFT-LOCK §8).
 export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: ChainDetailProps) {
   const { token } = theme.useToken();
   const links = chainLinks(chain);
@@ -36,10 +46,18 @@ export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: C
   const canVote = chain.status === 'CANDIDATE';
   const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);
+  // голос привязан к цели голосования, а не к голосующему: решение участника позиции p лежит
+  // в vote позиции (p + 1) % length (SOFT-LOCK §3.3); на CANDIDATE сдвига нет — там это отклики
+  const showConfirmPills = chain.status !== 'CANDIDATE';
 
   return (
     <div className="chain-detail">
-      {assembled ? <p className="chain-detail__ready">Цепочка собрана</p> : null}
+      {assembled ? (
+        <div className="chain-detail__head">
+          <p className="chain-detail__ready">Цепочка собрана</p>
+          <ConsentBadge count={approvedVotes(chain)} total={chain.length} />
+        </div>
+      ) : null}
       <ul className="chain-detail__participants">
         {links.map((link) => (
           <ChainLinkRow
@@ -48,12 +66,13 @@ export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: C
             isMine={me?.position === link.position}
             isReceiveLink={link.position === chain.receivesFromPosition}
             canVote={canVote}
+            confirmVote={showConfirmPills ? confirmVoteAt(chain, link.position) : undefined}
             isVoting={isVoting}
             onVote={onVote}
           />
         ))}
       </ul>
-      {chain.status === 'PROPOSED' ? (
+      {needsMyAction(chain) ? (
         <Button
           className="chain-detail__action"
           type="primary"
@@ -63,6 +82,10 @@ export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: C
         >
           Требуются действия
         </Button>
+      ) : chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
+        <p className="chain-detail__confirmed" role="status">
+          Вы подтвердили · ждём остальных
+        </p>
       ) : hardLocked ? (
         <Button
           className="chain-detail__action"
@@ -87,6 +110,7 @@ interface ChainLinkRowProps {
   isMine: boolean;
   isReceiveLink: boolean;
   canVote: boolean;
+  confirmVote?: VoteValue | null;
   isVoting: boolean;
   onVote: (candidate: ChainParticipant, active: boolean) => void;
 }
@@ -96,6 +120,7 @@ function ChainLinkRow({
   isMine,
   isReceiveLink,
   canVote,
+  confirmVote,
   isVoting,
   onVote,
 }: ChainLinkRowProps) {
@@ -113,6 +138,7 @@ function ChainLinkRow({
           emoji={isMine ? undefined : alias.emoji}
         />
         <span className="chain-detail__participant-name">{label}</span>
+        {confirmVote !== undefined ? <ConfirmVotePill vote={confirmVote} /> : null}
       </div>
 
       {candidates.length === 1 ? (
@@ -148,6 +174,16 @@ function ChainLinkRow({
   );
 }
 
+// пилюля голоса второго раунда в шапке строки звена (SOFT-LOCK §8); null — вакансия после отказа
+function ConfirmVotePill({ vote }: { vote: VoteValue | null }) {
+  const meta = vote === null ? VACANCY_META : CONFIRM_VOTE_META[vote];
+  return (
+    <span className={`chain-detail__confirm chain-detail__confirm--${meta.tone}`}>
+      {meta.label}
+    </span>
+  );
+}
+
 interface ChainLinkItemProps {
   participant: ChainParticipant;
   isReceiveLink: boolean;
@@ -158,7 +194,8 @@ interface ChainLinkItemProps {
 
 // Одна запись кандидата в звене: миниатюра, товар и «что хочет взамен», статус отклика и действие.
 // Действие видно только на кандидатной цепочке; отозвать можно лишь pending-отклик —
-// у принятого/отклонённого отклика кнопки нет (DELETE их не снимает, PROJECT.md §4.5).
+// у принятого/отклонённого отклика кнопки нет (DELETE их не снимает, PROJECT.md §4.5). Пилюли
+// первого раунда на собранной цепочке не показываются — там у vote другой смысл (SOFT-LOCK §8).
 function ChainLinkItem({
   participant,
   isReceiveLink,
@@ -166,7 +203,7 @@ function ChainLinkItem({
   isVoting,
   onVote,
 }: ChainLinkItemProps) {
-  const voteMeta = participant.vote ? VOTE_META[participant.vote] : null;
+  const voteMeta = canVote && participant.vote ? VOTE_META[participant.vote] : null;
   const active = !participant.vote;
   const showAction = isReceiveLink && canVote && (active || participant.vote === 'pending');
 
@@ -186,7 +223,6 @@ function ChainLinkItem({
       </div>
       {voteMeta ? (
         <span className={`chain-detail__response chain-detail__response--${voteMeta.tone}`}>
-          {voteMeta.glyph ? `${voteMeta.glyph} ` : ''}
           {voteMeta.label}
         </span>
       ) : null}

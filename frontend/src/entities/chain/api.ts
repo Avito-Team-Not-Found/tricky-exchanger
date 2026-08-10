@@ -7,7 +7,14 @@ import type {
   DeclineResult,
   ExchangeOptions,
   VotePayload,
+  VoteValue,
 } from './model';
+
+// ответ POST /chains/{id}/think: явное «я подумаю» — голос thinking на сервере (SOFT-LOCK §3.2)
+export interface ThinkResult {
+  chainId: number;
+  vote: VoteValue;
+}
 
 export async function fetchChain(chainId: number): Promise<Chain> {
   const { data } = await apiClient.get<Chain>(`/chains/${chainId}`);
@@ -43,5 +50,11 @@ export async function confirmChain(chainId: number): Promise<ConfirmResult> {
 // отказ от участия в собранной цепочке (второй раунд, SOFT-LOCK §3.2)
 export async function declineChain(chainId: number): Promise<DeclineResult> {
   const { data } = await apiClient.post<DeclineResult>(`/chains/${chainId}/decline`);
+  return data;
+}
+
+// явное «я подумаю»: решение откладывается, но голос уже не pending (второй раунд, SOFT-LOCK §3.2)
+export async function thinkChain(chainId: number): Promise<ThinkResult> {
+  const { data } = await apiClient.post<ThinkResult>(`/chains/${chainId}/think`);
   return data;
 }

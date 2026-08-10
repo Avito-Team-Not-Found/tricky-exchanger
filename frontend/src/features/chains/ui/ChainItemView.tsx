@@ -1,14 +1,19 @@
 import { theme, Button } from 'antd';
 
 import {
+  approvedVotes,
   HARD_LOCK_MESSAGE,
   isAssembled,
   isHardLocked,
+  myConfirmVote,
+  needsMyAction,
   receivesItem,
   type Chain,
 } from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
+
+import { ConsentBadge } from './ConsentBadge';
 
 import './ChainItemView.scss';
 
@@ -22,7 +27,8 @@ interface ChainItemViewProps {
 // Экран цепочки (макет 4.7): товар, который пользователь получит в обмене, его описание
 // и переход к схеме участников (макет 4.8). Пока цепочка CANDIDATE, получаемое звено — пул
 // кандидатов: товар однозначен только когда кандидат один (собранная цепочка, §3.1).
-// На PROPOSED внизу — «Требуются действия», на FROZEN/IN_PROGRESS — плашка блокировки
+// На PROPOSED внизу — «Требуются действия» (или «Вы подтвердили · ждём остальных», если голос
+// уже поставлен), на FROZEN/IN_PROGRESS — плашка блокировки, бейдж «M/M согласий»
 // и «Перейти к сделке» (SOFT-LOCK §7).
 export function ChainItemView({
   chain,
@@ -60,7 +66,10 @@ export function ChainItemView({
             {chain.length} {pluralize(chain.length)} в цепочке
           </span>
           {assembled ? (
-            <span className="chain-item__ready">Цепочка собрана</span>
+            <span className="chain-item__badges">
+              <span className="chain-item__ready">Цепочка собрана</span>
+              <ConsentBadge count={approvedVotes(chain)} total={chain.length} />
+            </span>
           ) : (
             <ProbabilityBadge score={chain.score} />
           )}
@@ -80,7 +89,7 @@ export function ChainItemView({
         <Button className="chain-item__details" size="large" block onClick={onOpenParticipants}>
           Посмотреть всю цепочку
         </Button>
-        {chain.status === 'PROPOSED' ? (
+        {needsMyAction(chain) ? (
           <Button
             className="chain-item__action"
             type="primary"
@@ -90,6 +99,10 @@ export function ChainItemView({
           >
             Требуются действия
           </Button>
+        ) : chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
+          <p className="chain-item__confirmed" role="status">
+            Вы подтвердили · ждём остальных
+          </p>
         ) : hardLocked ? (
           <Button
             className="chain-item__action"
