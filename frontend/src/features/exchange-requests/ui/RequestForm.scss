@@ -1,6 +1,8 @@
 .request-form {
   display: flex;
   flex-direction: column;
+  /* форма растягивается на высоту экрана, чтобы блок кнопок прижался к низу */
+  flex: 1;
 }
 
 // ритм формы задают отступы antd: 24px под каждым полем — как в форме товара и формах авторизации.
@@ -148,8 +150,26 @@
   max-height: 200px;
 }
 
+// кнопки действий прижаты к нижнему краю экрана (DESIGN.md §4.4); на мобильных
+// нижний таб-бар занимает 60px + safe-area, поэтому кнопки липнут над ним
+.request-form__actions {
+  position: sticky;
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  /* auto-отступ прижимает блок к низу формы на коротких экранах, sticky держит его при прокрутке */
+  margin-top: auto;
+  padding-top: var(--spacing-sm);
+  background: var(--color-bg-page);
+}
+
+// на десктопе таб-бара нет — кнопки липнут к самому низу экрана
+@media (min-width: 1024px) {
+  .request-form__actions {
+    bottom: 0;
+  }
+}
+
 .request-form__submit {
-  margin-top: var(--spacing-sm);
+  margin-top: 0;
 }
 
 // заметный отступ между «Сохранить запрос» и «Удалить запрос» — как в форме товара
