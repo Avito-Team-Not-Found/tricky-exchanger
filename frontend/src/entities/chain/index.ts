@@ -1,6 +1,5 @@
 export {
   approvedVotes,
-  bestChainId,
   chainLinks,
   CONFIRM_VOTE_META,
   confirmVoteAt,
@@ -44,6 +43,5 @@ export {
   useChain,
   useChains,
   useExchangeOptions,
-  useIsBestChain,
   useReplacements,
 } from './hooks';

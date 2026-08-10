@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ChainItemView, useChainConfirm } from '@features/chains';
 
-import { receivesItem, useChain, useIsBestChain, useReplacements } from '@entities/chain';
+import { receivesItem, useChain, useReplacements } from '@entities/chain';
 
 import { ErrorState } from '@shared/ui';
 
@@ -18,14 +18,13 @@ export function ChainDetailPage() {
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
-  const { isBest, isLoading: isBestLoading } = useIsBestChain(chain);
   const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
   // баннер входа в замену — единственный корректный признак вакансии (TZ §2): в теле цепочки
   // отличий после отказа не видно
   const { data: replacements = [], isLoading: isReplacementsLoading } = useReplacements(chainId, {
     enabled: chain?.status === 'PROPOSED',
   });
-  const isLoading = isChainLoading || isBestLoading || isReplacementsLoading;
+  const isLoading = isChainLoading || isReplacementsLoading;
   // статус проверяем и здесь, а не только через enabled: выключенный запрос сохраняет прошлые
   // данные и не перезапрашивается, поэтому после ухода цепочки из PROPOSED (замену подтвердили)
   // непустой пул из кеша иначе продолжил бы звать выбирать замену на уже собранной цепочке
@@ -66,7 +65,6 @@ export function ChainDetailPage() {
             ) : null}
             <ChainItemView
               chain={chain}
-              isBest={isBest}
               onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
               onConfirm={() => openConfirm(chain.id)}
               onProceed={() => navigate(`/chains/${chain.id}`)}

@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   confirmChain,
   useChain,
-  useIsBestChain,
   useReplacements,
   type Chain,
   type ReplacementOption,
@@ -24,14 +23,12 @@ vi.mock('@entities/chain', async (importOriginal) => {
   return {
     ...actual,
     useChain: vi.fn(),
-    useIsBestChain: vi.fn(),
     confirmChain: vi.fn(),
     useReplacements: vi.fn(),
   };
 });
 
 const mockedUseChain = vi.mocked(useChain);
-const mockedUseIsBestChain = vi.mocked(useIsBestChain);
 const mockedConfirm = vi.mocked(confirmChain);
 const mockedUseReplacements = vi.mocked(useReplacements);
 
@@ -87,37 +84,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: false });
     mockReplacements([]);
-  });
-
-  it('shows the best-chain badge when the chain leads the options of its request', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-    mockedUseIsBestChain.mockReturnValue({ isBest: true, isLoading: false });
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.getByText('Лучшая цепочка для этого товара')).toBeInTheDocument();
-  });
-
-  // иначе плашка появлялась бы после отрисовки и сдвигала вниз уже прочитанное содержимое
-  it('keeps the skeleton until the best-chain check resolves', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: true });
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(
-      screen.queryByRole('heading', { name: 'Зеркальный фотоаппарат Canon', level: 2 }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('hides the best-chain badge for a chain that does not lead', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.queryByText('Лучшая цепочка для этого товара')).not.toBeInTheDocument();
   });
 
   it('shows the received item with its description', () => {
