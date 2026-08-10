@@ -1,0 +1,41 @@
+.deal-pickup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+}
+
+.deal-pickup__icon {
+  flex-shrink: 0;
+  font-size: var(--font-size-h2);
+  line-height: 1;
+}
+
+.deal-pickup__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.deal-pickup__title {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+.deal-pickup__address {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+.deal-pickup__change {
+  flex-shrink: 0;
+}

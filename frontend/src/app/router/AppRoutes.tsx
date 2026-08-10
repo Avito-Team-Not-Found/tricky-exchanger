@@ -8,6 +8,8 @@ import {
   ChainListPage,
   ChainParticipantsPage,
   ChangePasswordPage,
+  DealPage,
+  DealStatusPage,
   ExchangeRequestsPage,
   ForgotPasswordPage,
   ItemFormPage,
@@ -62,6 +64,8 @@ export function AppRoutes() {
         <Route path="/exchange-requests/:requestId" element={<ChainListPage />} />
         <Route path="/chains/:chainId" element={<ChainDetailPage />} />
         <Route path="/chains/:chainId/participants" element={<ChainParticipantsPage />} />
+        <Route path="/chains/:chainId/deal" element={<DealPage />} />
+        <Route path="/chains/:chainId/deal/:mode" element={<DealStatusPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
       {/* смена пароля — отдельный экран без таб-бара/бокового меню (DESIGN.md §4.8) */}

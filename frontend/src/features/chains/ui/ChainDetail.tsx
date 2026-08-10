@@ -7,8 +7,8 @@ import {
   chainLinks,
   CONFIRM_VOTE_META,
   confirmVoteAt,
+  hasDeal,
   isAssembled,
-  isHardLocked,
   myConfirmVote,
   myParticipant,
   needsMyAction,
@@ -23,14 +23,12 @@ import {
 
 import { Avatar } from '@shared/ui';
 
-import { BestChainBadge } from './BestChainBadge';
 import { ConsentBadge } from './ConsentBadge';
 
 import './ChainDetail.scss';
 
 interface ChainDetailProps {
   chain: Chain;
-  isBest: boolean;
   isVoting: boolean;
   onVote: (candidate: ChainParticipant, active: boolean) => void;
   onConfirm: () => void;
@@ -45,7 +43,6 @@ interface ChainDetailProps {
 // строки — пилюля голоса второго раунда, внизу — действие (SOFT-LOCK §8).
 export function ChainDetail({
   chain,
-  isBest,
   isVoting,
   onVote,
   onConfirm,
@@ -56,7 +53,6 @@ export function ChainDetail({
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
   const assembled = isAssembled(chain.status);
-  const hardLocked = isHardLocked(chain.status);
   // голос привязан к цели голосования, а не к голосующему: решение участника позиции p лежит
   // в vote позиции (p + 1) % length (SOFT-LOCK §3.3); на CANDIDATE сдвига нет — там это отклики
   const showConfirmPills = chain.status !== 'CANDIDATE';
@@ -89,13 +85,6 @@ export function ChainDetail({
 
   return (
     <div className="chain-detail">
-      {isBest ? (
-        // обёртка обязательна: прямые дети .chain-detail-page__body растягиваются на всю
-        // ширину колонки, а плашка должна остаться по ширине текста
-        <div className="chain-detail__best">
-          <BestChainBadge />
-        </div>
-      ) : null}
       {assembled ? (
         <div className="chain-detail__head">
           <p className="chain-detail__ready">Цепочка собрана</p>
@@ -144,7 +133,7 @@ export function ChainDetail({
         <p className="chain-detail__confirmed" role="status">
           Вы подтвердили · ждём остальных
         </p>
-      ) : hardLocked ? (
+      ) : hasDeal(chain.status) ? (
         <Button
           className="chain-detail__action"
           size="large"

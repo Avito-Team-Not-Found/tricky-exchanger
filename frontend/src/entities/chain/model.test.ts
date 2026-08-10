@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   approvedVotes,
-  bestChainId,
   chainLinks,
   CONFIRM_VOTE_META,
   confirmVoteAt,
@@ -11,10 +10,10 @@ import {
   myConfirmVote,
   myParticipant,
   needsMyAction,
+  needsShipment,
   receivesItem,
   type Chain,
   type ChainParticipant,
-  type ExchangeOptions,
 } from './model';
 
 const MYSELF: ChainParticipant = {
@@ -26,6 +25,7 @@ const MYSELF: ChainParticipant = {
   offeredItemTitle: 'Велосипед',
   offeredItemDescription: '',
   wantedDescription: 'Хочу фотоаппарат',
+  requestStatus: 'ACTIVE',
 };
 
 const OTHER: ChainParticipant = {
@@ -38,6 +38,7 @@ const OTHER: ChainParticipant = {
   offeredItemDescription: 'Полный комплект',
   wantedDescription: 'Хочу велосипед',
   imageUrl: 'http://localhost:9000/photos/camera.jpg',
+  requestStatus: 'ACTIVE',
 };
 
 function buildChain(participants = [MYSELF, OTHER], overrides: Partial<Chain> = {}): Chain {
@@ -98,32 +99,6 @@ describe('chainLinks', () => {
   });
 });
 
-describe('bestChainId', () => {
-  function buildOptions(chainId: number, score: number): ExchangeOptions {
-    return { chainId, score } as ExchangeOptions;
-  }
-
-  it('picks the chain with the highest score', () => {
-    const options = [buildOptions(1, 0.55), buildOptions(2, 0.91), buildOptions(3, 0.72)];
-    expect(bestChainId(options)).toBe(2);
-  });
-
-  // отметка не должна прыгать между равными цепочками при каждом рефетче
-  it('resolves a score tie by the lower chain id', () => {
-    const options = [buildOptions(7, 0.8), buildOptions(3, 0.8)];
-    expect(bestChainId(options)).toBe(3);
-  });
-
-  // у заявки чаще всего ровно одна цепочка — она и есть лучший вариант для этого товара
-  it('marks the only option as the best one', () => {
-    expect(bestChainId([buildOptions(1, 0.91)])).toBe(1);
-  });
-
-  it('marks nothing when there are no options', () => {
-    expect(bestChainId([])).toBeNull();
-  });
-});
-
 describe('receivesItem', () => {
   it('returns the candidate pool of the receiving position', () => {
     const chain = buildChain();
@@ -161,6 +136,17 @@ describe('isAssembled', () => {
     expect(isAssembled('CANDIDATE')).toBe(false);
     expect(isAssembled('BROKEN')).toBe(false);
     expect(isAssembled('COMPLETED')).toBe(false);
+  });
+});
+
+describe('needsShipment', () => {
+  // до первого handoff цепочка не покидает FROZEN — это строго «пора отправлять свой товар»
+  it('requires shipment only on a frozen chain', () => {
+    expect(needsShipment('FROZEN')).toBe(true);
+    expect(needsShipment('IN_PROGRESS')).toBe(false);
+    expect(needsShipment('COMPLETED')).toBe(false);
+    expect(needsShipment('CANDIDATE')).toBe(false);
+    expect(needsShipment('PROPOSED')).toBe(false);
   });
 });
 

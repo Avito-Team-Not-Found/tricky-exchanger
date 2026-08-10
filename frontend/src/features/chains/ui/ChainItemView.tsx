@@ -3,24 +3,24 @@ import { theme, Button } from 'antd';
 import {
   approvedVotes,
   HARD_LOCK_MESSAGE,
+  hasDeal,
   isAssembled,
   isHardLocked,
   myConfirmVote,
   needsMyAction,
+  needsShipment,
   receivesItem,
   type Chain,
 } from '@entities/chain';
 
 import { ProbabilityBadge } from '@shared/ui';
 
-import { BestChainBadge } from './BestChainBadge';
 import { ConsentBadge } from './ConsentBadge';
 
 import './ChainItemView.scss';
 
 interface ChainItemViewProps {
   chain: Chain;
-  isBest: boolean;
   onOpenParticipants: () => void;
   onConfirm: () => void;
   onProceed: () => void;
@@ -30,11 +30,11 @@ interface ChainItemViewProps {
 // и переход к схеме участников (макет 4.8). Пока цепочка CANDIDATE, получаемое звено — пул
 // кандидатов: товар однозначен только когда кандидат один (собранная цепочка, §3.1).
 // На PROPOSED внизу — «Требуются действия» (или «Вы подтвердили · ждём остальных», если голос
-// уже поставлен), на FROZEN/IN_PROGRESS — плашка блокировки, бейдж «M/M согласий»
-// и «Перейти к сделке» (SOFT-LOCK §7).
+// уже поставлен), на FROZEN — «Требуется действие» (пора отправлять), на IN_PROGRESS/COMPLETED —
+// плашка блокировки (кроме COMPLETED), бейдж «M/M согласий» и «Перейти к сделке» (SOFT-LOCK §7,
+// DEAL-PLAN.md §5.1).
 export function ChainItemView({
   chain,
-  isBest,
   onOpenParticipants,
   onConfirm,
   onProceed,
@@ -44,6 +44,7 @@ export function ChainItemView({
   const single = received.length === 1 ? received[0] : null;
   const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);
+  const shipRequired = needsShipment(chain.status);
 
   return (
     <div className="chain-item">
@@ -60,7 +61,6 @@ export function ChainItemView({
       </div>
 
       <div className="chain-item__head">
-        {isBest ? <BestChainBadge /> : null}
         <h2 className="chain-item__title">
           {single?.offeredItemTitle ??
             `Получаете: ${received.length} ${pluralizeVariants(received.length)}`}
@@ -107,7 +107,17 @@ export function ChainItemView({
           <p className="chain-item__confirmed" role="status">
             Вы подтвердили · ждём остальных
           </p>
-        ) : hardLocked ? (
+        ) : shipRequired ? (
+          <Button
+            className="chain-item__action"
+            type="primary"
+            size="large"
+            block
+            onClick={onProceed}
+          >
+            Требуется действие
+          </Button>
+        ) : hasDeal(chain.status) ? (
           <Button
             className="chain-item__action"
             size="large"

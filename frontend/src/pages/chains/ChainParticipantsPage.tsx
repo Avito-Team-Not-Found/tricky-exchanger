@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ChainDetail, useChainConfirm, useChainVote } from '@features/chains';
 
-import { useChain, useIsBestChain } from '@entities/chain';
+import { useChain } from '@entities/chain';
 
 import { ErrorState } from '@shared/ui';
 
@@ -17,11 +17,9 @@ export function ChainParticipantsPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
-  const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
+  const { data: chain, isLoading, isError, refetch } = useChain(chainId);
   const { confirmVote, isVoting } = useChainVote(refetch);
   const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
-  const { isBest, isLoading: isBestLoading } = useIsBestChain(chain);
-  const isLoading = isChainLoading || isBestLoading;
 
   return (
     <div className="chain-detail-page">
@@ -35,7 +33,6 @@ export function ChainParticipantsPage() {
         ) : (
           <ChainDetail
             chain={chain}
-            isBest={isBest}
             isVoting={isVoting}
             onVote={(candidate, active) =>
               confirmVote(
@@ -48,7 +45,7 @@ export function ChainParticipantsPage() {
               )
             }
             onConfirm={() => openConfirm(chain.id)}
-            onProceed={() => navigate(`/chains/${chain.id}`)}
+            onProceed={() => navigate(`/chains/${chain.id}/deal`)}
           />
         )}
       </div>
