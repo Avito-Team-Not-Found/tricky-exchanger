@@ -130,6 +130,14 @@ type fakeRepository struct {
 	declinedRequestID       int64
 	fastReplacementEligible bool
 	selectedRequestID       int64
+	handoffStatus           entity.RequestStatus
+	receiptStatus           entity.RequestStatus
+	receiptErr              error
+	handoffCalls            int
+	startCalls              int
+	doneCalls               int
+	allDone                 bool
+	completeCalls           int
 }
 
 func (r *fakeRepository) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
@@ -278,6 +286,43 @@ func (r *fakeRepository) LoadRequestLiveChainStatus(_ context.Context, _ databas
 
 func (r *fakeRepository) FindParticipantEdge(_ context.Context, _ database.Tx, _ int64, _ string) (int64, int64, error) {
 	return r.edgeRequestID, r.edgeTargetID, r.edgeErr
+}
+
+func (r *fakeRepository) MarkRequestInProgress(_ context.Context, _ database.Tx, _, _ int64) (entity.RequestStatus, error) {
+	r.handoffCalls++
+	if r.handoffStatus == "" {
+		return entity.RequestStatusInProgress, nil
+	}
+	return r.handoffStatus, nil
+}
+
+func (r *fakeRepository) StartChain(_ context.Context, _ database.Tx, _ int64) error {
+	r.startCalls++
+	return nil
+}
+
+func (r *fakeRepository) FindReceiptRequestStatus(_ context.Context, _ database.Tx, _, _ int64, _ string) (entity.RequestStatus, error) {
+	if r.receiptErr != nil {
+		return "", r.receiptErr
+	}
+	if r.receiptStatus == "" {
+		return entity.RequestStatusInProgress, nil
+	}
+	return r.receiptStatus, nil
+}
+
+func (r *fakeRepository) MarkRequestDone(_ context.Context, _ database.Tx, _ int64) error {
+	r.doneCalls++
+	return nil
+}
+
+func (r *fakeRepository) AllChainRequestsDone(_ context.Context, _ database.Tx, _ int64) (bool, error) {
+	return r.allDone, nil
+}
+
+func (r *fakeRepository) CompleteChain(_ context.Context, _ database.Tx, _ int64) error {
+	r.completeCalls++
+	return nil
 }
 
 type fakeTransactionManager struct{}
@@ -501,6 +546,74 @@ func TestConfirmFrozenRetryIsIdempotentForParticipant(t *testing.T) {
 	}
 	if repository.lockRequestCalls != 0 || repository.freezeCalled {
 		t.Fatal("idempotent retry must not repeat locking or freezing")
+	}
+}
+
+func TestHandoffStartsFrozenChainForPinnedRequest(t *testing.T) {
+	repository := &fakeRepository{status: entity.ChainStatusFrozen}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	result, err := service.Handoff(context.Background(), 7, 10)
+	if err != nil {
+		t.Fatalf("Handoff() error = %v", err)
+	}
+	if result.Status != entity.ChainStatusInProgress {
+		t.Fatalf("status = %s, want %s", result.Status, entity.ChainStatusInProgress)
+	}
+	if repository.handoffCalls != 1 || repository.startCalls != 1 {
+		t.Fatalf("handoff calls = %d, start calls = %d", repository.handoffCalls, repository.startCalls)
+	}
+}
+
+func TestConfirmReceiptRequiresHandoff(t *testing.T) {
+	repository := &fakeRepository{
+		status:        entity.ChainStatusInProgress,
+		receiptStatus: entity.RequestStatusLocked,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	_, err := service.ConfirmReceipt(context.Background(), "recipient", 7, 10)
+	if !errors.Is(err, entity.ErrChainHandoffPending) {
+		t.Fatalf("ConfirmReceipt() error = %v, want %v", err, entity.ErrChainHandoffPending)
+	}
+	if repository.doneCalls != 0 {
+		t.Fatal("receipt before handoff must not complete request")
+	}
+}
+
+func TestConfirmReceiptCompletesChainAfterEveryRequestDone(t *testing.T) {
+	repository := &fakeRepository{
+		status:        entity.ChainStatusInProgress,
+		receiptStatus: entity.RequestStatusInProgress,
+		allDone:       true,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	result, err := service.ConfirmReceipt(context.Background(), "recipient", 7, 10)
+	if err != nil {
+		t.Fatalf("ConfirmReceipt() error = %v", err)
+	}
+	if result.Status != entity.ChainStatusCompleted {
+		t.Fatalf("status = %s, want %s", result.Status, entity.ChainStatusCompleted)
+	}
+	if repository.doneCalls != 1 || repository.completeCalls != 1 {
+		t.Fatalf("done calls = %d, complete calls = %d", repository.doneCalls, repository.completeCalls)
+	}
+}
+
+func TestConfirmReceiptIsIdempotentAfterCompletion(t *testing.T) {
+	repository := &fakeRepository{
+		status:        entity.ChainStatusCompleted,
+		receiptStatus: entity.RequestStatusDone,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	result, err := service.ConfirmReceipt(context.Background(), "recipient", 7, 10)
+	if err != nil {
+		t.Fatalf("ConfirmReceipt() error = %v", err)
+	}
+	if result.Status != entity.ChainStatusCompleted || repository.completeCalls != 0 {
+		t.Fatalf("result = %+v, complete calls = %d", result, repository.completeCalls)
 	}
 }
 

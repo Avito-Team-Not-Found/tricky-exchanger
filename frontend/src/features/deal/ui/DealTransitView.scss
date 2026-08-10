@@ -1,0 +1,172 @@
+.deal-transit {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--spacing-md);
+}
+
+.deal-transit__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.deal-transit__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.deal-transit__section-title {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+// счётчик доставки — пилюля в тоне успеха (макет 4.9)
+.deal-transit__count {
+  flex-shrink: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-success);
+  white-space: nowrap;
+}
+
+// строка товара: миниатюра, название, пилюля статуса и переход в трекинг (макет 4.9)
+.deal-transit__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deal-transit__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+}
+
+.deal-transit__thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.deal-transit__thumb--empty {
+  background: var(--color-bg-page);
+}
+
+.deal-transit__thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.deal-transit__item-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  flex: 1;
+}
+
+.deal-transit__item-name {
+  min-width: 0;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// пилюля статуса доставки товара — 15%-я заливка тона и подпись текстом (§1.8)
+.deal-transit__item-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  white-space: nowrap;
+}
+
+.deal-transit__item-pill--success {
+  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
+  color: var(--color-status-success);
+}
+
+.deal-transit__item-pill--accent {
+  background: color-mix(in srgb, var(--color-accent-primary) 15%, transparent);
+  color: var(--color-accent-primary);
+}
+
+.deal-transit__item-pill--warning {
+  background: color-mix(in srgb, var(--color-status-warning) 15%, transparent);
+  color: var(--color-status-warning);
+}
+
+.deal-transit__item-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  color: var(--color-text-secondary);
+}
+
+// строка спора: «Проблемы с товаром?» + ghost-кнопка «Открыть спор» (макет 4.9)
+.deal-transit__dispute {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+// после открытия спора строка заменяется статусной пилюлей «Жалоба на рассмотрении» (DEAL-PLAN.md §4.4)
+.deal-transit__disputed {
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-card);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-secondary);
+}

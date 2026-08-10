@@ -1,3 +1,5 @@
+import type { RequestStatus } from '@entities/exchangeRequest';
+
 import type { StatusTone } from '@shared/ui';
 
 export type ChainStatus =
@@ -17,6 +19,9 @@ export interface ChainParticipant {
   wantedDescription: string;
   // фото может отсутствовать вовсе (omitempty), а не только быть null — поле опционально (PROJECT.md §4.4)
   imageUrl?: string | null;
+  // статус заявки участника — единственный источник состояния экрана сделки (DEAL-PLAN.md §2.2):
+  // LOCKED — товар не отправлен, IN_PROGRESS — отправлен (в ПВЗ), DONE — получатель подтвердил получение
+  requestStatus: RequestStatus;
   // отклик приходит только у кандидатов позиции receivesFromPosition
   vote?: VoteValue;
 }
@@ -97,6 +102,14 @@ export interface ChainLink {
   candidates: ChainParticipant[];
 }
 
+// ответ POST /integrations/avito/handoffs и POST /chains/{id}/receipt: статус цепочки после
+// подтверждения отправки/получения (DEAL-PLAN.md §2.2)
+export interface FulfillmentResult {
+  chainId: number;
+  requestId: number;
+  status: ChainStatus;
+}
+
 // статус отклика не передаётся одним лишь цветом — подпись текстом обязательна. Только первый
 // раунд: thinking — значение второго раунда, в словаре ему места нет (Partial не требует ветки)
 export const VOTE_META: Partial<Record<VoteValue, ConfirmVoteMeta>> = {
@@ -133,6 +146,19 @@ export function isHardLocked(status: ChainStatus): boolean {
   return status === 'FROZEN' || status === 'IN_PROGRESS';
 }
 
+// кнопка «Перейти к сделке» и экран /deal доступны и на завершённой цепочке: isHardLocked
+// намеренно не включает COMPLETED (жёсткой блокировки там уже нет), но сделку открыть всё равно нужно
+export function hasDeal(status: ChainStatus): boolean {
+  return isHardLocked(status) || status === 'COMPLETED';
+}
+
+// Нужно ли отправить свой товар: до первого handoff цепочка не покидает FROZEN (service.Handoff
+// переводит её в IN_PROGRESS), поэтому FROZEN строго означает «сделка началась, я ещё не отправил».
+// На 4.6/4.7 вместо «Перейти к сделке» показываем «Требуется действие».
+export function needsShipment(status: ChainStatus): boolean {
+  return status === 'FROZEN';
+}
+
 // собранная цепочка, которая занимает заявку: кольцо откликов замкнулось (PROPOSED) или сделка
 // уже идёт (FROZEN/IN_PROGRESS) — остальные варианты этого запроса приглушены и недоступны
 export function isAssembled(status: ChainStatus): boolean {
@@ -158,23 +184,17 @@ export function chainLinks(chain: Chain): ChainLink[] {
     .map(([position, candidates]) => ({ position, candidates }));
 }
 
-// Лучшая цепочка среди вариантов одной заявки — с максимальной вероятностью успеха (score).
-// При равенстве score выигрывает меньший chainId: иначе отметка прыгала бы между равными
-// цепочками при каждом рефетче. Единственный вариант тоже лучший: на практике у заявки чаще
-// всего ровно одна цепочка, и без отметки плашка не появлялась бы почти нигде.
-export function bestChainId(options: ExchangeOptions[]): number | null {
-  if (options.length === 0) return null;
-  return options.reduce((best, option) =>
-    option.score > best.score || (option.score === best.score && option.chainId < best.chainId)
-      ? option
-      : best,
-  ).chainId;
-}
-
 // Что пользователь получит взамен: пул заявок следующего звена по кольцу (PROJECT.md §4.4).
 // Пока цепочка CANDIDATE, кандидатов несколько — UI сам решает, как их показать.
 export function receivesItem(chain: Chain): ChainParticipant[] {
   return chain.participants.filter((p) => p.position === chain.receivesFromPosition);
+}
+
+// Единственное звено, от которого текущий пользователь получает товар: на собранной цепочке
+// (FROZEN и дальше) на позицию приходится ровно один участник — источник для «Я забрал товар»
+export function sourceParticipant(chain: Chain): ChainParticipant | null {
+  const sources = receivesItem(chain);
+  return sources.length === 1 ? sources[0] : null;
 }
 
 // Решение второго раунда участника позиции p лежит в vote участника следующей по кольцу позиции:
@@ -209,4 +229,34 @@ export function approvedVotes(chain: Chain): number {
 // После подтверждения действий нет — остаётся статусная строка «Вы подтвердили · ждём остальных»
 export function needsMyAction(chain: Chain): boolean {
   return chain.status === 'PROPOSED' && myConfirmVote(chain) !== 'approved';
+}
+
+// Состояние экрана сделки (макет 4.9): чистый дискриминант из статуса цепочки и статусов заявок.
+// «Отправил» = заявка участника уже не LOCKED; «я забрал» = у звена-источника заявка DONE
+// (receipt переводит заявку источника в DONE, DEAL-PLAN.md §2.2). CANDIDATE/PROPOSED/BROKEN —
+// сделки ещё нет: весь второй раунд живёт на 4.6/4.7/4.8, ссылки на /deal оттуда не появляется.
+export type DealState =
+  | { status: 'ship'; deadlineAt: string | null }
+  | { status: 'shipped-waiting'; shipped: number; total: number }
+  | { status: 'in-transit'; shipped: number; total: number }
+  | { status: 'received-waiting' }
+  | { status: 'completed' }
+  | { status: 'unavailable' };
+
+export function dealState(chain: Chain): DealState {
+  if (chain.status === 'COMPLETED') return { status: 'completed' };
+  if (chain.status !== 'FROZEN' && chain.status !== 'IN_PROGRESS') {
+    return { status: 'unavailable' };
+  }
+  const me = myParticipant(chain);
+  if (!me) return { status: 'unavailable' };
+  const total = chain.length;
+  const shipped = chain.participants.filter((p) => p.requestStatus !== 'LOCKED').length;
+  // я ещё не отправил — экран отправки виден и на IN_PROGRESS: первым мог отправиться сосед
+  if (me.requestStatus === 'LOCKED') {
+    return { status: 'ship', deadlineAt: chain.freezeDeadlineAt ?? null };
+  }
+  if (sourceParticipant(chain)?.requestStatus === 'DONE') return { status: 'received-waiting' };
+  if (shipped < total) return { status: 'shipped-waiting', shipped, total };
+  return { status: 'in-transit', shipped, total };
 }

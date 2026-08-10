@@ -38,12 +38,12 @@ const loadVisibleChainsQuery = `
 		  AND (
 			(c.status = 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL'))
 			OR (c.status <> 'CANDIDATE' AND member.request_id = cp.request_id
-				AND eo.status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED'))
+				AND eo.status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED', 'IN_PROGRESS', 'DONE'))
 		  )
 		ORDER BY cp.position
 		LIMIT 1
 	) AS viewer ON true
-	WHERE c.status IN ('CANDIDATE', 'PROPOSED', 'FROZEN', 'IN_PROGRESS')
+	WHERE c.status IN ('CANDIDATE', 'PROPOSED', 'FROZEN', 'IN_PROGRESS', 'COMPLETED')
 		AND ($2::bigint = 0 OR c.id = $2)
 		AND ($3::bigint = 0 OR viewer.request_id = $3)
 	ORDER BY c.created_at DESC, c.id DESC
@@ -515,7 +515,7 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 	rows, err := r.pool.Query(ctx, `
 		SELECT cp.id, cp.chain_id, COALESCE(cp.cluster_id, 0), member.request_id, cp.position,
 		       eo.user_id, eo.offered_item_id, i.title, COALESCE(i.description, ''),
-		       COALESCE(eo.wanted_description, ''), cp.created_at,
+		       COALESCE(eo.wanted_description, ''), eo.status, cp.created_at,
 		       i.image_url
 		FROM chain_participants AS cp
 		JOIN chains AS c ON c.id = cp.chain_id
@@ -526,7 +526,7 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 		  AND (c.status = 'CANDIDATE' OR member.request_id = cp.request_id)
 		  AND (
 			(c.status = 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL'))
-			OR (c.status <> 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED'))
+			OR (c.status <> 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED', 'IN_PROGRESS', 'DONE'))
 		  )
 		ORDER BY cp.chain_id, cp.position, member.request_id
 	`, chainIDs)
@@ -548,6 +548,7 @@ func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) 
 			&participant.OfferedItemTitle,
 			&participant.OfferedItemDescription,
 			&participant.WantedDescription,
+			&participant.RequestStatus,
 			&participant.CreatedAt,
 			&participant.ImageURL,
 		); err != nil {
@@ -1122,6 +1123,152 @@ func (r *Postgres) FindParticipantEdge(ctx context.Context, tx database.Tx, chai
 		return 0, 0, fmt.Errorf("find participant edge: %w", err)
 	}
 	return requestID, targetID, nil
+}
+
+// MarkRequestInProgress records an external handoff for a request pinned in a
+// frozen chain. Repeated callbacks leave an already started or completed
+// request unchanged.
+func (r *Postgres) MarkRequestInProgress(
+	ctx context.Context,
+	tx database.Tx,
+	chainID, requestID int64,
+) (entity.RequestStatus, error) {
+	var status entity.RequestStatus
+	err := tx.QueryRow(ctx, `
+		SELECT eo.status
+		FROM chain_participants AS cp
+		JOIN exchange_offers AS eo ON eo.id = cp.request_id
+		WHERE cp.chain_id = $1 AND cp.request_id = $2
+		FOR UPDATE OF eo
+	`, chainID, requestID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", entity.ErrHandoffRequestInvalid
+	}
+	if err != nil {
+		return "", fmt.Errorf("lock handoff request: %w", err)
+	}
+
+	switch status {
+	case entity.RequestStatusLocked:
+		if _, err := tx.Exec(ctx, `
+			UPDATE exchange_offers
+			SET status = 'IN_PROGRESS', updated_at = NOW()
+			WHERE id = $1
+		`, requestID); err != nil {
+			return "", fmt.Errorf("mark request in progress: %w", err)
+		}
+		return entity.RequestStatusInProgress, nil
+	case entity.RequestStatusInProgress, entity.RequestStatusDone:
+		return status, nil
+	default:
+		return "", entity.ErrHandoffRequestInvalid
+	}
+}
+
+// StartChain promotes a frozen chain after its first confirmed handoff.
+func (r *Postgres) StartChain(ctx context.Context, tx database.Tx, chainID int64) error {
+	result, err := tx.Exec(ctx, `
+		UPDATE chains
+		SET status = 'IN_PROGRESS', version = version + 1, updated_at = NOW()
+		WHERE id = $1 AND status = 'FROZEN'
+	`, chainID)
+	if err != nil {
+		return fmt.Errorf("start chain fulfillment: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return entity.ErrChainNotReadyForHandoff
+	}
+	return nil
+}
+
+// FindReceiptRequestStatus verifies that userID is the physical recipient of
+// requestID. A participant gives its item to the previous chain position.
+func (r *Postgres) FindReceiptRequestStatus(
+	ctx context.Context,
+	tx database.Tx,
+	chainID, requestID int64,
+	userID string,
+) (entity.RequestStatus, error) {
+	var status entity.RequestStatus
+	err := tx.QueryRow(ctx, `
+		SELECT source_offer.status
+		FROM chain_participants AS source
+		JOIN chains AS chain ON chain.id = source.chain_id
+		JOIN exchange_offers AS source_offer ON source_offer.id = source.request_id
+		JOIN chain_participants AS recipient
+		  ON recipient.chain_id = source.chain_id
+		 AND recipient.position = (source.position - 1 + chain.length) % chain.length
+		JOIN exchange_offers AS recipient_offer ON recipient_offer.id = recipient.request_id
+		WHERE source.chain_id = $1
+		  AND source.request_id = $2
+		  AND recipient_offer.user_id = $3
+		FOR UPDATE OF source_offer
+	`, chainID, requestID, userID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", entity.ErrChainReceiptForbidden
+	}
+	if err != nil {
+		return "", fmt.Errorf("find receipt request: %w", err)
+	}
+	return status, nil
+}
+
+// MarkRequestDone closes a handed-off request after its recipient confirms
+// receipt. Retrying a completed acknowledgement is intentionally successful.
+func (r *Postgres) MarkRequestDone(ctx context.Context, tx database.Tx, requestID int64) error {
+	result, err := tx.Exec(ctx, `
+		UPDATE exchange_offers
+		SET status = 'DONE', updated_at = NOW()
+		WHERE id = $1 AND status = 'IN_PROGRESS'
+	`, requestID)
+	if err != nil {
+		return fmt.Errorf("mark request done: %w", err)
+	}
+	if result.RowsAffected() == 1 {
+		return nil
+	}
+
+	var status entity.RequestStatus
+	if err := tx.QueryRow(ctx, `SELECT status FROM exchange_offers WHERE id = $1`, requestID).Scan(&status); err != nil {
+		return fmt.Errorf("load completed request status: %w", err)
+	}
+	if status == entity.RequestStatusDone {
+		return nil
+	}
+	return entity.ErrChainHandoffPending
+}
+
+// AllChainRequestsDone reports whether every pinned request has been received.
+func (r *Postgres) AllChainRequestsDone(ctx context.Context, tx database.Tx, chainID int64) (bool, error) {
+	var complete bool
+	err := tx.QueryRow(ctx, `
+		SELECT COUNT(*) > 0
+		   AND COUNT(*) FILTER (WHERE eo.status = 'DONE') = COUNT(*)
+		FROM chain_participants AS cp
+		JOIN exchange_offers AS eo ON eo.id = cp.request_id
+		WHERE cp.chain_id = $1
+	`, chainID).Scan(&complete)
+	if err != nil {
+		return false, fmt.Errorf("check completed chain requests: %w", err)
+	}
+	return complete, nil
+}
+
+// CompleteChain finalizes the aggregate state only after all pinned requests
+// have been received.
+func (r *Postgres) CompleteChain(ctx context.Context, tx database.Tx, chainID int64) error {
+	result, err := tx.Exec(ctx, `
+		UPDATE chains
+		SET status = 'COMPLETED', version = version + 1, updated_at = NOW()
+		WHERE id = $1 AND status = 'IN_PROGRESS'
+	`, chainID)
+	if err != nil {
+		return fmt.Errorf("complete chain: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return entity.ErrChainNotReadyForHandoff
+	}
+	return nil
 }
 
 // ListChainsContainingRequest возвращает цепочки, где заявка участвует как представитель.

@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   confirmChain,
   useChain,
-  useIsBestChain,
   voteForRequest,
   withdrawVote,
   type Chain,
@@ -25,7 +24,6 @@ vi.mock('@entities/chain', async (importOriginal) => {
   return {
     ...actual,
     useChain: vi.fn(),
-    useIsBestChain: vi.fn(),
     voteForRequest: vi.fn(),
     withdrawVote: vi.fn(),
     confirmChain: vi.fn(),
@@ -33,7 +31,6 @@ vi.mock('@entities/chain', async (importOriginal) => {
 });
 
 const mockedUseChain = vi.mocked(useChain);
-const mockedUseIsBestChain = vi.mocked(useIsBestChain);
 const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
 const mockedConfirm = vi.mocked(confirmChain);
@@ -47,6 +44,7 @@ const MY_CANDIDATE: ChainParticipant = {
   offeredItemTitle: 'Велосипед',
   offeredItemDescription: '',
   wantedDescription: 'Хочу фотоаппарат',
+  requestStatus: 'ACTIVE' as const,
 };
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
@@ -73,6 +71,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         offeredItemTitle: 'Зеркальный фотоаппарат Canon',
         offeredItemDescription: 'Полный комплект',
         wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
       },
     ],
     ...overrides,
@@ -82,16 +81,6 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainParticipantsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: false });
-  });
-
-  it('shows the best-chain badge above the links when the chain leads', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-    mockedUseIsBestChain.mockReturnValue({ isBest: true, isLoading: false });
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    expect(screen.getByText('Лучшая цепочка для этого товара')).toBeInTheDocument();
   });
 
   it('shows the chain as links with position aliases and candidate items', () => {
@@ -116,6 +105,7 @@ describe('ChainParticipantsPage', () => {
       offeredItemTitle: `Мой товар ${index + 1}`,
       offeredItemDescription: '',
       wantedDescription: 'Хочу фотоаппарат',
+      requestStatus: 'ACTIVE' as const,
     }));
     mockedUseChain.mockReturnValue(
       queryOk(makeChain({ participants: [...pool, makeChain().participants[1]] })),
@@ -140,6 +130,7 @@ describe('ChainParticipantsPage', () => {
         offeredItemTitle: 'Зеркальный фотоаппарат Canon',
         offeredItemDescription: '',
         wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
       },
       // кандидат без фото: imageUrl с omitempty может отсутствовать вовсе (PROJECT.md §4.4)
       {
@@ -151,6 +142,7 @@ describe('ChainParticipantsPage', () => {
         offeredItemTitle: 'Планшет',
         offeredItemDescription: '',
         wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
       },
     ];
     mockedUseChain.mockReturnValue(queryOk(makeChain({ participants: [MY_CANDIDATE, ...pool] })));
@@ -235,6 +227,7 @@ describe('ChainParticipantsPage', () => {
       offeredItemTitle: 'Планшет',
       offeredItemDescription: '',
       wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
       vote: 'approved' as const,
     };
     const fourth = {
@@ -246,6 +239,7 @@ describe('ChainParticipantsPage', () => {
       offeredItemTitle: 'Наушники',
       offeredItemDescription: '',
       wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
       vote: 'rejected' as const,
     };
     mockedUseChain.mockReturnValue(
@@ -281,6 +275,7 @@ describe('ChainParticipantsPage', () => {
       offeredItemTitle: 'Планшет',
       offeredItemDescription: '',
       wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
     };
     mockedUseChain.mockReturnValue(
       queryOk(

@@ -1,0 +1,84 @@
+.deal-tracking {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.deal-tracking__title {
+  margin: 0;
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+// пока отправитель не принёс товар, все точки серые — подпись объясняет причину текстом (§1.8)
+.deal-tracking__waiting {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-secondary);
+}
+
+.deal-tracking__steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deal-tracking__step {
+  display: flex;
+  align-items: stretch;
+  gap: var(--spacing-sm);
+}
+
+// колонка маркера: точка 12px и соединительная линия 2px между этапами (макет 4.9)
+.deal-tracking__marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 12px;
+}
+
+.deal-tracking__dot {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  margin-top: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-border-default);
+}
+
+.deal-tracking__line {
+  width: 2px;
+  flex: 1;
+  margin-top: 2px;
+  background: var(--color-border-default);
+}
+
+// пройденный этап — зелёная точка; последний пройденный — жирный с акцентной точкой (§4.3)
+.deal-tracking__step--passed .deal-tracking__dot {
+  background: var(--color-status-success);
+}
+
+.deal-tracking__step--current .deal-tracking__dot {
+  background: var(--color-accent-primary);
+}
+
+.deal-tracking__label {
+  padding: 1px 0 var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-secondary);
+}
+
+.deal-tracking__step--passed .deal-tracking__label {
+  color: var(--color-text-primary);
+}
+
+.deal-tracking__step--current .deal-tracking__label {
+  font-weight: var(--font-weight-semibold);
+}

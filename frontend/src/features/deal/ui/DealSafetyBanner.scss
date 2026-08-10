@@ -1,0 +1,37 @@
+// строка «🔒 Сделка защищена ›»: вся полоса кликабельна, зелёная 15%-я заливка — как у остальных
+// статусных бейджей цепочки (макет 4.9)
+.deal-safety {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-status-success) 12%, transparent);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.deal-safety__icon {
+  flex-shrink: 0;
+  font-size: var(--font-size-body);
+  line-height: 1;
+}
+
+.deal-safety__label {
+  flex: 1;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-success);
+}
+
+.deal-safety__arrow {
+  flex-shrink: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  color: var(--color-status-success);
+}
