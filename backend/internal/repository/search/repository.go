@@ -156,18 +156,25 @@ const querySimilarOffers = `
 `
 
 // queryOutgoingFrontier загружает Top-K исходящих рёбер сразу для всего frontier.
-// LATERAL ограничивает соседей каждой исходной заявки отдельно, поэтому один уровень
-// обхода графа требует одного SQL-запроса, а не запроса на каждую вершину.
+// Frontier состоит из опорных заявок, но вершины DFS — кластеры. Поэтому сначала
+// раскрываются все активные заявки кластеров frontier, иначе путь мог бы зависеть
+// от случайно выбранного представителя кластера.
 // Если wanted_category задана, ребро допускается только к товару той же категории.
 const queryOutgoingFrontier = `
+	WITH source_clusters AS (
+		SELECT DISTINCT member.cluster_id
+		FROM cluster_members AS member
+		WHERE member.request_id = ANY($1::bigint[])
+	)
 	SELECT source.id AS from_request_id,
 	       source_member.cluster_id AS from_cluster_id,
 	       candidate.request_id AS to_request_id,
 	       candidate.cluster_id AS to_cluster_id,
 	       candidate.score
-	FROM exchange_offers AS source
+	FROM source_clusters AS source_cluster
+	JOIN cluster_members AS source_member ON source_member.cluster_id = source_cluster.cluster_id
+	JOIN exchange_offers AS source ON source.id = source_member.request_id
 	JOIN items AS source_item ON source_item.id = source.offered_item_id
-	JOIN cluster_members AS source_member ON source_member.request_id = source.id
 	JOIN LATERAL (
 		SELECT target.id AS request_id,
 		       target_member.cluster_id,
@@ -188,25 +195,20 @@ const queryOutgoingFrontier = `
 		ORDER BY target_item.embedding <=> source.want_embedding
 		LIMIT $2
 	) AS candidate ON true
-	WHERE source.id = ANY($1::bigint[])
-	  AND source.status = 'ACTIVE'
+	WHERE source.status = 'ACTIVE'
 	  AND source_item.status = 'ACTIVE'
 	  AND source.want_embedding IS NOT NULL
 	ORDER BY source.id, candidate.score DESC, candidate.request_id
 `
 
-// queryIncomingToStart ищет заявки, которые могут получить отдаваемый товар start.
-// Полученное множество используется как проверка замыкающего ребра current -> start,
+// queryIncomingToStart ищет заявки, которые могут получить любой товар стартового
+// кластера. Полученное множество используется как проверка замыкающего ребра,
 // поэтому DFS не загружает пятый уровень размером K^5.
 // У заявки, замыкающей цикл, заданная wanted_category также должна совпадать
-// с категорией отдаваемого товара стартовой заявки.
+// с категорией отдаваемого товара выбранного участника стартового кластера.
 const queryIncomingToStart = `
-	WITH start_offer AS MATERIALIZED (
-		SELECT start.id,
-		       start.user_id,
-		       start_member.cluster_id,
-		       start_item.embedding,
-		       start_item.category
+	WITH start_cluster AS MATERIALIZED (
+		SELECT start_member.cluster_id
 		FROM exchange_offers AS start
 		JOIN items AS start_item ON start_item.id = start.offered_item_id
 		JOIN cluster_members AS start_member ON start_member.request_id = start.id
@@ -217,23 +219,37 @@ const queryIncomingToStart = `
 	)
 	SELECT candidate.id AS from_request_id,
 	       candidate_member.cluster_id AS from_cluster_id,
-	       start_offer.id AS to_request_id,
-	       start_offer.cluster_id AS to_cluster_id,
-	       1 - (candidate.want_embedding <=> start_offer.embedding) AS score
-	FROM start_offer
+	       target.request_id AS to_request_id,
+	       start_cluster.cluster_id AS to_cluster_id,
+	       target.score
+	FROM start_cluster
 	JOIN exchange_offers AS candidate ON candidate.status = 'ACTIVE'
 	JOIN items AS candidate_item ON candidate_item.id = candidate.offered_item_id
 	JOIN cluster_members AS candidate_member ON candidate_member.request_id = candidate.id
-	WHERE candidate.id <> start_offer.id
-	  AND candidate.user_id <> start_offer.user_id
+	JOIN LATERAL (
+		SELECT start_member.request_id,
+		       start_item.category,
+		       1 - (candidate.want_embedding <=> start_item.embedding) AS score
+		FROM cluster_members AS start_member
+		JOIN exchange_offers AS start ON start.id = start_member.request_id
+		JOIN items AS start_item ON start_item.id = start.offered_item_id
+		WHERE start_member.cluster_id = start_cluster.cluster_id
+		  AND start.status = 'ACTIVE'
+		  AND start_item.status = 'ACTIVE'
+		  AND start_item.embedding IS NOT NULL
+		  AND start.user_id <> candidate.user_id
+		ORDER BY candidate.want_embedding <=> start_item.embedding, start.id
+		LIMIT 1
+	) AS target ON true
+	WHERE candidate_member.cluster_id <> start_cluster.cluster_id
 	  AND candidate_item.status = 'ACTIVE'
 	  AND candidate.want_embedding IS NOT NULL
 	  AND (
 		  COALESCE(candidate.wanted_category, '') = ''
-		  OR COALESCE(start_offer.category, '') IS NOT DISTINCT FROM candidate.wanted_category
+		  OR COALESCE(target.category, '') IS NOT DISTINCT FROM candidate.wanted_category
 	  )
-	  AND 1 - (candidate.want_embedding <=> start_offer.embedding) >= $3
-	ORDER BY candidate.want_embedding <=> start_offer.embedding
+	  AND target.score >= $3
+	ORDER BY target.score DESC, candidate.id
 	LIMIT $2
 `
 

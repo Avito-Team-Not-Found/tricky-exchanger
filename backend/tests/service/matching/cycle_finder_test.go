@@ -247,6 +247,28 @@ func TestCycleFinderTreatsRequestsOfOneClusterAsOneVertex(t *testing.T) {
 	}
 }
 
+// Замыкающее ребро может вести не в стартовую заявку, а в другую активную
+// заявку её кластера. Для DFS это всё равно возврат в стартовую вершину.
+func TestCycleFinderClosesThroughAnotherRequestOfStartCluster(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {edge(1, 101, 2, 102, 0.91)},
+		},
+		closers: []entity.CandidateEdge{
+			edge(2, 102, 3, 101, 0.92),
+		},
+	}
+	finder := matching.NewCycleFinder(loader, 20, 10, 0.8)
+
+	drafts, err := finder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(drafts) != 1 || len(drafts[0].Participants) != 2 {
+		t.Fatalf("drafts = %#v, want one two-cluster cycle", drafts)
+	}
+}
+
 func TestCycleFinderLoadsEachFrontierAsBatch(t *testing.T) {
 	loader := &fakeFrontierLoader{
 		outgoing: map[int64][]entity.CandidateEdge{

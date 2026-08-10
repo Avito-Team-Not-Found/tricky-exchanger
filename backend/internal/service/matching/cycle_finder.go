@@ -214,8 +214,7 @@ func (f *CycleFinder) indexClosers(
 	var startClusterID int64
 
 	for _, edge := range edges {
-		if edge.ToRequestID != startRequestID ||
-			edge.FromRequestID == startRequestID ||
+		if edge.FromRequestID == edge.ToRequestID ||
 			edge.FromClusterID == 0 ||
 			edge.ToClusterID == 0 ||
 			edge.FromClusterID == edge.ToClusterID ||
