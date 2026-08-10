@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { confirmChain, useChain, useIsBestChain, type Chain } from '@entities/chain';
+import { confirmChain, useChain, type Chain } from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -14,11 +14,10 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, useChain: vi.fn(), useIsBestChain: vi.fn(), confirmChain: vi.fn() };
+  return { ...actual, useChain: vi.fn(), confirmChain: vi.fn() };
 });
 
 const mockedUseChain = vi.mocked(useChain);
-const mockedUseIsBestChain = vi.mocked(useIsBestChain);
 const mockedConfirm = vi.mocked(confirmChain);
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
@@ -44,6 +43,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         offeredItemTitle: 'Велосипед',
         offeredItemDescription: '',
         wantedDescription: 'Хочу фотоаппарат',
+        requestStatus: 'ACTIVE' as const,
       },
       {
         clusterId: 2,
@@ -55,6 +55,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         offeredItemDescription: 'Полный комплект: камера, объектив, флешка и чехол',
         wantedDescription: 'Хочу велосипед',
         imageUrl: 'http://localhost:9000/photos/canon.jpg',
+        requestStatus: 'ACTIVE' as const,
       },
     ],
     ...overrides,
@@ -64,36 +65,6 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: false });
-  });
-
-  it('shows the best-chain badge when the chain leads the options of its request', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-    mockedUseIsBestChain.mockReturnValue({ isBest: true, isLoading: false });
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.getByText('Лучшая цепочка для этого товара')).toBeInTheDocument();
-  });
-
-  // иначе плашка появлялась бы после отрисовки и сдвигала вниз уже прочитанное содержимое
-  it('keeps the skeleton until the best-chain check resolves', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: true });
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(
-      screen.queryByRole('heading', { name: 'Зеркальный фотоаппарат Canon', level: 2 }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('hides the best-chain badge for a chain that does not lead', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.queryByText('Лучшая цепочка для этого товара')).not.toBeInTheDocument();
   });
 
   it('shows the received item with its description', () => {
@@ -144,7 +115,8 @@ describe('ChainDetailPage', () => {
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
   });
 
-  it('shows the hard lock plaque and the proceed button on a frozen chain', () => {
+  // на замороженной цепочке пора отправлять товар: вместо «Перейти к сделке» — «Требуется действие»
+  it('shows the hard lock plaque and the shipment action on a frozen chain', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
 
     renderWithProviders(<ChainDetailPage />);
@@ -152,8 +124,8 @@ describe('ChainDetailPage', () => {
     expect(
       screen.getByText('Товар жёстко заблокирован: изменить или удалить заявку нельзя'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Требуется действие' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Перейти к сделке' })).not.toBeInTheDocument();
   });
 
   it('shows the consent badge with the approved count on a proposed chain', () => {
@@ -202,6 +174,7 @@ describe('ChainDetailPage', () => {
       offeredItemTitle: `Фотоаппарат ${index + 1}`,
       offeredItemDescription: '',
       wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
     }));
     mockedUseChain.mockReturnValue(
       queryOk(makeChain({ participants: [makeChain().participants[0], ...pool] })),

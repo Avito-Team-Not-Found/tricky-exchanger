@@ -1,0 +1,150 @@
+.deal-ship {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: var(--spacing-md);
+}
+
+.deal-ship__file {
+  display: none;
+}
+
+// таймер дедлайна отправки — строка с предупреждающей пилюлей; значение не передаётся цветом
+.deal-ship__timer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  align-self: flex-start;
+  margin: 0;
+  padding: var(--spacing-sm) 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-status-warning) 12%, transparent);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-status-warning);
+}
+
+.deal-ship__timer-icon {
+  display: inline-flex;
+  font-size: var(--font-size-body);
+  line-height: 1;
+}
+
+.deal-ship__timer--expired {
+  background: color-mix(in srgb, var(--color-status-error) 12%, transparent);
+  color: var(--color-status-error);
+}
+
+.deal-ship__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.deal-ship__section-title {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+.deal-ship__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  color: var(--color-text-primary);
+}
+
+.deal-ship__pickup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.deal-ship__pickup-note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-body);
+  color: var(--color-text-secondary);
+}
+
+.deal-ship__photo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.deal-ship__photo-label {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+}
+
+.deal-ship__photo-label span {
+  color: var(--color-status-error);
+}
+
+// блок загрузки фото: сплошная рамка, bg-card, кликабелен (макет 4.9). Размер повторяет превью
+// фото (aspect-ratio 16/10) — иначе при прикреплении снимка блок «прыгает» по высоте
+.deal-ship__photo-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  aspect-ratio: 16 / 10;
+  justify-content: center;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-card);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.deal-ship__photo-icon {
+  display: inline-flex;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.deal-ship__photo-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.deal-ship__photo-img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  display: block;
+  background: var(--color-bg-card);
+}
+
+.deal-ship__photo-controls {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-sm);
+}
+
+// модалка выбора ПВЗ: селект со списком и полем «Другой адрес», кнопка сохранения
+.deal-pickup-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.deal-pickup-form__select {
+  width: 100%;
+}

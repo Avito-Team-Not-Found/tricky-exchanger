@@ -42,6 +42,12 @@ type Repository interface {
 	LoadRequestLiveChainStatus(ctx context.Context, tx database.Tx, requestID int64) (entity.ChainStatus, error)
 	FindParticipantEdge(ctx context.Context, tx database.Tx, chainID int64, userID string) (requestID, targetRequestID int64, err error)
 	ReleaseUnselectedFromChain(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
+	MarkRequestInProgress(ctx context.Context, tx database.Tx, chainID, requestID int64) (entity.RequestStatus, error)
+	StartChain(ctx context.Context, tx database.Tx, chainID int64) error
+	FindReceiptRequestStatus(ctx context.Context, tx database.Tx, chainID, requestID int64, userID string) (entity.RequestStatus, error)
+	MarkRequestDone(ctx context.Context, tx database.Tx, requestID int64) error
+	AllChainRequestsDone(ctx context.Context, tx database.Tx, chainID int64) (bool, error)
+	CompleteChain(ctx context.Context, tx database.Tx, chainID int64) error
 
 	// Жизненный цикл цепочек (пересборка/удаление) под властью matcher.
 	ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error)
