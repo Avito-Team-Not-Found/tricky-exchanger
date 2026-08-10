@@ -38,6 +38,10 @@ var (
 	ErrChainConfirmationExpired = errors.New("срок подтверждения цепочки истёк")
 	ErrChainNotFrozen           = errors.New("цепочка ещё не заморожена")
 	ErrRequestInTwoFrozenChains = errors.New("запрос не может состоять в двух замороженных цепочках")
+	ErrChainNotReadyForHandoff  = errors.New("цепочка не готова к передаче товаров")
+	ErrHandoffRequestInvalid    = errors.New("заявка не является закреплённым товаром этой цепочки")
+	ErrChainReceiptForbidden    = errors.New("только получатель товара может подтвердить его получение")
+	ErrChainHandoffPending      = errors.New("передача товара ещё не подтверждена")
 
 	ErrItemNotFound           = errors.New("item not found")
 	ErrItemForbidden          = errors.New("item belongs to another user")

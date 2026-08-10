@@ -7,8 +7,8 @@ import {
   chainLinks,
   CONFIRM_VOTE_META,
   confirmVoteAt,
+  hasDeal,
   isAssembled,
-  isHardLocked,
   myConfirmVote,
   myParticipant,
   needsMyAction,
@@ -53,7 +53,6 @@ export function ChainDetail({
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
   const assembled = isAssembled(chain.status);
-  const hardLocked = isHardLocked(chain.status);
   // голос привязан к цели голосования, а не к голосующему: решение участника позиции p лежит
   // в vote позиции (p + 1) % length (SOFT-LOCK §3.3); на CANDIDATE сдвига нет — там это отклики
   const showConfirmPills = chain.status !== 'CANDIDATE';
@@ -134,7 +133,7 @@ export function ChainDetail({
         <p className="chain-detail__confirmed" role="status">
           Вы подтвердили · ждём остальных
         </p>
-      ) : hardLocked ? (
+      ) : hasDeal(chain.status) ? (
         <Button
           className="chain-detail__action"
           size="large"

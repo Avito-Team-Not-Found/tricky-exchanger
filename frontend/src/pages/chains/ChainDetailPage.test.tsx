@@ -43,6 +43,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         offeredItemTitle: 'Велосипед',
         offeredItemDescription: '',
         wantedDescription: 'Хочу фотоаппарат',
+        requestStatus: 'ACTIVE' as const,
       },
       {
         clusterId: 2,
@@ -54,6 +55,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         offeredItemDescription: 'Полный комплект: камера, объектив, флешка и чехол',
         wantedDescription: 'Хочу велосипед',
         imageUrl: 'http://localhost:9000/photos/canon.jpg',
+        requestStatus: 'ACTIVE' as const,
       },
     ],
     ...overrides,
@@ -118,7 +120,8 @@ describe('ChainDetailPage', () => {
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
   });
 
-  it('shows the hard lock plaque and the proceed button on a frozen chain', () => {
+  // на замороженной цепочке пора отправлять товар: вместо «Перейти к сделке» — «Требуется действие»
+  it('shows the hard lock plaque and the shipment action on a frozen chain', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
 
     renderWithProviders(<ChainDetailPage />);
@@ -126,8 +129,8 @@ describe('ChainDetailPage', () => {
     expect(
       screen.getByText('Товар жёстко заблокирован: изменить или удалить заявку нельзя'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Требуется действие' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Перейти к сделке' })).not.toBeInTheDocument();
   });
 
   it('shows the consent badge with the approved count on a proposed chain', () => {
@@ -200,6 +203,7 @@ describe('ChainDetailPage', () => {
       offeredItemTitle: `Фотоаппарат ${index + 1}`,
       offeredItemDescription: '',
       wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
     }));
     mockedUseChain.mockReturnValue(
       queryOk(makeChain({ participants: [makeChain().participants[0], ...pool] })),

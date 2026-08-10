@@ -158,6 +158,7 @@ const querySimilarOffers = `
 // queryOutgoingFrontier загружает Top-K исходящих рёбер сразу для всего frontier.
 // LATERAL ограничивает соседей каждой исходной заявки отдельно, поэтому один уровень
 // обхода графа требует одного SQL-запроса, а не запроса на каждую вершину.
+// Если wanted_category задана, ребро допускается только к товару той же категории.
 const queryOutgoingFrontier = `
 	SELECT source.id AS from_request_id,
 	       source_member.cluster_id AS from_cluster_id,
@@ -179,6 +180,10 @@ const queryOutgoingFrontier = `
 		  AND target_item.embedding IS NOT NULL
 		  AND target.user_id <> source.user_id
 		  AND target.id <> source.id
+		  AND (
+			  COALESCE(source.wanted_category, '') = ''
+			  OR COALESCE(target_item.category, '') IS NOT DISTINCT FROM source.wanted_category
+		  )
 		  AND 1 - (target_item.embedding <=> source.want_embedding) >= $3
 		ORDER BY target_item.embedding <=> source.want_embedding
 		LIMIT $2
@@ -193,12 +198,15 @@ const queryOutgoingFrontier = `
 // queryIncomingToStart ищет заявки, которые могут получить отдаваемый товар start.
 // Полученное множество используется как проверка замыкающего ребра current -> start,
 // поэтому DFS не загружает пятый уровень размером K^5.
+// У заявки, замыкающей цикл, заданная wanted_category также должна совпадать
+// с категорией отдаваемого товара стартовой заявки.
 const queryIncomingToStart = `
 	WITH start_offer AS MATERIALIZED (
 		SELECT start.id,
 		       start.user_id,
 		       start_member.cluster_id,
-		       start_item.embedding
+		       start_item.embedding,
+		       start_item.category
 		FROM exchange_offers AS start
 		JOIN items AS start_item ON start_item.id = start.offered_item_id
 		JOIN cluster_members AS start_member ON start_member.request_id = start.id
@@ -220,6 +228,10 @@ const queryIncomingToStart = `
 	  AND candidate.user_id <> start_offer.user_id
 	  AND candidate_item.status = 'ACTIVE'
 	  AND candidate.want_embedding IS NOT NULL
+	  AND (
+		  COALESCE(candidate.wanted_category, '') = ''
+		  OR COALESCE(start_offer.category, '') IS NOT DISTINCT FROM candidate.wanted_category
+	  )
 	  AND 1 - (candidate.want_embedding <=> start_offer.embedding) >= $3
 	ORDER BY candidate.want_embedding <=> start_offer.embedding
 	LIMIT $2

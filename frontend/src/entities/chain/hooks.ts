@@ -2,9 +2,15 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 
 import { fetchChain, fetchExchangeOptions } from './api';
 
-// Пока на экране есть цепочка в PROPOSED, данные обновляются каждые 30с и при возврате вкладки
-// (SOFT-LOCK §9.6): так переход в FROZEN после последнего подтверждения виден без ручного обновления
+// Пока на экране есть цепочка в PROPOSED/FROZEN/IN_PROGRESS, данные обновляются каждые 30с и при
+// возврате вкладки (SOFT-LOCK §9.6, DEAL-PLAN.md §11): так переход в FROZEN после последнего
+// подтверждения и статусы отправки/получения на экране сделки видны без ручного обновления.
+// На COMPLETED опрос не нужен — состояние конечное.
 const ACTUALIZATION_MS = 30_000;
+
+function isPollableStatus(status: string | undefined): boolean {
+  return status === 'PROPOSED' || status === 'FROZEN' || status === 'IN_PROGRESS';
+}
 
 // Опции запроса деталей цепочки вынесены отдельно: на 4.6 они нужны для нескольких PROPOSED-цепочек
 // сразу (бейдж «N/M согласий» считается из participants[].vote), поэтому переиспользуются в useChains
@@ -14,9 +20,9 @@ export function chainQueryOptions(chainId?: number) {
     queryFn: () => fetchChain(chainId as number),
     enabled: Boolean(chainId),
     refetchInterval: (query: { state: { data?: { status: string } } }) =>
-      query.state.data?.status === 'PROPOSED' ? ACTUALIZATION_MS : false,
+      isPollableStatus(query.state.data?.status) ? ACTUALIZATION_MS : false,
     refetchOnWindowFocus: (query: { state: { data?: { status: string } } }) =>
-      query.state.data?.status === 'PROPOSED',
+      isPollableStatus(query.state.data?.status),
   };
 }
 

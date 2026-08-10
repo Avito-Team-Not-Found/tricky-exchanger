@@ -151,6 +151,7 @@ export function ChainListPage() {
                 approvedCount={approvedCountFor(entry)}
                 deadlineAt={deadlineAtFor(entry)}
                 onOpen={() => navigate(`/chains/${entry.chainId}`)}
+                onProceed={() => navigate(`/chains/${entry.chainId}/deal`)}
                 onConfirm={(chainId) => openConfirm(chainId)}
                 onConfirmNow={(chainId) => confirmNow(chainId)}
                 onDecline={(chainId) => openDecline(chainId)}

@@ -88,8 +88,13 @@ func New(
 			chains.POST("/:id/decline", chainH.Decline)
 			chains.GET("/:id/replacements", chainH.ListReplacements)
 			chains.PUT("/:id/replacement", chainH.SelectReplacement)
-
+			chains.POST("/:id/receipt", chainH.ConfirmReceipt)
 		}
+
+		// Временный callback для локального MVP. Перед внешним запуском
+		// на будущее защитим сейчас сделано для понимания как будет происходить подтверждение отправки
+		integrations := api.Group("/integrations")
+		integrations.POST("/avito/handoffs", chainH.Handoff)
 
 		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен
 		recovery := api.Group("/account/password-recovery")

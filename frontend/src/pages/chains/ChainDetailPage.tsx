@@ -44,7 +44,7 @@ export function ChainDetailPage() {
             chain={chain}
             onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
             onConfirm={() => openConfirm(chain.id)}
-            onProceed={() => navigate(`/chains/${chain.id}`)}
+            onProceed={() => navigate(`/chains/${chain.id}/deal`)}
           />
         )}
       </div>

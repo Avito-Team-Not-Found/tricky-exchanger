@@ -43,3 +43,29 @@ export const userStorage = {
     localStorage.removeItem(USER_KEY);
   },
 };
+
+// типизированный доступ к JSON-значениям по произвольному ключу — для клиентских имитаций сделки
+// (адрес ПВЗ, фото упаковки, флаг спора, DEAL-PLAN.md §4). Возвращает false, если запись не
+// влезла в квоту localStorage: фото упаковки при этом остаётся только в состоянии страницы
+export const jsonStorage = {
+  get<T>(key: string): T | null {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
+  },
+  set<T>(key: string, value: T): boolean {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  remove(key: string): void {
+    localStorage.removeItem(key);
+  },
+};

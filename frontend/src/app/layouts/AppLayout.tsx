@@ -31,10 +31,10 @@ const FORM_SCREEN_PATTERNS = [
   /^\/exchange-requests\/[^/]+\/edit$/,
 ];
 
-// экраны цепочки — полноэкранный подпоток (макеты 4.7/4.8): у экрана своя шапка, а низ занимает
+// экраны цепочки — полноэкранный подпоток (макеты 4.7/4.8/4.9): у экрана своя шапка, а низ занимает
 // кнопка действия, поэтому глобальной шапки и таб-бара нет. Макеты только мобильные — боковое
 // меню десктопа остаётся: там кнопка действия ничего не перекрывает
-const FULL_SCREEN_PATTERNS = [/^\/chains\/[^/]+(\/participants)?$/];
+const FULL_SCREEN_PATTERNS = [/^\/chains\/[^/]+(\/(participants|deal(\/(shipments|receipts))?))?$/];
 
 export function AppLayout() {
   const { pathname } = useLocation();

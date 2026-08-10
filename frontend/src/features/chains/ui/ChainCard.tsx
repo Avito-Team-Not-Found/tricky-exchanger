@@ -2,7 +2,9 @@ import { theme, Button } from 'antd';
 
 import {
   HARD_LOCK_MESSAGE,
+  hasDeal,
   isHardLocked,
+  needsShipment,
   type ExchangeOption,
   type ExchangeOptions,
   type VoteValue,
@@ -28,6 +30,7 @@ interface ChainCardProps {
   // его не отдаёт; без даты таймер не рисуем
   deadlineAt?: string | null;
   onOpen: () => void;
+  onProceed: () => void;
   onVote: (active: boolean) => void;
   onConfirm: (chainId: number) => void;
   onConfirmNow: (chainId: number) => void;
@@ -37,9 +40,9 @@ interface ChainCardProps {
 // Карточка варианта обмена (макет 4.6): один конкретный получаемый товар из пула кандидатов
 // следующего звена. На кандидатной цепочке действие — «Откликнуться» / «Отозвать отклик» по
 // option.vote; на PROPOSED — «Требуются действия» (подтверждение второго раунда), а после «Я
-// подумаю» — inline-«Да»/«Нет» без модалки; на FROZEN/IN_PROGRESS — «Перейти к сделке», плашка
-// жёсткой блокировки и бейдж «N/M согласий» (SOFT-LOCK §5.1–5.5). Мой голос второго раунда
-// на этом экране — vote единственного receiveOption (SOFT-LOCK §3.3).
+// подумаю» — inline-«Да»/«Нет» без модалки; на FROZEN — «Требуется действие» (пора отправлять),
+// на IN_PROGRESS/COMPLETED — «Перейти к сделке», бейдж «N/M согласий» (SOFT-LOCK §5.1–5.5). Мой
+// голос второго раунда на этом экране — vote единственного receiveOption (SOFT-LOCK §3.3).
 export function ChainCard({
   options,
   option,
@@ -49,6 +52,7 @@ export function ChainCard({
   approvedCount,
   deadlineAt,
   onOpen,
+  onProceed,
   onVote,
   onConfirm,
   onConfirmNow,
@@ -58,6 +62,10 @@ export function ChainCard({
   const canVote = options.status === 'CANDIDATE';
   const canAct = canVote && (!option.vote || option.vote === 'pending');
   const hardLocked = isHardLocked(options.status);
+  // на FROZEN сделка началась, товар ещё не отправлен — вместо «Перейти к сделке» зовём действовать
+  const shipRequired = needsShipment(options.status);
+  // на COMPLETED жёсткой блокировки уже нет, но сделку открыть нужно — кнопка по hasDeal (§5.1)
+  const dealReady = hasDeal(options.status) && !shipRequired;
   // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя (§3.3);
   // на CANDIDATE то же поле — отклик первого раунда, myVote им не считается
   const myVote: VoteValue | undefined = options.status === 'PROPOSED' ? option.vote : undefined;
@@ -180,7 +188,19 @@ export function ChainCard({
             Требуются действия
           </Button>
         </div>
-      ) : hardLocked ? (
+      ) : shipRequired ? (
+        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
+          <Button
+            type="primary"
+            block
+            size="large"
+            disabled={locked}
+            onClick={onProceed}
+          >
+            Требуется действие
+          </Button>
+        </div>
+      ) : dealReady ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
           <Button
             block
@@ -190,7 +210,7 @@ export function ChainCard({
               borderColor: token.colorSuccess,
               color: '#FFFFFF',
             }}
-            onClick={onOpen}
+            onClick={onProceed}
           >
             Перейти к сделке
           </Button>

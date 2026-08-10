@@ -44,6 +44,7 @@ const MY_CANDIDATE: ChainParticipant = {
   offeredItemTitle: 'Велосипед',
   offeredItemDescription: '',
   wantedDescription: 'Хочу фотоаппарат',
+  requestStatus: 'ACTIVE' as const,
 };
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
@@ -70,6 +71,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
         offeredItemTitle: 'Зеркальный фотоаппарат Canon',
         offeredItemDescription: 'Полный комплект',
         wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
       },
     ],
     ...overrides,
@@ -103,6 +105,7 @@ describe('ChainParticipantsPage', () => {
       offeredItemTitle: `Мой товар ${index + 1}`,
       offeredItemDescription: '',
       wantedDescription: 'Хочу фотоаппарат',
+      requestStatus: 'ACTIVE' as const,
     }));
     mockedUseChain.mockReturnValue(
       queryOk(makeChain({ participants: [...pool, makeChain().participants[1]] })),
@@ -127,6 +130,7 @@ describe('ChainParticipantsPage', () => {
         offeredItemTitle: 'Зеркальный фотоаппарат Canon',
         offeredItemDescription: '',
         wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
       },
       // кандидат без фото: imageUrl с omitempty может отсутствовать вовсе (PROJECT.md §4.4)
       {
@@ -138,6 +142,7 @@ describe('ChainParticipantsPage', () => {
         offeredItemTitle: 'Планшет',
         offeredItemDescription: '',
         wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
       },
     ];
     mockedUseChain.mockReturnValue(queryOk(makeChain({ participants: [MY_CANDIDATE, ...pool] })));
@@ -222,6 +227,7 @@ describe('ChainParticipantsPage', () => {
       offeredItemTitle: 'Планшет',
       offeredItemDescription: '',
       wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
       vote: 'approved' as const,
     };
     const fourth = {
@@ -233,6 +239,7 @@ describe('ChainParticipantsPage', () => {
       offeredItemTitle: 'Наушники',
       offeredItemDescription: '',
       wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
       vote: 'rejected' as const,
     };
     mockedUseChain.mockReturnValue(
@@ -268,6 +275,7 @@ describe('ChainParticipantsPage', () => {
       offeredItemTitle: 'Планшет',
       offeredItemDescription: '',
       wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
     };
     mockedUseChain.mockReturnValue(
       queryOk(

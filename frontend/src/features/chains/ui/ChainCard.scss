@@ -20,14 +20,6 @@
   pointer-events: none;
 }
 
-// плашка жёсткой блокировки — Caption text-secondary под мета-строкой (SOFT-LOCK §5.5)
-.chain-card__lock {
-  margin: 0;
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-body);
-  color: var(--color-text-secondary);
-}
-
 // фото получаемого товара — крупный блок в верхней части карточки (макет 4.6)
 .chain-card__photo {
   position: relative;

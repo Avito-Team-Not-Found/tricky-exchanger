@@ -254,8 +254,9 @@ describe('ChainListPage', () => {
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
   });
 
-  // сделка по одной из цепочек заморожена: баннер, зелёная кнопка на замороженной карточке,
-  // остальные варианты приглушены и недоступны, правка запроса заблокирована (SOFT-LOCK §5.4/§5.5)
+  // сделка по одной из цепочек заморожена: баннер, кнопка «Требуется действие» на замороженной
+  // карточке (пора отправлять товар), остальные варианты приглушены и недоступны, правка запроса
+  // заблокирована (SOFT-LOCK §5.4/§5.5)
   it('locks the request once one of its chains is frozen', async () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(
@@ -297,10 +298,7 @@ describe('ChainListPage', () => {
         'Сделка по одной из цепочек уже согласована. Остальные варианты недоступны.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
-    expect(
-      screen.getByText('Товар жёстко заблокирован: изменить или удалить заявку нельзя'),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Требуется действие' })).toBeInTheDocument();
 
     const dimmedCard = screen
       .getAllByRole('article')

@@ -10,6 +10,7 @@ import {
   myConfirmVote,
   myParticipant,
   needsMyAction,
+  needsShipment,
   receivesItem,
   type Chain,
   type ChainParticipant,
@@ -24,6 +25,7 @@ const MYSELF: ChainParticipant = {
   offeredItemTitle: 'Велосипед',
   offeredItemDescription: '',
   wantedDescription: 'Хочу фотоаппарат',
+  requestStatus: 'ACTIVE',
 };
 
 const OTHER: ChainParticipant = {
@@ -36,6 +38,7 @@ const OTHER: ChainParticipant = {
   offeredItemDescription: 'Полный комплект',
   wantedDescription: 'Хочу велосипед',
   imageUrl: 'http://localhost:9000/photos/camera.jpg',
+  requestStatus: 'ACTIVE',
 };
 
 function buildChain(participants = [MYSELF, OTHER], overrides: Partial<Chain> = {}): Chain {
@@ -133,6 +136,17 @@ describe('isAssembled', () => {
     expect(isAssembled('CANDIDATE')).toBe(false);
     expect(isAssembled('BROKEN')).toBe(false);
     expect(isAssembled('COMPLETED')).toBe(false);
+  });
+});
+
+describe('needsShipment', () => {
+  // до первого handoff цепочка не покидает FROZEN — это строго «пора отправлять свой товар»
+  it('requires shipment only on a frozen chain', () => {
+    expect(needsShipment('FROZEN')).toBe(true);
+    expect(needsShipment('IN_PROGRESS')).toBe(false);
+    expect(needsShipment('COMPLETED')).toBe(false);
+    expect(needsShipment('CANDIDATE')).toBe(false);
+    expect(needsShipment('PROPOSED')).toBe(false);
   });
 });
 

@@ -1,0 +1,65 @@
+// строка обмена — карточка bg-card с заголовком и миниатюрами (макет 4.9, ItemSummary)
+.deal-swap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+}
+
+.deal-swap__label {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-secondary);
+}
+
+.deal-swap__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.deal-swap__thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+}
+
+.deal-swap__thumb--empty {
+  background: var(--color-bg-card);
+}
+
+.deal-swap__thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.deal-swap__name {
+  min-width: 0;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-heading);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deal-swap__arrow {
+  flex-shrink: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+}
