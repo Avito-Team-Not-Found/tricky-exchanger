@@ -12,6 +12,7 @@
   color: var(--color-accent-primary);
   font-weight: var(--font-weight-semibold);
   font-size: 24px;
+  user-select: none;
 }
 
 .profile__name {
