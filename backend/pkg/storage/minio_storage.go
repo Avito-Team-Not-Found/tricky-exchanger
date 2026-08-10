@@ -24,6 +24,11 @@ type Config struct {
 	// фото (то, что реально открывается в браузере с хост-машины, например
 	// "localhost:9000"). Если не задан, используется Endpoint.
 	PublicEndpoint string
+	// PublicUseSSL — схема https:// для публичных URL. Отдельно от UseSSL, потому
+	// что внутри docker-сети клиент ходит на minio:9000 по HTTP, а снаружи Caddy
+	// отдаёт те же объекты уже по HTTPS.
+	// nil = как UseSSL (обратная совместимость).
+	PublicUseSSL *bool
 }
 
 // Storage — S3-совместимое объектное хранилище для фото товаров.
@@ -64,8 +69,13 @@ func New(ctx context.Context, cfg Config) (*Storage, error) {
 		return nil, fmt.Errorf("minio bucket policy: %w", err)
 	}
 
+	publicUseSSL := cfg.UseSSL
+	if cfg.PublicUseSSL != nil {
+		publicUseSSL = *cfg.PublicUseSSL
+	}
+
 	scheme := "http"
-	if cfg.UseSSL {
+	if publicUseSSL {
 		scheme = "https"
 	}
 
