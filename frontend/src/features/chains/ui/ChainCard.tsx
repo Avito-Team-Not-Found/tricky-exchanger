@@ -1,7 +1,6 @@
 import { theme, Button } from 'antd';
 
 import {
-  HARD_LOCK_MESSAGE,
   hasDeal,
   isHardLocked,
   needsShipment,
@@ -115,8 +114,6 @@ export function ChainCard({
         )}
       </div>
 
-      {hardLocked ? <p className="chain-card__lock">{HARD_LOCK_MESSAGE}</p> : null}
-
       <DeadlineRow status={options.status} deadlineAt={deadlineAt} />
 
       {canAct ? (
@@ -190,13 +187,7 @@ export function ChainCard({
         </div>
       ) : shipRequired ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
-          <Button
-            type="primary"
-            block
-            size="large"
-            disabled={locked}
-            onClick={onProceed}
-          >
+          <Button type="primary" block size="large" disabled={locked} onClick={onProceed}>
             Требуется действие
           </Button>
         </div>

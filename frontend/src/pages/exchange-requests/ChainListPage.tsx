@@ -2,7 +2,7 @@ import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { useChainConfirm, useChainVote, ChainCard } from '@features/chains';
+import { useChainConfirm, useChainVote, useProposalExpiry, ChainCard } from '@features/chains';
 
 import {
   approvedVotes,
@@ -52,6 +52,18 @@ export function ChainListPage() {
   proposedQueries.forEach((query, index) => {
     if (query.data) detailByChain.set(proposedChainIds[index], query.data);
   });
+
+  // exchange-options не откатывает просроченный PROPOSED (это делает только GET /chains/{id}),
+  // поэтому после дедлайна список надо перезапросить — иначе карточка останется с живыми
+  // кнопками второго раунда
+  useProposalExpiry(
+    options.map((entry) => ({
+      chainId: entry.chainId,
+      listStatus: entry.status,
+      detailStatus: detailByChain.get(entry.chainId)?.status,
+      deadlineAt: detailByChain.get(entry.chainId)?.freezeDeadlineAt,
+    })),
+  );
 
   function approvedCountFor(entry: ExchangeOptions): number | undefined {
     if (isHardLocked(entry.status)) return entry.length;

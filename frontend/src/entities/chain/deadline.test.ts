@@ -9,6 +9,11 @@ describe('formatRemaining', () => {
     expect(formatRemaining('2026-08-12T09:58:00Z', NOW)).toBe('47 ч 58 мин');
   });
 
+  it('drops the zero minutes on a whole number of hours', () => {
+    expect(formatRemaining('2026-08-10T11:00:00Z', NOW)).toBe('1 ч');
+    expect(formatRemaining('2026-08-12T10:00:00Z', NOW)).toBe('48 ч');
+  });
+
   it('formats less than an hour as minutes only', () => {
     expect(formatRemaining('2026-08-10T10:58:00Z', NOW)).toBe('58 мин');
   });

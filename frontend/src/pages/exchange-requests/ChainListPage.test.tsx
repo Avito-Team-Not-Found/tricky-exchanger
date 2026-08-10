@@ -14,7 +14,7 @@ import {
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems, type Item } from '@entities/item';
 
-import { renderWithProviders } from '@shared/testing/renderWithProviders';
+import { createTestQueryClient, renderWithProviders } from '@shared/testing/renderWithProviders';
 
 import { ChainListPage } from './ChainListPage';
 
@@ -426,6 +426,38 @@ describe('ChainListPage', () => {
     renderWithProviders(<ChainListPage />);
 
     expect(screen.getByText('Осталось 47 ч 58 мин на ответ')).toBeInTheDocument();
+  });
+
+  // exchange-options не откатывает просроченный PROPOSED — это делает только GET /chains/{id}.
+  // Пока список не перезапрошен, карточка держит живые кнопки второго раунда и confirm ловит 410
+  it('refetches the offer list once the chain detail has expired the proposal', async () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(queryOk([makeOptions({ status: 'PROPOSED' })]));
+    mockedUseChains.mockReturnValue([
+      {
+        data: {
+          id: 1,
+          // деталь уже откатила цепочку, а список всё ещё считает её собранной
+          status: 'CANDIDATE',
+          length: 2,
+          currentPosition: 1,
+          receivesFromPosition: 2,
+          freezeDeadlineAt: null,
+          participants: [],
+        },
+        isPending: false,
+        isError: false,
+      },
+    ] as never);
+
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+
+    renderWithProviders(<ChainListPage />, { client });
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['exchange-options'] }),
+    );
   });
 
   it('hides the deadline row on candidate cards', () => {

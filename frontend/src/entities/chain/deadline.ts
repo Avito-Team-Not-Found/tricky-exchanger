@@ -7,7 +7,8 @@ export function formatRemaining(deadlineAt: string | null | undefined, now: numb
   const totalMinutes = Math.floor((deadline - now) / 60_000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours > 0) return `${hours} ч ${minutes} мин`;
+  // ровно столько-то часов пишем без «0 мин» — «1 ч 0 мин» читается как ошибка вёрстки
+  if (hours > 0) return minutes > 0 ? `${hours} ч ${minutes} мин` : `${hours} ч`;
   if (minutes > 0) return `${minutes} мин`;
   return 'меньше минуты';
 }
