@@ -10,6 +10,7 @@ import {
   isHardLocked,
   useChains,
   useExchangeOptions,
+  type Chain,
   type ExchangeOptions,
 } from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
@@ -41,27 +42,34 @@ export function ChainListPage() {
   // деталь заявки не отдаёт снимок отдаваемого товара — берём его из кеша товаров
   const offeredItem = itemsQuery.data?.items.find((item) => item.id === request?.offeredItemId);
 
-  // exchange-options не отдаёт число согласий второго раунда: для PROPOSED-цепочек оно
-  // считается из participants[].vote детали (GET /chains/{id}) — см. approvedCountFor
+  // exchange-options не отдаёт ни число согласий второго раунда, ни дедлайн ответа: и то и другое
+  // для PROPOSED-цепочек берётся из детали (GET /chains/{id}) — см. approvedCountFor/deadlineAtFor
   const proposedChainIds = options
     .filter((entry) => entry.status === 'PROPOSED')
     .map((entry) => entry.chainId);
   const proposedQueries = useChains(proposedChainIds);
-  const approvedByChain = new Map<number, number>();
+  const detailByChain = new Map<number, Chain>();
   proposedQueries.forEach((query, index) => {
-    if (query.data) approvedByChain.set(proposedChainIds[index], approvedVotes(query.data));
+    if (query.data) detailByChain.set(proposedChainIds[index], query.data);
   });
 
   function approvedCountFor(entry: ExchangeOptions): number | undefined {
     if (isHardLocked(entry.status)) return entry.length;
-    return approvedByChain.get(entry.chainId);
+    const detail = detailByChain.get(entry.chainId);
+    return detail ? approvedVotes(detail) : undefined;
+  }
+
+  function deadlineAtFor(entry: ExchangeOptions): string | null | undefined {
+    return detailByChain.get(entry.chainId)?.freezeDeadlineAt;
   }
 
   if (requestQuery.isLoading || optionsQuery.isLoading || itemsQuery.isLoading) {
     return (
       <div className="chain-list-page">
         <ChainListHeader onBack={() => navigate('/exchange-requests')} />
-        <Skeleton active paragraph={{ rows: 6 }} />
+        <div className="chain-list-page__body">
+          <Skeleton active paragraph={{ rows: 6 }} />
+        </div>
       </div>
     );
   }
@@ -141,6 +149,7 @@ export function ChainListPage() {
                 isConfirming={isConfirming}
                 locked={hasAssembled && !isAssembled(entry.status)}
                 approvedCount={approvedCountFor(entry)}
+                deadlineAt={deadlineAtFor(entry)}
                 onOpen={() => navigate(`/chains/${entry.chainId}`)}
                 onConfirm={(chainId) => openConfirm(chainId)}
                 onConfirmNow={(chainId) => confirmNow(chainId)}

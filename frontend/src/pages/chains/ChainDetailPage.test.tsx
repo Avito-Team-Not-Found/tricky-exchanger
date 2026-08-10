@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { confirmChain, useChain, type Chain } from '@entities/chain';
 
@@ -63,6 +63,11 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    // тесты таймера фиксируют дату через vi.setSystemTime — возвращаем настоящий Date.now()
+    vi.useRealTimers();
   });
 
   it('shows the received item with its description', () => {
@@ -145,6 +150,30 @@ describe('ChainDetailPage', () => {
     renderWithProviders(<ChainDetailPage />);
 
     expect(screen.getByText('2/2 согласий')).toBeInTheDocument();
+  });
+
+  // таймер дедлайна ответа — атрибут PROPOSED-цепочки (макет 4.7, TimerRow); на FROZEN то же
+  // поле несёт дедлайн отправки товара, поэтому строка гейтится по статусу (DEADLINE-PLAN §1.5)
+  it('shows the response deadline on a proposed chain', () => {
+    vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ status: 'PROPOSED', freezeDeadlineAt: '2026-08-12T09:58:00Z' })),
+    );
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('Осталось 47 ч 58 мин на ответ')).toBeInTheDocument();
+  });
+
+  it('hides the deadline row on a frozen chain even when the deadline is set', () => {
+    vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ status: 'FROZEN', freezeDeadlineAt: '2026-08-12T09:58:00Z' })),
+    );
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.queryByText(/Осталось .* на ответ/)).not.toBeInTheDocument();
   });
 
   it('replaces the action with the confirmed line once my vote is approved', () => {

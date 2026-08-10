@@ -11,6 +11,7 @@ import {
 import { ProbabilityBadge } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
+import { DeadlineRow } from './DeadlineRow';
 
 import './ChainCard.scss';
 
@@ -23,6 +24,9 @@ interface ChainCardProps {
   // число согласий второго раунда: на FROZEN всегда = length, на PROPOSED — из деталей цепочки
   // (exchange-options его не отдаёт); undefined — бейдж не рисуем, пока счётчик неизвестен
   approvedCount?: number;
+  // дедлайн ответа по собранной цепочке — тоже из детали (GET /chains/{id}), exchange-options
+  // его не отдаёт; без даты таймер не рисуем
+  deadlineAt?: string | null;
   onOpen: () => void;
   onVote: (active: boolean) => void;
   onConfirm: (chainId: number) => void;
@@ -43,6 +47,7 @@ export function ChainCard({
   isConfirming,
   locked,
   approvedCount,
+  deadlineAt,
   onOpen,
   onVote,
   onConfirm,
@@ -103,6 +108,8 @@ export function ChainCard({
       </div>
 
       {hardLocked ? <p className="chain-card__lock">{HARD_LOCK_MESSAGE}</p> : null}
+
+      <DeadlineRow status={options.status} deadlineAt={deadlineAt} />
 
       {canAct ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>

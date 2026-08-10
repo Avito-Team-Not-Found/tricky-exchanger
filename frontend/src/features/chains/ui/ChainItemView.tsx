@@ -14,6 +14,7 @@ import {
 import { ProbabilityBadge } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
+import { DeadlineRow } from './DeadlineRow';
 
 import './ChainItemView.scss';
 
@@ -77,6 +78,8 @@ export function ChainItemView({
       </div>
 
       {hardLocked ? <p className="chain-item__lock">{HARD_LOCK_MESSAGE}</p> : null}
+
+      <DeadlineRow status={chain.status} deadlineAt={chain.freezeDeadlineAt} />
 
       {single?.offeredItemDescription ? (
         <section className="chain-item__section">

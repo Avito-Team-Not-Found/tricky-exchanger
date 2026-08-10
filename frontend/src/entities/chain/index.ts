@@ -25,6 +25,7 @@ export {
   type VotePayload,
   type VoteValue,
 } from './model';
+export { formatRemaining } from './deadline';
 export { participantAlias, type ParticipantAlias } from './alias';
 export {
   confirmChain,
