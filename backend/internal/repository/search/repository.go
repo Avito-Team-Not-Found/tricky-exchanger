@@ -28,12 +28,12 @@ package search
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
 // CandidateSearcher — контракт векторного поиска кандидатов.
@@ -241,7 +241,10 @@ const queryIncomingToStart = `
 func (s *Search) FindOutgoingByThreshold(ctx context.Context, want []float32, excludeUserID string, threshold float64) ([]entity.Candidate, error) {
 	rows, err := s.pool.Query(ctx, constQueryOutgoingThreshold, embedLiteral(want), excludeUserID, threshold)
 	if err != nil {
-		return nil, fmt.Errorf("search outgoing by threshold: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return collectCandidates(rows)
 }
@@ -250,7 +253,10 @@ func (s *Search) FindOutgoingByThreshold(ctx context.Context, want []float32, ex
 func (s *Search) FindIncomingByThreshold(ctx context.Context, mine []float32, excludeUserID string, threshold float64) ([]entity.Candidate, error) {
 	rows, err := s.pool.Query(ctx, constQueryIncomingThreshold, embedLiteral(mine), excludeUserID, threshold)
 	if err != nil {
-		return nil, fmt.Errorf("search incoming by threshold: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return collectCandidates(rows)
 }
@@ -259,7 +265,10 @@ func (s *Search) FindIncomingByThreshold(ctx context.Context, mine []float32, ex
 func (s *Search) FindOutgoingTopK(ctx context.Context, want []float32, excludeUserID string, k int) ([]entity.Candidate, error) {
 	rows, err := s.pool.Query(ctx, constQueryOutgoingTopK, embedLiteral(want), excludeUserID, k)
 	if err != nil {
-		return nil, fmt.Errorf("search outgoing top-k: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return collectCandidates(rows)
 }
@@ -268,7 +277,10 @@ func (s *Search) FindOutgoingTopK(ctx context.Context, want []float32, excludeUs
 func (s *Search) FindIncomingTopK(ctx context.Context, mine []float32, excludeUserID string, k int) ([]entity.Candidate, error) {
 	rows, err := s.pool.Query(ctx, constQueryIncomingTopK, embedLiteral(mine), excludeUserID, k)
 	if err != nil {
-		return nil, fmt.Errorf("search incoming top-k: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return collectCandidates(rows)
 }
@@ -289,7 +301,10 @@ func (s *Search) FindSimilarOffers(
 		ctx, querySimilarOffers, offer, want, excludeOfferID, category, threshold, k, directionMargin,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("search similar offers: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return collectCandidates(rows)
 }
@@ -308,7 +323,10 @@ func (s *Search) LoadOutgoingFrontier(
 
 	rows, err := tx.Query(ctx, queryOutgoingFrontier, requestIDs, k, threshold)
 	if err != nil {
-		return nil, fmt.Errorf("load outgoing frontier: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return collectCandidateEdges(rows)
 }
@@ -323,7 +341,10 @@ func (s *Search) LoadIncomingToStart(
 ) ([]entity.CandidateEdge, error) {
 	rows, err := tx.Query(ctx, queryIncomingToStart, startRequestID, k, threshold)
 	if err != nil {
-		return nil, fmt.Errorf("load incoming to start: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return collectCandidateEdges(rows)
 }
@@ -336,12 +357,18 @@ func collectCandidates(rows pgx.Rows) ([]entity.Candidate, error) {
 	for rows.Next() {
 		var c entity.Candidate
 		if err := rows.Scan(&c.RequestID, &c.ItemID, &c.OwnerID, &c.Score); err != nil {
-			return nil, fmt.Errorf("scan candidate: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		candidates = append(candidates, c)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate candidates: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return candidates, nil
 }
@@ -359,12 +386,18 @@ func collectCandidateEdges(rows pgx.Rows) ([]entity.CandidateEdge, error) {
 			&edge.ToClusterID,
 			&edge.Score,
 		); err != nil {
-			return nil, fmt.Errorf("scan candidate edge: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		edges = append(edges, edge)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate candidate edges: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	return edges, nil
 }

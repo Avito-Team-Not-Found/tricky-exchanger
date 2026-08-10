@@ -3,7 +3,6 @@ package exchange_offer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -12,6 +11,7 @@ import (
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 	offerservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/exchange_offer"
 )
 
@@ -60,7 +60,10 @@ func (r *Postgres) Create(ctx context.Context, tx database.Tx, request entity.Ex
 		&created.UpdatedAt,
 	)
 	if err != nil {
-		return entity.ExchangeOffer{}, fmt.Errorf("insert exchange request: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return entity.ExchangeOffer{}, mappedErr
+		}
+		return entity.ExchangeOffer{}, err
 	}
 
 	return created, nil
@@ -76,11 +79,14 @@ func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (ent
 	`
 
 	request, err := scanExchangeOffer(r.pool.QueryRow(ctx, query, requestID, userID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ExchangeOffer{}, entity.ErrExchangeOfferNotFound
-	}
 	if err != nil {
-		return entity.ExchangeOffer{}, fmt.Errorf("get exchange request: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return entity.ExchangeOffer{}, mappedErr
+			}
+			return entity.ExchangeOffer{}, err
+		}
+		return entity.ExchangeOffer{}, entity.ErrExchangeOfferNotFound
 	}
 
 	return request, nil
@@ -102,7 +108,10 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOf
 
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
-		return nil, fmt.Errorf("list exchange requests: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -121,13 +130,19 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOf
 			&item.UpdatedAt,
 			&item.OfferedItemTitle,
 		); err != nil {
-			return nil, fmt.Errorf("scan exchange request list row: %w", err)
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return nil, mappedErr
+			}
+			return nil, err
 		}
 		requests = append(requests, item)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate exchange request list: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return nil, mappedErr
+		}
+		return nil, err
 	}
 
 	return requests, nil
@@ -174,7 +189,10 @@ func (r *Postgres) Update(ctx context.Context, tx database.Tx, request entity.Ex
 		if mapped := mutationError(ctx, tx, request.ID, request.UserID, expectedVersion, err); mapped != nil {
 			return entity.ExchangeOffer{}, mapped
 		}
-		return entity.ExchangeOffer{}, fmt.Errorf("update exchange request: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return entity.ExchangeOffer{}, mappedErr
+		}
+		return entity.ExchangeOffer{}, err
 	}
 
 	if err := invalidateCandidateChains(ctx, tx, updated.ID, "request_changed"); err != nil {
@@ -203,7 +221,10 @@ func (r *Postgres) Archive(ctx context.Context, tx database.Tx, userID string, r
 		if mapped := mutationError(ctx, tx, requestID, userID, expectedVersion, err); mapped != nil {
 			return entity.ExchangeOffer{}, mapped
 		}
-		return entity.ExchangeOffer{}, fmt.Errorf("archive exchange request: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return entity.ExchangeOffer{}, mappedErr
+		}
+		return entity.ExchangeOffer{}, err
 	}
 
 	if err := invalidateCandidateChains(ctx, tx, archived.ID, "request_archived"); err != nil {
@@ -245,7 +266,10 @@ func ensureActiveOwnedItem(ctx context.Context, tx database.Tx, userID string, i
 
 	var exists bool
 	if err := tx.QueryRow(ctx, query, itemID, userID).Scan(&exists); err != nil {
-		return fmt.Errorf("verify offered item: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	if !exists {
 		return entity.ErrOfferedItemUnavailable
@@ -262,11 +286,14 @@ func ensureMutableRequest(ctx context.Context, tx database.Tx, requestID int64, 
 		WHERE id = $1 AND user_id = $2
 		FOR UPDATE
 	`, requestID, userID).Scan(&status, &currentVersion)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ErrExchangeOfferNotFound
-	}
 	if err != nil {
-		return fmt.Errorf("lock exchange request for update: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
+		}
+		return entity.ErrExchangeOfferNotFound
 	}
 	if status == entity.RequestStatusLocked {
 		return entity.ErrExchangeOfferLocked
@@ -297,7 +324,10 @@ func invalidateCandidateChains(ctx context.Context, tx database.Tx, requestID in
 		)
 	`
 	if _, err := tx.Exec(ctx, query, requestID, reason); err != nil {
-		return fmt.Errorf("invalidate candidate chains: %w", err)
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
 	}
 	return nil
 }
@@ -314,11 +344,14 @@ func mutationError(ctx context.Context, tx database.Tx, requestID int64, userID 
 		FROM exchange_offers
 		WHERE id = $1 AND user_id = $2
 	`, requestID, userID).Scan(&status, &currentVersion)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return entity.ErrExchangeOfferNotFound
-	}
 	if err != nil {
-		return fmt.Errorf("inspect failed exchange request mutation: %w", err)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
+		}
+		return entity.ErrExchangeOfferNotFound
 	}
 	if status == entity.RequestStatusLocked {
 		return entity.ErrExchangeOfferLocked

@@ -27,11 +27,22 @@ Feature-Sliced Design. Слои (сверху вниз, импорты толь�
 
 ## Установка и запуск
 
+### Весь проект через Docker (рекомендуется)
+
+Из корня репозитория:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+UI: http://localhost:3000 (nginx проксирует `/api` и `/s3`).
+
+### Только frontend (hot-reload)
+
 ```bash
 npm install
-npm run dev          # dev-сервер (Vite), по умолчанию http://localhost:5173
-npm run build        # сборка (tsc + vite build)
-npm run preview      # предпросмотр собранного проекта
+npm run dev          # http://localhost:5173
 ```
 
 Фронтенд работает с реальным Go-бэкендом: запросы с пустым `VITE_API_BASE_URL` идут relative
