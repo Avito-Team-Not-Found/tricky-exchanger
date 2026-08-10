@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -157,6 +158,14 @@ func (stubChainService) ListReplacements(_ context.Context, _ string, _ int64) (
 
 func (stubChainService) SelectReplacement(_ context.Context, _ string, _, _ int64) error { return nil }
 
+func (stubChainService) Handoff(_ context.Context, chainID, requestID int64) (chainService.FulfillmentResult, error) {
+	return chainService.FulfillmentResult{ChainID: chainID, RequestID: requestID, Status: entity.ChainStatusInProgress}, nil
+}
+
+func (stubChainService) ConfirmReceipt(_ context.Context, _ string, chainID, requestID int64) (chainService.FulfillmentResult, error) {
+	return chainService.FulfillmentResult{ChainID: chainID, RequestID: requestID, Status: entity.ChainStatusInProgress}, nil
+}
+
 func TestPingHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -232,6 +241,37 @@ func TestChains_RequiresAuth(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status %d for /api/v1/chains without Authorization header, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestReceipt_RequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/chains/7/receipt", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+}
+
+func TestAvitoHandoff_IsRegisteredForLocalMVP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := newTestEngine()
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/integrations/avito/handoffs",
+		strings.NewReader(`{"chainId":7,"requestId":10}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
 	}
 }
 

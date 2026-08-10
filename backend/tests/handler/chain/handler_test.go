@@ -142,15 +142,22 @@ func TestExchangeOptionsReturnsOnlyNextClusterMembers(t *testing.T) {
 }
 
 type fakeService struct {
-	chain          entity.Chain
-	chains         []entity.Chain
-	vote           entity.ChainVote
-	voteInput      chainservice.VoteInput
-	withdrawInput  chainservice.VoteInput
-	confirmStatus  entity.ChainStatus
-	confirmUserID  string
-	confirmChainID int64
-	err            error
+	chain            entity.Chain
+	chains           []entity.Chain
+	vote             entity.ChainVote
+	voteInput        chainservice.VoteInput
+	withdrawInput    chainservice.VoteInput
+	confirmStatus    entity.ChainStatus
+	confirmUserID    string
+	confirmChainID   int64
+	handoffResult    chainservice.FulfillmentResult
+	receiptResult    chainservice.FulfillmentResult
+	handoffChainID   int64
+	handoffRequestID int64
+	receiptUserID    string
+	receiptChainID   int64
+	receiptRequestID int64
+	err              error
 }
 
 func (s *fakeService) Confirm(_ context.Context, userID string, chainID int64) (entity.ChainStatus, error) {
@@ -170,6 +177,19 @@ func (s *fakeService) ListReplacements(_ context.Context, _ string, _ int64) ([]
 }
 
 func (s *fakeService) SelectReplacement(_ context.Context, _ string, _, _ int64) error { return s.err }
+
+func (s *fakeService) Handoff(_ context.Context, chainID, requestID int64) (chainservice.FulfillmentResult, error) {
+	s.handoffChainID = chainID
+	s.handoffRequestID = requestID
+	return s.handoffResult, s.err
+}
+
+func (s *fakeService) ConfirmReceipt(_ context.Context, userID string, chainID, requestID int64) (chainservice.FulfillmentResult, error) {
+	s.receiptUserID = userID
+	s.receiptChainID = chainID
+	s.receiptRequestID = requestID
+	return s.receiptResult, s.err
+}
 
 func (s *fakeService) List(_ context.Context, _ string) ([]entity.Chain, error) {
 	return []entity.Chain{s.chain}, s.err
@@ -301,5 +321,66 @@ func TestConfirmMapsForeignParticipantToForbidden(t *testing.T) {
 
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandoffAcceptsPinnedRequestWithoutJWT(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	service := &fakeService{handoffResult: chainservice.FulfillmentResult{
+		ChainID: 7, RequestID: 10, Status: entity.ChainStatusInProgress,
+	}}
+	engine := gin.New()
+	engine.POST("/integrations/avito/handoffs", chainhandler.NewHandler(service).Handoff)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/integrations/avito/handoffs",
+		strings.NewReader(`{"chainId":7,"requestId":10}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if service.handoffChainID != 7 || service.handoffRequestID != 10 {
+		t.Fatalf("handoff = chain %d, request %d", service.handoffChainID, service.handoffRequestID)
+	}
+	if !strings.Contains(recorder.Body.String(), `"status":"IN_PROGRESS"`) {
+		t.Fatalf("body = %s", recorder.Body.String())
+	}
+}
+
+func TestReceiptRequiresAuthenticatedRecipient(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	service := &fakeService{receiptResult: chainservice.FulfillmentResult{
+		ChainID: 7, RequestID: 10, Status: entity.ChainStatusCompleted,
+	}}
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c.Set("userID", userID)
+		c.Next()
+	})
+	engine.POST("/chains/:id/receipt", chainhandler.NewHandler(service).ConfirmReceipt)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/chains/7/receipt",
+		strings.NewReader(`{"requestId":10}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	if service.receiptUserID != userID.String() || service.receiptChainID != 7 || service.receiptRequestID != 10 {
+		t.Fatalf("receipt = user %q, chain %d, request %d", service.receiptUserID, service.receiptChainID, service.receiptRequestID)
+	}
+	if !strings.Contains(recorder.Body.String(), `"status":"COMPLETED"`) {
+		t.Fatalf("body = %s", recorder.Body.String())
 	}
 }

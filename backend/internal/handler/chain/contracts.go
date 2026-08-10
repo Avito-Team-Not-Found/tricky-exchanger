@@ -19,4 +19,6 @@ type chainService interface {
 	Decline(ctx context.Context, userID string, chainID int64) (bool, entity.ChainStatus, error)
 	ListReplacements(ctx context.Context, userID string, chainID int64) ([]entity.ReplacementOption, error)
 	SelectReplacement(ctx context.Context, userID string, chainID, replacementRequestID int64) error
+	Handoff(ctx context.Context, chainID, requestID int64) (chainservice.FulfillmentResult, error)
+	ConfirmReceipt(ctx context.Context, userID string, chainID, requestID int64) (chainservice.FulfillmentResult, error)
 }
