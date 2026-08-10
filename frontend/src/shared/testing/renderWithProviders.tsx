@@ -14,14 +14,16 @@ export function createTestQueryClient() {
 export interface RenderWithProvidersOptions {
   initialEntries?: string[];
   routes?: { path: string; element: ReactNode }[];
+  // свой клиент нужен тестам, которые следят за инвалидацией кеша
+  client?: QueryClient;
 }
 
 // ui рендерится как catch-all-роут, а routes — как конкретные целевые экраны для проверки навигации
 export function renderWithProviders(
   ui: ReactNode,
-  { initialEntries = ['/'], routes = [] }: RenderWithProvidersOptions = {},
+  { initialEntries = ['/'], routes = [], client }: RenderWithProvidersOptions = {},
 ): RenderResult {
-  const queryClient = createTestQueryClient();
+  const queryClient = client ?? createTestQueryClient();
   return render(
     <QueryClientProvider client={queryClient}>
       <AntApp>
