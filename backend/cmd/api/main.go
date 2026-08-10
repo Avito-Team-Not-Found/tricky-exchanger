@@ -100,7 +100,7 @@ func main() {
 		cfg.MatchingThreshold,
 	).WithQualityRules(cfg.CycleMinAverageScore, cfg.CycleMaxScoreGap)
 	transactionManager := database.NewTransactionManager(pool)
-	chainRepository := chainRepo.NewRepository(pool)
+	chainRepository := chainRepo.NewRepository(pool, cfg.MatchingThreshold)
 
 	scoreRanker := ranker.NewChainScoreCalculator(ranker.NewRankerConfig())
 	chainSvc := chainservice.NewService(chainRepository, transactionManager)

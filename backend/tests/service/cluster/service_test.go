@@ -56,6 +56,13 @@ func TestSynchronizeRefreshesOldClusterAndUsesCandidate(t *testing.T) {
 	if repository.vectors.Category != "Телефоны" {
 		t.Fatalf("repository category = %q, want %q", repository.vectors.Category, "Телефоны")
 	}
+	if repository.vectors.WantedCategory != "Игры и приставки" {
+		t.Fatalf(
+			"repository wanted category = %q, want %q",
+			repository.vectors.WantedCategory,
+			"Игры и приставки",
+		)
+	}
 	if searcher.excludeOfferID != 10 || searcher.topK != 50 || searcher.threshold != 0.8 || searcher.directionMargin != 0.05 {
 		t.Fatalf(
 			"search args = exclude %d, topK %d, threshold %v, margin %v",
@@ -64,6 +71,13 @@ func TestSynchronizeRefreshesOldClusterAndUsesCandidate(t *testing.T) {
 	}
 	if searcher.category != "Телефоны" {
 		t.Fatalf("search category = %q, want %q", searcher.category, "Телефоны")
+	}
+	if searcher.wantedCategory != "Игры и приставки" {
+		t.Fatalf(
+			"search wanted category = %q, want %q",
+			searcher.wantedCategory,
+			"Игры и приставки",
+		)
 	}
 }
 
@@ -99,6 +113,7 @@ func (r *fakeRepository) LoadVectors(context.Context, database.Tx, int64) (clust
 		OfferEmbedding: "[1,0]",
 		WantEmbedding:  "[0,1]",
 		Category:       "Телефоны",
+		WantedCategory: "Игры и приставки",
 	}, nil
 }
 
@@ -145,6 +160,7 @@ func (r *fakeRepository) ListActiveMembers(context.Context, int64) ([]entity.Exc
 type fakeSearcher struct {
 	candidates      []entity.Candidate
 	category        string
+	wantedCategory  string
 	excludeOfferID  int64
 	topK            int
 	threshold       float64
@@ -155,12 +171,14 @@ func (s *fakeSearcher) FindSimilarOffers(
 	_ context.Context,
 	_, _ string,
 	category string,
+	wantedCategory string,
 	excludeOfferID int64,
 	threshold float64,
 	directionMargin float64,
 	topK int,
 ) ([]entity.Candidate, error) {
 	s.category = category
+	s.wantedCategory = wantedCategory
 	s.excludeOfferID = excludeOfferID
 	s.threshold = threshold
 	s.directionMargin = directionMargin

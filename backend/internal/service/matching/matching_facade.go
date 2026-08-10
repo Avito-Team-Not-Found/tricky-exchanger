@@ -58,9 +58,63 @@ func (f *MatchingFacade) RebuildForRequest(
 	if f.clusters == nil {
 		return nil, entity.ErrClusterNotConfigured
 	}
+	// chain_participants keeps a foreign key to clusters.  Therefore all
+	// candidate chains built from the old cluster must be removed before
+	// Synchronize removes the request's old membership (and possibly the empty
+	// cluster itself).
+	affectedRequestIDs, err := f.detachAffectedCandidates(ctx, tx, requestID)
+	if err != nil {
+		return nil, err
+	}
 	if err := f.clusters.Synchronize(ctx, tx, requestID); err != nil {
 		return nil, err
 	}
+	drafts, err := f.findAndSaveCandidates(ctx, tx, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if err := f.rebuildCandidateRequests(ctx, tx, affectedRequestIDs, requestID); err != nil {
+		return nil, err
+	}
+	return drafts, nil
+}
+
+// detachAffectedCandidates removes all candidate-chain rows that reference
+// the request's current cluster and returns their selected requests for a
+// subsequent search.  The deletion must happen before the cluster membership
+// is changed, otherwise PostgreSQL correctly prevents deleting an empty
+// cluster referenced by chain_participants.
+func (f *MatchingFacade) detachAffectedCandidates(
+	ctx context.Context,
+	tx database.Tx,
+	requestID int64,
+) ([]int64, error) {
+	if f.chains == nil {
+		return nil, nil
+	}
+	affected, err := f.chains.ListChainsContainingRequest(ctx, tx, requestID)
+	if err != nil {
+		return nil, err
+	}
+	requestIDs := make([]int64, 0)
+	for _, chainID := range affected {
+		ids, err := f.chains.LoadChainRequestIDs(ctx, tx, chainID)
+		if err != nil {
+			return nil, err
+		}
+		if err := f.chains.DeleteChain(ctx, tx, chainID); err != nil {
+			return nil, err
+		}
+		requestIDs = append(requestIDs, ids...)
+	}
+	return requestIDs, nil
+}
+
+func (f *MatchingFacade) findAndSaveCandidates(
+	ctx context.Context,
+	tx database.Tx,
+	requestID int64,
+) ([]entity.ChainDraft, error) {
 	if f.cycles == nil {
 		return []entity.ChainDraft{}, nil
 	}
@@ -87,6 +141,28 @@ func (f *MatchingFacade) RebuildForRequest(
 		}
 	}
 	return drafts, nil
+}
+
+func (f *MatchingFacade) rebuildCandidateRequests(
+	ctx context.Context,
+	tx database.Tx,
+	requestIDs []int64,
+	exceptID int64,
+) error {
+	seen := make(map[int64]struct{}, len(requestIDs))
+	for _, requestID := range requestIDs {
+		if requestID <= 0 || requestID == exceptID {
+			continue
+		}
+		if _, exists := seen[requestID]; exists {
+			continue
+		}
+		seen[requestID] = struct{}{}
+		if _, err := f.findAndSaveCandidates(ctx, tx, requestID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RemoveRequest исключает заявку из производных данных: вычищает её участие

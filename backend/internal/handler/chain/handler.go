@@ -3,6 +3,7 @@ package chain
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -422,6 +423,7 @@ func (h *Handler) Confirm(c *gin.Context) {
 		case errors.Is(err, entity.ErrChainConfirmationExpired):
 			api.SendError(c, http.StatusGone, err.Error())
 		default:
+			log.Printf("confirm chain failed: %v", err)
 			api.SendError(c, http.StatusInternalServerError, "internal server error")
 		}
 		return
@@ -589,6 +591,7 @@ func DetermineError(c *gin.Context, err error) {
 	case errors.Is(err, entity.ErrHandoffRequestInvalid):
 		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 	default:
+		log.Printf("chain request failed: %v", err)
 		api.SendError(c, http.StatusInternalServerError, "internal server error")
 	}
 }

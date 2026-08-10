@@ -35,7 +35,7 @@ var imageExtensionByContentType = map[string]string{
 type CreateInput struct {
 	Title       string `json:"title" validate:"not_empty,max=200"`
 	Description string `json:"description" validate:"omitempty,max=2000"`
-	Category    string `json:"category" validate:"omitempty,max=100"`
+	Category    string `json:"category" validate:"not_empty,max=100"`
 }
 
 // UpdateInput содержит новые данные для частичного изменения товара.

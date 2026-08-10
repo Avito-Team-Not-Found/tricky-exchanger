@@ -31,7 +31,7 @@ func NewHandler(service itemService) *Handler {
 type createItemRequest struct {
 	Title       string `json:"title" validate:"not_empty,max=200"`
 	Description string `json:"description" validate:"omitempty,max=2000"`
-	Category    string `json:"category" validate:"omitempty,max=100"`
+	Category    string `json:"category" validate:"not_empty,max=100"`
 }
 
 type updateItemRequest struct {
@@ -300,4 +300,3 @@ func pathID(c *gin.Context) (int64, bool) {
 	}
 	return itemID, true
 }
-

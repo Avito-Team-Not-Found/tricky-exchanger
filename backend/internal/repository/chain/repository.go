@@ -19,7 +19,8 @@ import (
 
 // Postgres хранит цепочки и их участников в PostgreSQL.
 type Postgres struct {
-	pool *pgxpool.Pool
+	pool              *pgxpool.Pool
+	matchingThreshold float64
 }
 
 const loadVisibleChainsQuery = `
@@ -39,7 +40,7 @@ const loadVisibleChainsQuery = `
 		  AND (
 			(c.status = 'CANDIDATE' AND eo.status IN ('ACTIVE', 'IN_PROPOSAL'))
 			OR (c.status <> 'CANDIDATE' AND member.request_id = cp.request_id
-				AND eo.status IN ('ACTIVE', 'IN_PROPOSAL', 'LOCKED', 'IN_PROGRESS', 'DONE'))
+				AND eo.status IN ('IN_PROPOSAL', 'LOCKED', 'IN_PROGRESS', 'DONE'))
 		  )
 		ORDER BY cp.position
 		LIMIT 1
@@ -84,8 +85,12 @@ const listPendingVoteEdgesQuery = `
 `
 
 // NewRepository создаёт репозиторий цепочек.
-func NewRepository(pool *pgxpool.Pool) *Postgres {
-	return &Postgres{pool: pool}
+func NewRepository(pool *pgxpool.Pool, thresholds ...float64) *Postgres {
+	threshold := 0.5
+	if len(thresholds) > 0 && thresholds[0] > 0 && thresholds[0] <= 1 {
+		threshold = thresholds[0]
+	}
+	return &Postgres{pool: pool, matchingThreshold: threshold}
 }
 
 // SaveCandidates атомарно сохраняет цепочки и участников в уже открытой транзакции.
@@ -99,6 +104,7 @@ func (r *Postgres) SaveCandidates(ctx context.Context, tx database.Tx, drafts []
 }
 
 func saveCandidate(ctx context.Context, tx database.Tx, draft entity.ChainDraft) error {
+	draft = canonicalizeDraft(draft)
 	clusterIDs := make([]int64, len(draft.Participants))
 	for i, participant := range draft.Participants {
 		clusterIDs[i] = participant.ClusterID
@@ -208,11 +214,69 @@ func clusterSizeAt(draft entity.ChainDraft, position int) int {
 }
 
 func chainSignature(clusterIDs []int64) string {
+	clusterIDs = canonicalClusterCycle(clusterIDs)
 	parts := make([]string, len(clusterIDs))
 	for i, clusterID := range clusterIDs {
 		parts[i] = strconv.FormatInt(clusterID, 10)
 	}
 	return strings.Join(parts, ":")
+}
+
+func canonicalizeDraft(draft entity.ChainDraft) entity.ChainDraft {
+	if len(draft.Participants) < 2 {
+		return draft
+	}
+	best := 0
+	for i := 1; i < len(draft.Participants); i++ {
+		if draft.Participants[i].ClusterID < draft.Participants[best].ClusterID {
+			best = i
+		}
+	}
+	rotateParticipants := append(append([]entity.ChainDraftParticipant(nil), draft.Participants[best:]...), draft.Participants[:best]...)
+	draft.Participants = rotateParticipants
+	draft.EdgeCosines = rotateFloat64(draft.EdgeCosines, best)
+	draft.ParticipantReliability = rotateFloat64(draft.ParticipantReliability, best)
+	draft.ClusterSizes = rotateInts(draft.ClusterSizes, best)
+	return draft
+}
+
+func rotateFloat64(values []float64, start int) []float64 {
+	if len(values) == 0 || start <= 0 || start >= len(values) {
+		return values
+	}
+	return append(append([]float64(nil), values[start:]...), values[:start]...)
+}
+
+func rotateInts(values []int, start int) []int {
+	if len(values) == 0 || start <= 0 || start >= len(values) {
+		return values
+	}
+	return append(append([]int(nil), values[start:]...), values[:start]...)
+}
+
+func canonicalClusterCycle(clusterIDs []int64) []int64 {
+	if len(clusterIDs) < 2 {
+		return append([]int64(nil), clusterIDs...)
+	}
+	best := 0
+	for start := 1; start < len(clusterIDs); start++ {
+		for offset := 0; offset < len(clusterIDs); offset++ {
+			left := clusterIDs[(start+offset)%len(clusterIDs)]
+			right := clusterIDs[(best+offset)%len(clusterIDs)]
+			if left < right {
+				best = start
+				break
+			}
+			if left > right {
+				break
+			}
+		}
+	}
+	result := make([]int64, len(clusterIDs))
+	for i := range result {
+		result[i] = clusterIDs[(best+i)%len(clusterIDs)]
+	}
+	return result
 }
 
 // List возвращает актуальные цепочки пользователя без N+1-запросов.
@@ -884,7 +948,9 @@ func (r *Postgres) MarkParticipantThinking(ctx context.Context, tx database.Tx, 
 
 // DeclineParticipant removes the participant's confirmation and releases its
 // request. A replacement is allowed only when every other participant has
-// confirmed. Otherwise the proposal is rolled back to CANDIDATE.
+// confirmed and the declining participant has an own vote in the chain. An
+// invited replacement has no own vote yet; its refusal rolls the proposal back
+// to CANDIDATE instead of opening an unsupported second replacement round.
 func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chainID, requestID int64, fastReplacementEligible bool) (bool, entity.ChainStatus, error) {
 	var openReplacements int
 	if err := tx.QueryRow(ctx, `
@@ -928,6 +994,15 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 		return false, "", entity.ErrChainVoteForbidden
 	}
 
+	var hasOwnVote bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM votes WHERE chain_id = $1 AND request_id = $2
+		)
+	`, chainID, requestID).Scan(&hasOwnVote); err != nil {
+		return false, "", fmt.Errorf("check declined participant vote: %w", err)
+	}
+
 	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1 AND request_id = $2`, chainID, requestID); err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
 			return false, "", mappedErr
@@ -942,16 +1017,35 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 	}
 
 	var replacementAvailable bool
-	if fastReplacementEligible {
+	if fastReplacementEligible && hasOwnVote {
 		if err := tx.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1
 			FROM cluster_members candidate_member
 			JOIN exchange_offers candidate ON candidate.id = candidate_member.request_id
+			JOIN items candidate_item ON candidate_item.id = candidate.offered_item_id
 			JOIN chain_participants declined ON declined.chain_id = $3 AND declined.request_id = $2
 			JOIN chains c ON c.id = declined.chain_id
+			JOIN chain_participants previous_cp ON previous_cp.chain_id = c.id
+			 AND previous_cp.position = (declined.position - 1 + c.length) % c.length
+			JOIN exchange_offers previous_offer ON previous_offer.id = previous_cp.request_id
+			JOIN chain_participants next_cp ON next_cp.chain_id = c.id
+			 AND next_cp.position = (declined.position + 1) % c.length
+			JOIN exchange_offers next_offer ON next_offer.id = next_cp.request_id
+			JOIN items next_item ON next_item.id = next_offer.offered_item_id
 			WHERE candidate_member.cluster_id = $1 AND candidate.id <> $2
 			  AND candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+			  AND candidate.user_id <> ALL (
+				SELECT occupied.user_id FROM chain_participants occupied_cp
+				JOIN exchange_offers occupied ON occupied.id = occupied_cp.request_id
+				WHERE occupied_cp.chain_id = c.id AND occupied_cp.position <> declined.position
+			  )
+			  AND candidate_item.embedding IS NOT NULL AND previous_offer.want_embedding IS NOT NULL
+			  AND candidate.want_embedding IS NOT NULL AND next_item.embedding IS NOT NULL
+			  AND candidate_item.category IS NOT DISTINCT FROM previous_offer.wanted_category
+			  AND next_item.category IS NOT DISTINCT FROM candidate.wanted_category
+			  AND 1 - (candidate_item.embedding <=> previous_offer.want_embedding) >= $4
+			  AND 1 - (next_item.embedding <=> candidate.want_embedding) >= $4
 		)
 		`, clusterID, requestID, chainID).Scan(&replacementAvailable); err != nil {
 			if mappedErr, ok := repository.DBErrToErr(err); ok {
@@ -969,6 +1063,14 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 		SET status = 'ACTIVE', updated_at = NOW()
 		WHERE eo.id IN (SELECT request_id FROM chain_participants WHERE chain_id = $1)
 		  AND eo.status IN ('IN_PROPOSAL', 'LOCKED')
+		  AND NOT EXISTS (
+			SELECT 1 FROM chain_participants other_cp
+			JOIN chains other_chain ON other_chain.id = other_cp.chain_id
+			JOIN votes other_vote ON other_vote.chain_id = other_cp.chain_id
+			 AND other_vote.request_id = other_cp.request_id AND other_vote.vote = 'approved'
+			WHERE other_cp.request_id = eo.id AND other_cp.chain_id <> $1
+			  AND other_chain.status IN ('PROPOSED', 'FROZEN', 'IN_PROGRESS')
+		  )
 	`, chainID); err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
 			return false, "", mappedErr
@@ -1028,13 +1130,31 @@ func (r *Postgres) ListReplacementOptions(ctx context.Context, userID string, ch
 		JOIN exchange_offers candidate ON candidate.id = member.request_id
 		JOIN items item ON item.id = candidate.offered_item_id
 		JOIN chain_participants position ON position.chain_id = $1 AND position.position = v.position
+		JOIN chain_participants previous_cp ON previous_cp.chain_id = $1
+		 AND previous_cp.position = (v.position - 1 + v.length) % v.length
+		JOIN exchange_offers previous_offer ON previous_offer.id = previous_cp.request_id
+		JOIN chain_participants next_cp ON next_cp.chain_id = $1
+		 AND next_cp.position = (v.position + 1) % v.length
+		JOIN exchange_offers next_offer ON next_offer.id = next_cp.request_id
+		JOIN items next_item ON next_item.id = next_offer.offered_item_id
 		WHERE candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+		  AND candidate.user_id <> ALL (
+			SELECT occupied.user_id FROM chain_participants occupied_cp
+			JOIN exchange_offers occupied ON occupied.id = occupied_cp.request_id
+			WHERE occupied_cp.chain_id = $1 AND occupied_cp.position <> v.position
+		  )
+		  AND item.embedding IS NOT NULL AND previous_offer.want_embedding IS NOT NULL
+		  AND candidate.want_embedding IS NOT NULL AND next_item.embedding IS NOT NULL
+		  AND item.category IS NOT DISTINCT FROM previous_offer.wanted_category
+		  AND next_item.category IS NOT DISTINCT FROM candidate.wanted_category
+		  AND 1 - (item.embedding <=> previous_offer.want_embedding) >= $3
+		  AND 1 - (next_item.embedding <=> candidate.want_embedding) >= $3
 		  AND NOT EXISTS (
 			  SELECT 1 FROM chain_participants current
 			  WHERE current.chain_id = $1 AND current.request_id = candidate.id
 		  )
 		ORDER BY COALESCE(position.reliability, 0.75) DESC, candidate.updated_at, candidate.id
-	`, chainID, userID)
+	`, chainID, userID, r.matchingThreshold)
 	if err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
 			return nil, mappedErr
@@ -1100,8 +1220,23 @@ func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID
 			SELECT 1 FROM cluster_members candidate_member
 			JOIN cluster_members old_member ON old_member.cluster_id = candidate_member.cluster_id
 			JOIN exchange_offers candidate ON candidate.id = candidate_member.request_id
+			JOIN items candidate_item ON candidate_item.id = candidate.offered_item_id
+			JOIN exchange_offers actor_offer ON actor_offer.id = $4
+			JOIN exchange_offers next_offer ON next_offer.id = $5
+			JOIN items next_item ON next_item.id = next_offer.offered_item_id
 			WHERE old_member.request_id = $2 AND candidate.id = $3
 			  AND candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+			  AND candidate.user_id <> ALL (
+				SELECT occupied.user_id FROM chain_participants occupied_cp
+				JOIN exchange_offers occupied ON occupied.id = occupied_cp.request_id
+				WHERE occupied_cp.chain_id = $1 AND occupied_cp.position <> $6
+			  )
+			  AND candidate_item.embedding IS NOT NULL AND actor_offer.want_embedding IS NOT NULL
+			  AND candidate.want_embedding IS NOT NULL AND next_item.embedding IS NOT NULL
+			  AND candidate_item.category IS NOT DISTINCT FROM actor_offer.wanted_category
+			  AND next_item.category IS NOT DISTINCT FROM candidate.wanted_category
+			  AND 1 - (candidate_item.embedding <=> actor_offer.want_embedding) >= $7
+			  AND 1 - (next_item.embedding <=> candidate.want_embedding) >= $7
 			  AND NOT EXISTS (
 				  SELECT 1 FROM chain_participants current
 				  WHERE current.chain_id = $1 AND current.request_id = candidate.id
@@ -1163,6 +1298,22 @@ func (r *Postgres) CountApprovedVoters(ctx context.Context, tx database.Tx, chai
 			return 0, mappedErr
 		}
 		return 0, err
+	}
+	return count, nil
+}
+
+func (r *Postgres) CountApprovedVotersExcept(ctx context.Context, tx database.Tx, chainID, requestID int64) (int, error) {
+	var count int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(DISTINCT vote.request_id)
+		FROM votes AS vote
+		JOIN chain_participants AS source
+		  ON source.chain_id = vote.chain_id AND source.request_id = vote.request_id
+		JOIN chain_participants AS target
+		  ON target.chain_id = vote.chain_id AND target.request_id = vote.target_request_id
+		WHERE vote.chain_id = $1 AND vote.request_id <> $2 AND vote.vote = 'approved'
+	`, chainID, requestID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count approved voters except participant: %w", err)
 	}
 	return count, nil
 }
@@ -1542,12 +1693,17 @@ func (r *Postgres) CompleteChain(ctx context.Context, tx database.Tx, chainID in
 	return nil
 }
 
-// ListChainsContainingRequest возвращает цепочки, где заявка участвует как представитель.
+// ListChainsContainingRequest returns candidate chains whose position contains
+// the request, including the request as an alternative member of that
+// position's cluster. Live proposals and frozen deals must never be removed by
+// candidate rebuilding.
 func (r *Postgres) ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT DISTINCT cp.chain_id
 		FROM chain_participants AS cp
-		WHERE cp.request_id = $1
+		JOIN cluster_members AS member ON member.cluster_id = cp.cluster_id
+		JOIN chains AS chain ON chain.id = cp.chain_id
+		WHERE member.request_id = $1 AND chain.status = 'CANDIDATE'
 	`, requestID)
 	if err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {

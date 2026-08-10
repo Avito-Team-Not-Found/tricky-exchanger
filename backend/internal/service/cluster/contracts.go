@@ -12,6 +12,7 @@ type OfferVectors struct {
 	OfferEmbedding string
 	WantEmbedding  string
 	Category       string
+	WantedCategory string
 }
 
 // Repository описывает SQL-операции, нужные сервису кластеризации.
@@ -39,6 +40,7 @@ type CandidateSearcher interface {
 		offer string,
 		want string,
 		category string,
+		wantedCategory string,
 		excludeOfferID int64,
 		threshold float64,
 		directionMargin float64,

@@ -137,40 +137,51 @@ const querySimilarOffers = `
 		  AND i.status = 'ACTIVE'
 		  AND eo.id <> $3
 		  AND COALESCE(i.category, '') IS NOT DISTINCT FROM COALESCE($4, '')
+		  AND COALESCE(eo.wanted_category, '') IS NOT DISTINCT FROM COALESCE($5, '')
 		  AND i.embedding IS NOT NULL
 		  AND eo.want_embedding IS NOT NULL
 		ORDER BY i.embedding <=> $1::vector
-		LIMIT $6
+		LIMIT $7
 	)
 	SELECT request_id, item_id, owner_id,
 	       LEAST(offer_score, want_score) AS score
 	FROM nearest_by_offer
-	WHERE offer_score >= $5
-	  AND want_score >= $5
+	WHERE offer_score >= $6
+	  AND want_score >= $6
 	  AND (
 		$4 <> ''
 		OR (offer_score + want_score) / 2 >=
-		   (offer_to_want_score + want_to_offer_score) / 2 + $7
+		   (offer_to_want_score + want_to_offer_score) / 2 + $8
 	  )
 	ORDER BY offer_score + want_score DESC, request_id
 `
 
 // queryOutgoingFrontier загружает Top-K исходящих рёбер сразу для всего frontier.
-// LATERAL ограничивает соседей каждой исходной заявки отдельно, поэтому один уровень
-// обхода графа требует одного SQL-запроса, а не запроса на каждую вершину.
+// Frontier состоит из опорных заявок, но вершины DFS — кластеры. Поэтому сначала
+// раскрываются все активные заявки кластеров frontier, иначе путь мог бы зависеть
+// от случайно выбранного представителя кластера.
 // Если wanted_category задана, ребро допускается только к товару той же категории.
 const queryOutgoingFrontier = `
+	WITH source_clusters AS (
+		SELECT DISTINCT member.cluster_id
+		FROM cluster_members AS member
+		WHERE member.request_id = ANY($1::bigint[])
+	)
 	SELECT source.id AS from_request_id,
 	       source_member.cluster_id AS from_cluster_id,
+	       source.user_id::text AS from_owner_id,
 	       candidate.request_id AS to_request_id,
 	       candidate.cluster_id AS to_cluster_id,
+	       candidate.owner_id,
 	       candidate.score
-	FROM exchange_offers AS source
+	FROM source_clusters AS source_cluster
+	JOIN cluster_members AS source_member ON source_member.cluster_id = source_cluster.cluster_id
+	JOIN exchange_offers AS source ON source.id = source_member.request_id
 	JOIN items AS source_item ON source_item.id = source.offered_item_id
-	JOIN cluster_members AS source_member ON source_member.request_id = source.id
 	JOIN LATERAL (
 		SELECT target.id AS request_id,
 		       target_member.cluster_id,
+		       target.user_id::text AS owner_id,
 		       1 - (target_item.embedding <=> source.want_embedding) AS score
 		FROM exchange_offers AS target
 		JOIN items AS target_item ON target_item.id = target.offered_item_id
@@ -188,25 +199,21 @@ const queryOutgoingFrontier = `
 		ORDER BY target_item.embedding <=> source.want_embedding
 		LIMIT $2
 	) AS candidate ON true
-	WHERE source.id = ANY($1::bigint[])
-	  AND source.status = 'ACTIVE'
+	WHERE source.status = 'ACTIVE'
 	  AND source_item.status = 'ACTIVE'
 	  AND source.want_embedding IS NOT NULL
 	ORDER BY source.id, candidate.score DESC, candidate.request_id
 `
 
-// queryIncomingToStart ищет заявки, которые могут получить отдаваемый товар start.
-// Полученное множество используется как проверка замыкающего ребра current -> start,
+// queryIncomingToStart ищет заявки, которые могут получить любой товар стартового
+// кластера. Полученное множество используется как проверка замыкающего ребра,
 // поэтому DFS не загружает пятый уровень размером K^5.
 // У заявки, замыкающей цикл, заданная wanted_category также должна совпадать
-// с категорией отдаваемого товара стартовой заявки.
+// с категорией отдаваемого товара выбранного участника стартового кластера.
 const queryIncomingToStart = `
-	WITH start_offer AS MATERIALIZED (
-		SELECT start.id,
-		       start.user_id,
-		       start_member.cluster_id,
-		       start_item.embedding,
-		       start_item.category
+	WITH start_request AS MATERIALIZED (
+		SELECT start.id, start.user_id, start_item.embedding, start_item.category,
+		       start_member.cluster_id
 		FROM exchange_offers AS start
 		JOIN items AS start_item ON start_item.id = start.offered_item_id
 		JOIN cluster_members AS start_member ON start_member.request_id = start.id
@@ -217,23 +224,25 @@ const queryIncomingToStart = `
 	)
 	SELECT candidate.id AS from_request_id,
 	       candidate_member.cluster_id AS from_cluster_id,
-	       start_offer.id AS to_request_id,
-	       start_offer.cluster_id AS to_cluster_id,
-	       1 - (candidate.want_embedding <=> start_offer.embedding) AS score
-	FROM start_offer
+	       candidate.user_id::text AS from_owner_id,
+	       start_request.id AS to_request_id,
+	       start_request.cluster_id AS to_cluster_id,
+	       start_request.user_id::text AS owner_id,
+	       1 - (candidate.want_embedding <=> start_request.embedding) AS score
+	FROM start_request
 	JOIN exchange_offers AS candidate ON candidate.status = 'ACTIVE'
 	JOIN items AS candidate_item ON candidate_item.id = candidate.offered_item_id
 	JOIN cluster_members AS candidate_member ON candidate_member.request_id = candidate.id
-	WHERE candidate.id <> start_offer.id
-	  AND candidate.user_id <> start_offer.user_id
+	WHERE candidate_member.cluster_id <> start_request.cluster_id
+	  AND candidate.user_id <> start_request.user_id
 	  AND candidate_item.status = 'ACTIVE'
 	  AND candidate.want_embedding IS NOT NULL
 	  AND (
 		  COALESCE(candidate.wanted_category, '') = ''
-		  OR COALESCE(start_offer.category, '') IS NOT DISTINCT FROM candidate.wanted_category
+		  OR COALESCE(start_request.category, '') IS NOT DISTINCT FROM candidate.wanted_category
 	  )
-	  AND 1 - (candidate.want_embedding <=> start_offer.embedding) >= $3
-	ORDER BY candidate.want_embedding <=> start_offer.embedding
+	  AND 1 - (candidate.want_embedding <=> start_request.embedding) >= $3
+	ORDER BY score DESC, candidate.id
 	LIMIT $2
 `
 
@@ -292,13 +301,23 @@ func (s *Search) FindSimilarOffers(
 	offer string,
 	want string,
 	category string,
+	wantedCategory string,
 	excludeOfferID int64,
 	threshold float64,
 	directionMargin float64,
 	k int,
 ) ([]entity.Candidate, error) {
 	rows, err := s.pool.Query(
-		ctx, querySimilarOffers, offer, want, excludeOfferID, category, threshold, k, directionMargin,
+		ctx,
+		querySimilarOffers,
+		offer,
+		want,
+		excludeOfferID,
+		category,
+		wantedCategory,
+		threshold,
+		k,
+		directionMargin,
 	)
 	if err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
@@ -382,8 +401,10 @@ func collectCandidateEdges(rows pgx.Rows) ([]entity.CandidateEdge, error) {
 		if err := rows.Scan(
 			&edge.FromRequestID,
 			&edge.FromClusterID,
+			&edge.FromOwnerID,
 			&edge.ToRequestID,
 			&edge.ToClusterID,
+			&edge.ToOwnerID,
 			&edge.Score,
 		); err != nil {
 			if mappedErr, ok := repository.DBErrToErr(err); ok {

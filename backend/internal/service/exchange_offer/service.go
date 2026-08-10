@@ -15,14 +15,14 @@ import (
 type CreateInput struct {
 	OfferedItemID     int64  `json:"offeredItemId" validate:"required,gt=0"`
 	WantedDescription string `json:"wantedDescription" validate:"not_empty,max=5000"`
-	WantedCategory    string `json:"wantedCategory" validate:"omitempty,max=100"`
+	WantedCategory    string `json:"wantedCategory" validate:"not_empty,max=100"`
 }
 
 // UpdateInput содержит новые данные и ожидаемую версию для изменения заявки.
 type UpdateInput struct {
 	OfferedItemID     int64  `json:"offeredItemId" validate:"required,gt=0"`
 	WantedDescription string `json:"wantedDescription" validate:"not_empty,max=5000"`
-	WantedCategory    string `json:"wantedCategory" validate:"omitempty,max=100"`
+	WantedCategory    string `json:"wantedCategory" validate:"not_empty,max=100"`
 	Version           int64  `json:"version" validate:"required,gt=0"`
 }
 

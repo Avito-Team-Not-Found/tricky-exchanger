@@ -53,6 +53,33 @@ func TestFacadePropagatesClusterError(t *testing.T) {
 	}
 }
 
+func TestRebuildForRequestDeletesAffectedChainsBeforeSavingFreshCandidates(t *testing.T) {
+	clusters := &fakeClusters{}
+	cycles := &fakeCycles{clusters: clusters}
+	chains := &fakeChains{
+		cycles: cycles,
+		affectedByRequest: map[int64][]int64{
+			11: {7, 8},
+		},
+		requestIDsByChain: map[int64][]int64{
+			7: {11, 20},
+			8: {30, 11},
+		},
+	}
+	facade := matching.NewFacade(clusters, cycles, chains).
+		WithRanker(ranker.NewChainScoreCalculator(ranker.NewRankerConfig()))
+
+	if _, err := facade.RebuildForRequest(context.Background(), nil, 11); err != nil {
+		t.Fatalf("RebuildForRequest() error = %v", err)
+	}
+	if len(chains.deleted) != 2 || chains.deleted[0] != 7 || chains.deleted[1] != 8 {
+		t.Fatalf("deleted chains = %v, want [7 8]", chains.deleted)
+	}
+	if len(cycles.searchedIDs) != 3 || cycles.searchedIDs[0] != 11 || cycles.searchedIDs[1] != 20 || cycles.searchedIDs[2] != 30 {
+		t.Fatalf("searched requests = %v, want [11 20 30]", cycles.searchedIDs)
+	}
+}
+
 func TestCandidateValidatorFiltersThresholdOwnerAndDuplicates(t *testing.T) {
 	validator := matching.NewCandidateValidator(0.8)
 	candidates := []entity.Candidate{
@@ -114,14 +141,16 @@ type fakeClusters struct {
 }
 
 type fakeCycles struct {
-	clusters   *fakeClusters
-	searchedID int64
+	clusters    *fakeClusters
+	searchedID  int64
+	searchedIDs []int64
 }
 
 type fakeChains struct {
 	cycles            *fakeCycles
 	saved             []entity.ChainDraft
 	requestIDsByChain map[int64][]int64
+	affectedByRequest map[int64][]int64
 	deleted           []int64
 }
 
@@ -132,8 +161,8 @@ func (c *fakeChains) SaveCandidates(_ context.Context, _ database.Tx, drafts []e
 	c.saved = append(c.saved, drafts...)
 	return nil
 }
-func (c *fakeChains) ListChainsContainingRequest(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
-	return nil, nil
+func (c *fakeChains) ListChainsContainingRequest(_ context.Context, _ database.Tx, requestID int64) ([]int64, error) {
+	return c.affectedByRequest[requestID], nil
 }
 func (c *fakeChains) LoadChainRequestIDs(_ context.Context, _ database.Tx, chainID int64) ([]int64, error) {
 	return c.requestIDsByChain[chainID], nil
@@ -148,10 +177,11 @@ func (c *fakeChains) DeleteChain(_ context.Context, _ database.Tx, chainID int64
 }
 
 func (c *fakeCycles) Find(_ context.Context, _ database.Tx, requestID int64) ([]entity.ChainDraft, error) {
-	if c.clusters != nil && c.clusters.synchronizedID != requestID {
+	if c.clusters != nil && c.clusters.synchronizeCalls == 0 {
 		return nil, errors.New("cycle search started before cluster synchronization")
 	}
 	c.searchedID = requestID
+	c.searchedIDs = append(c.searchedIDs, requestID)
 	// Драфт с 2 участниками, чтобы ChainState.Count >= 2 (иначе Ranker вернёт
 	// ErrInvalidChainState). Score вычисляет уже сам фасад через Ranker.
 	return []entity.ChainDraft{{

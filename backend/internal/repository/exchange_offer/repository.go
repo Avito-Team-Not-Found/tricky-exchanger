@@ -169,7 +169,7 @@ func (r *Postgres) Update(ctx context.Context, tx database.Tx, request entity.Ex
 		WHERE id = $1
 		  AND user_id = $2
 		  AND version = $7
-		  AND status NOT IN ('LOCKED', 'REMOVED')
+		  AND status NOT IN ('IN_PROPOSAL', 'LOCKED', 'REMOVED')
 		RETURNING id, user_id, offered_item_id, wanted_description, COALESCE(wanted_category, ''),
 		          status, version, created_at, updated_at
 	`
@@ -211,7 +211,7 @@ func (r *Postgres) Archive(ctx context.Context, tx database.Tx, userID string, r
 		WHERE id = $1
 		  AND user_id = $2
 		  AND version = $3
-		  AND status NOT IN ('LOCKED', 'REMOVED')
+		  AND status NOT IN ('IN_PROPOSAL', 'LOCKED', 'REMOVED')
 		RETURNING id, user_id, offered_item_id, wanted_description, COALESCE(wanted_category, ''),
 		          status, version, created_at, updated_at
 	`
@@ -295,7 +295,7 @@ func ensureMutableRequest(ctx context.Context, tx database.Tx, requestID int64, 
 		}
 		return entity.ErrExchangeOfferNotFound
 	}
-	if status == entity.RequestStatusLocked {
+	if status == entity.RequestStatusInProposal || status == entity.RequestStatusLocked {
 		return entity.ErrExchangeOfferLocked
 	}
 	if status == entity.RequestStatusRemoved {
@@ -353,7 +353,7 @@ func mutationError(ctx context.Context, tx database.Tx, requestID int64, userID 
 		}
 		return entity.ErrExchangeOfferNotFound
 	}
-	if status == entity.RequestStatusLocked {
+	if status == entity.RequestStatusInProposal || status == entity.RequestStatusLocked {
 		return entity.ErrExchangeOfferLocked
 	}
 	if currentVersion != expectedVersion {

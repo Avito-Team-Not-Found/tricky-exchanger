@@ -2,6 +2,7 @@ package matching_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
@@ -143,7 +144,7 @@ func TestCycleFinderExcludesRepeatedRequest(t *testing.T) {
 	assertUniqueParticipants(t, drafts[0])
 }
 
-func TestCycleFinderDoesNotAppendSameClusterTwice(t *testing.T) {
+func TestCycleFinderRejectsCycleThatSwitchesRequestInsideCluster(t *testing.T) {
 	loader := &fakeFrontierLoader{
 		outgoing: map[int64][]entity.CandidateEdge{
 			1: {edge(1, 101, 2, 102, 0.9)},
@@ -157,14 +158,8 @@ func TestCycleFinderDoesNotAppendSameClusterTwice(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
 	}
-	if len(drafts) != 1 {
-		t.Fatalf("draft count = %d, want one cluster cycle", len(drafts))
-	}
-	if len(drafts[0].Participants) != 2 {
-		t.Fatalf("cluster count = %d, want 2", len(drafts[0].Participants))
-	}
-	if drafts[0].Participants[0].ClusterID != 101 || drafts[0].Participants[1].ClusterID != 102 {
-		t.Fatalf("clusters = %#v, want [101, 102]", drafts[0].Participants)
+	if len(drafts) != 0 {
+		t.Fatalf("drafts = %#v, want no cycle assembled from requests 2 and 3", drafts)
 	}
 }
 
@@ -220,6 +215,32 @@ func TestCycleFinderReturnsAllUniqueDrafts(t *testing.T) {
 	}
 }
 
+func TestCycleFinderHonorsMaxDrafts(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {
+				edge(1, 101, 2, 102, 0.9),
+				edge(1, 101, 3, 103, 0.9),
+				edge(1, 101, 4, 104, 0.9),
+			},
+		},
+		closers: []entity.CandidateEdge{
+			edge(2, 102, 1, 101, 0.9),
+			edge(3, 103, 1, 101, 0.9),
+			edge(4, 104, 1, 101, 0.9),
+		},
+	}
+	finder := matching.NewCycleFinder(loader, 20, 1, 0.5)
+
+	drafts, err := finder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(drafts) != 1 {
+		t.Fatalf("draft count = %d, want configured maximum 1", len(drafts))
+	}
+}
+
 func TestCycleFinderTreatsRequestsOfOneClusterAsOneVertex(t *testing.T) {
 	loader := &fakeFrontierLoader{
 		outgoing: map[int64][]entity.CandidateEdge{
@@ -244,6 +265,66 @@ func TestCycleFinderTreatsRequestsOfOneClusterAsOneVertex(t *testing.T) {
 	}
 	if got := drafts[0].Participants[1].ClusterID; got != 103 {
 		t.Fatalf("second vertex cluster = %d, want 103", got)
+	}
+}
+
+func TestCycleFinderDoesNotCloseThroughAnotherRequestOfStartCluster(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {edge(1, 101, 2, 102, 0.91)},
+		},
+		closers: []entity.CandidateEdge{
+			edge(2, 102, 3, 101, 0.92),
+		},
+	}
+	finder := matching.NewCycleFinder(loader, 20, 10, 0.8)
+
+	drafts, err := finder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(drafts) != 0 {
+		t.Fatalf("drafts = %#v, want no cycle because request 2 does not lead back to request 1", drafts)
+	}
+}
+
+func TestCycleFinderRejectsFrankensteinCycleAcrossClusterMembers(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {edge(1, 101, 2, 102, 0.91)},
+			3: {edge(3, 102, 4, 103, 0.92)},
+		},
+		closers: []entity.CandidateEdge{edge(4, 103, 1, 101, 0.93)},
+	}
+	finder := matching.NewCycleFinder(loader, 20, 10, 0.8)
+
+	drafts, err := finder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(drafts) != 0 {
+		t.Fatalf("drafts = %#v, want no cycle assembled by entering request 2 and exiting request 3", drafts)
+	}
+}
+
+func TestCycleFinderRejectsSameOwnerAtDifferentPositions(t *testing.T) {
+	loader := &fakeFrontierLoader{
+		outgoing: map[int64][]entity.CandidateEdge{
+			1: {edgeWithOwners(1, 101, "alice", 2, 102, "bob", 0.91)},
+			2: {edgeWithOwners(2, 102, "bob", 3, 103, "alice", 0.92)},
+		},
+		closers: []entity.CandidateEdge{
+			edgeWithOwners(3, 103, "alice", 1, 101, "alice", 0.93),
+		},
+	}
+	finder := matching.NewCycleFinder(loader, 20, 10, 0.8)
+
+	drafts, err := finder.Find(context.Background(), nil, 1)
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if len(drafts) != 0 {
+		t.Fatalf("drafts = %#v, want no chain containing Alice twice", drafts)
 	}
 }
 
@@ -294,11 +375,33 @@ func cycleTestName(length int) string {
 }
 
 func edge(fromRequestID, fromClusterID, toRequestID, toClusterID int64, score float64) entity.CandidateEdge {
+	return edgeWithOwners(
+		fromRequestID,
+		fromClusterID,
+		fmt.Sprintf("owner-%d", fromRequestID),
+		toRequestID,
+		toClusterID,
+		fmt.Sprintf("owner-%d", toRequestID),
+		score,
+	)
+}
+
+func edgeWithOwners(
+	fromRequestID int64,
+	fromClusterID int64,
+	fromOwnerID string,
+	toRequestID int64,
+	toClusterID int64,
+	toOwnerID string,
+	score float64,
+) entity.CandidateEdge {
 	return entity.CandidateEdge{
 		FromRequestID: fromRequestID,
 		FromClusterID: fromClusterID,
+		FromOwnerID:   fromOwnerID,
 		ToRequestID:   toRequestID,
 		ToClusterID:   toClusterID,
+		ToOwnerID:     toOwnerID,
 		Score:         score,
 	}
 }

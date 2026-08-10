@@ -578,7 +578,7 @@ func (s *Service) Decline(ctx context.Context, userID string, chainID int64) (bo
 		if err != nil {
 			return err
 		}
-		approved, err := s.repository.CountApprovedVoters(ctx, tx, chainID)
+		approved, err := s.repository.CountApprovedVotersExcept(ctx, tx, chainID, requestID)
 		if err != nil {
 			return err
 		}

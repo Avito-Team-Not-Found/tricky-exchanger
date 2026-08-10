@@ -33,6 +33,7 @@ type Repository interface {
 	ListReplacementOptions(ctx context.Context, userID string, chainID int64) ([]entity.ReplacementOption, error)
 	SelectReplacement(ctx context.Context, tx database.Tx, userID string, chainID, replacementRequestID int64) error
 	CountApprovedVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error)
+	CountApprovedVotersExcept(ctx context.Context, tx database.Tx, chainID, requestID int64) (int, error)
 	MarkRequestLocked(ctx context.Context, tx database.Tx, requestID int64) error
 	FreezeChain(ctx context.Context, tx database.Tx, chainID int64, deadline time.Time) error
 	LockRequestsInChain(ctx context.Context, tx database.Tx, chainID int64) error
