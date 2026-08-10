@@ -113,7 +113,7 @@ func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int6
 		FROM exchange_offers AS eo
 		JOIN items AS i ON i.id = eo.offered_item_id
 		WHERE eo.id = $1 AND eo.status = 'ACTIVE'
-	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &category)
+	`, offerID).Scan(&offerEmbedding, &wantEmbedding, &category, &wantedCategory)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			if mappedErr, ok := repository.DBErrToErr(err); ok {
