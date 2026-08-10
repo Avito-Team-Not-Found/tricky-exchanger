@@ -45,6 +45,7 @@ type ChainParticipant struct {
 	OfferedItemDescription string
 	WantedDescription      string
 	ImageURL               *string
+	RequestStatus          RequestStatus
 	Vote                   *VoteValue
 	CreatedAt              time.Time
 }

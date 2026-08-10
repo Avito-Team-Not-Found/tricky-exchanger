@@ -2,16 +2,9 @@ import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { useChainConfirm, useChainVote, ChainCard } from '@features/chains';
+import { useChainVote, ChainCard } from '@features/chains';
 
-import {
-  approvedVotes,
-  isAssembled,
-  isHardLocked,
-  useChains,
-  useExchangeOptions,
-  type ExchangeOptions,
-} from '@entities/chain';
+import { bestChainId, useExchangeOptions } from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems } from '@entities/item';
 
@@ -20,9 +13,7 @@ import { EmptyState, ErrorState } from '@shared/ui';
 import './ChainListPage.scss';
 
 // Варианты обмена по заявке (PROJECT.md §2.6, макет 4.6): пул кандидатов следующего звена,
-// на каждого можно откликнуться или отозвать отклик. Когда одна из цепочек замкнулась
-// (PROPOSED) или заморожена — остальные варианты приглушены и недоступны; при заморозке
-// сделки дополнительно баннер, а кнопка правки запроса заблокирована (SOFT-LOCK §5.4/§5.5).
+// на каждого можно откликнуться или отозвать отклик.
 export function ChainListPage() {
   const { requestId: requestIdParam } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
@@ -31,31 +22,11 @@ export function ChainListPage() {
   const optionsQuery = useExchangeOptions(requestId);
   const itemsQuery = useItems();
   const { confirmVote, isVoting } = useChainVote();
-  const { openConfirm } = useChainConfirm();
 
   const request = requestQuery.data;
   const options = optionsQuery.data ?? [];
-  const hasFrozen = options.some((entry) => isHardLocked(entry.status));
-  // собранная или замороженная цепочка занимает заявку: кандидатные варианты приглушены
-  const hasAssembled = options.some((entry) => isAssembled(entry.status));
   // деталь заявки не отдаёт снимок отдаваемого товара — берём его из кеша товаров
   const offeredItem = itemsQuery.data?.items.find((item) => item.id === request?.offeredItemId);
-
-  // exchange-options не отдаёт число согласий второго раунда: для PROPOSED-цепочек оно
-  // считается из participants[].vote детали (GET /chains/{id}) — см. approvedCountFor
-  const proposedChainIds = options
-    .filter((entry) => entry.status === 'PROPOSED')
-    .map((entry) => entry.chainId);
-  const proposedQueries = useChains(proposedChainIds);
-  const approvedByChain = new Map<number, number>();
-  proposedQueries.forEach((query, index) => {
-    if (query.data) approvedByChain.set(proposedChainIds[index], approvedVotes(query.data));
-  });
-
-  function approvedCountFor(entry: ExchangeOptions): number | undefined {
-    if (isHardLocked(entry.status)) return entry.length;
-    return approvedByChain.get(entry.chainId);
-  }
 
   if (requestQuery.isLoading || optionsQuery.isLoading || itemsQuery.isLoading) {
     return (
@@ -81,11 +52,13 @@ export function ChainListPage() {
   }
 
   // бэкенд отдаёт цепочки по дате создания (repository.go: ORDER BY c.created_at DESC), а экран
-  // показывает их по убыванию вероятности (DESIGN.md §4.6) — самые вероятные варианты выше.
-  // Сортировка стабильная, поэтому варианты одной цепочки сохраняют исходный порядок между собой
+  // показывает их по убыванию вероятности (DESIGN.md §4.6) — иначе лучшая цепочка с плашкой
+  // оказывается в середине списка. Сортировка стабильная, поэтому варианты одной цепочки
+  // сохраняют исходный порядок между собой
   const receiveOptions = options
     .flatMap((entry) => entry.receiveOptions.map((option) => ({ entry, option })))
     .sort((a, b) => b.entry.score - a.entry.score);
+  const bestId = bestChainId(options);
 
   return (
     <div className="chain-list-page">
@@ -111,18 +84,10 @@ export function ChainListPage() {
               className="chain-list-page__edit"
               type="text"
               icon={<EditOutlined aria-hidden />}
-              aria-label={hasFrozen ? 'Заявка заблокирована сделкой' : 'Редактировать запрос'}
-              title={hasFrozen ? 'Заявка заблокирована сделкой' : undefined}
-              disabled={hasFrozen}
+              aria-label="Редактировать запрос"
               onClick={() => navigate(`/exchange-requests/${requestId}/edit`)}
             />
           </div>
-        ) : null}
-
-        {hasFrozen ? (
-          <p className="chain-list-page__banner" role="status">
-            Сделка по одной из цепочек уже согласована. Остальные варианты недоступны.
-          </p>
         ) : null}
 
         {receiveOptions.length === 0 ? (
@@ -137,11 +102,9 @@ export function ChainListPage() {
                 key={`${entry.chainId}-${option.requestId}`}
                 options={entry}
                 option={option}
+                isBest={entry.chainId === bestId}
                 isVoting={isVoting}
-                locked={hasAssembled && !isAssembled(entry.status)}
-                approvedCount={approvedCountFor(entry)}
                 onOpen={() => navigate(`/chains/${entry.chainId}`)}
-                onConfirm={(chainId) => openConfirm(chainId)}
                 onVote={(active) =>
                   confirmVote(
                     {

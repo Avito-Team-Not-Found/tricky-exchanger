@@ -1,18 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  approvedVotes,
+  bestChainId,
   chainLinks,
-  CONFIRM_VOTE_META,
-  confirmVoteAt,
-  isAssembled,
-  isHardLocked,
-  myConfirmVote,
   myParticipant,
-  needsMyAction,
   receivesItem,
   type Chain,
   type ChainParticipant,
+  type ExchangeOptions,
 } from './model';
 
 const MYSELF: ChainParticipant = {
@@ -96,6 +91,32 @@ describe('chainLinks', () => {
   });
 });
 
+describe('bestChainId', () => {
+  function buildOptions(chainId: number, score: number): ExchangeOptions {
+    return { chainId, score } as ExchangeOptions;
+  }
+
+  it('picks the chain with the highest score', () => {
+    const options = [buildOptions(1, 0.55), buildOptions(2, 0.91), buildOptions(3, 0.72)];
+    expect(bestChainId(options)).toBe(2);
+  });
+
+  // отметка не должна прыгать между равными цепочками при каждом рефетче
+  it('resolves a score tie by the lower chain id', () => {
+    const options = [buildOptions(7, 0.8), buildOptions(3, 0.8)];
+    expect(bestChainId(options)).toBe(3);
+  });
+
+  // у заявки чаще всего ровно одна цепочка — она и есть лучший вариант для этого товара
+  it('marks the only option as the best one', () => {
+    expect(bestChainId([buildOptions(1, 0.91)])).toBe(1);
+  });
+
+  it('marks nothing when there are no options', () => {
+    expect(bestChainId([])).toBeNull();
+  });
+});
+
 describe('receivesItem', () => {
   it('returns the candidate pool of the receiving position', () => {
     const chain = buildChain();
@@ -113,142 +134,5 @@ describe('receivesItem', () => {
   it('returns an empty array when the receiving position is missing', () => {
     const chain = buildChain([], { receivesFromPosition: 9 });
     expect(receivesItem(chain)).toEqual([]);
-  });
-});
-
-describe('isHardLocked', () => {
-  it('locks FROZEN and IN_PROGRESS chains', () => {
-    expect(isHardLocked('FROZEN')).toBe(true);
-    expect(isHardLocked('IN_PROGRESS')).toBe(true);
-    expect(isHardLocked('CANDIDATE')).toBe(false);
-    expect(isHardLocked('PROPOSED')).toBe(false);
-  });
-});
-
-describe('isAssembled', () => {
-  it('treats PROPOSED and hard-locked chains as occupying the request', () => {
-    expect(isAssembled('PROPOSED')).toBe(true);
-    expect(isAssembled('FROZEN')).toBe(true);
-    expect(isAssembled('IN_PROGRESS')).toBe(true);
-    expect(isAssembled('CANDIDATE')).toBe(false);
-    expect(isAssembled('BROKEN')).toBe(false);
-    expect(isAssembled('COMPLETED')).toBe(false);
-  });
-});
-
-describe('confirmVoteAt', () => {
-  it('reads the vote of the next ring position as the participant decision', () => {
-    // позиция 1 (я) и позиция 2 — кольцо длины 2: решение каждой лежит в vote следующей позиции
-    const chain = buildChain(
-      [
-        { ...MYSELF, vote: 'approved' },
-        { ...OTHER, vote: 'rejected' },
-      ],
-      { status: 'PROPOSED' },
-    );
-
-    expect(confirmVoteAt(chain, 1)).toBe('rejected');
-    expect(confirmVoteAt(chain, 2)).toBe('approved');
-  });
-
-  it('returns null for a vacant position whose vote was deleted', () => {
-    // участник позиции 2 отказался — его голос удалён из следующей по кольцу позиции (позиция 1)
-    const chain = buildChain([{ ...MYSELF }, { ...OTHER, vote: 'pending' }], {
-      status: 'PROPOSED',
-    });
-
-    expect(confirmVoteAt(chain, 2)).toBeNull();
-    expect(confirmVoteAt(chain, 1)).toBe('pending');
-  });
-
-  it('returns null when the position is not in the ring', () => {
-    const chain = buildChain([MYSELF], { status: 'PROPOSED' });
-
-    expect(confirmVoteAt(chain, 5)).toBeNull();
-  });
-});
-
-describe('myConfirmVote', () => {
-  it('returns my second-round decision from the receiving position', () => {
-    const chain = buildChain(
-      [
-        { ...MYSELF, vote: 'pending' },
-        { ...OTHER, vote: 'rejected' },
-      ],
-      { status: 'PROPOSED' },
-    );
-
-    expect(myConfirmVote(chain)).toBe('rejected');
-  });
-});
-
-describe('approvedVotes', () => {
-  it('counts approved second-round votes on an assembled chain', () => {
-    const chain = buildChain(
-      [
-        { ...MYSELF, vote: 'approved' },
-        { ...OTHER, vote: 'approved' },
-      ],
-      { status: 'PROPOSED' },
-    );
-
-    expect(approvedVotes(chain)).toBe(2);
-  });
-
-  it('counts only approved votes, not rejected or pending', () => {
-    const chain = buildChain(
-      [
-        { ...MYSELF, vote: 'rejected' },
-        { ...OTHER, vote: 'approved' },
-      ],
-      { status: 'PROPOSED' },
-    );
-
-    expect(approvedVotes(chain)).toBe(1);
-  });
-
-  it('is zero outside PROPOSED/FROZEN where vote means something else', () => {
-    const chain = buildChain([
-      { ...MYSELF, vote: 'approved' },
-      { ...OTHER, vote: 'approved' },
-    ]);
-
-    expect(approvedVotes(chain)).toBe(0);
-  });
-});
-
-describe('needsMyAction', () => {
-  it('requires action while my second-round vote is pending', () => {
-    const chain = buildChain(
-      [
-        { ...MYSELF, vote: 'pending' },
-        { ...OTHER, vote: 'pending' },
-      ],
-      { status: 'PROPOSED' },
-    );
-
-    expect(needsMyAction(chain)).toBe(true);
-  });
-
-  it('requires no action once I have confirmed', () => {
-    const chain = buildChain(
-      [
-        { ...MYSELF, vote: 'pending' },
-        { ...OTHER, vote: 'approved' },
-      ],
-      { status: 'PROPOSED' },
-    );
-
-    expect(needsMyAction(chain)).toBe(false);
-  });
-
-  it('is false outside PROPOSED', () => {
-    expect(needsMyAction(buildChain())).toBe(false);
-  });
-});
-
-describe('CONFIRM_VOTE_META', () => {
-  it('defines meta for every second-round vote value', () => {
-    expect(Object.keys(CONFIRM_VOTE_META).sort()).toEqual(['approved', 'pending', 'rejected']);
   });
 });

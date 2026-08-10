@@ -1,14 +1,8 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  confirmChain,
-  useChain,
-  useReplacements,
-  type Chain,
-  type ReplacementOption,
-} from '@entities/chain';
+import { useChain, useIsBestChain, type Chain } from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -20,26 +14,11 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return {
-    ...actual,
-    useChain: vi.fn(),
-    confirmChain: vi.fn(),
-    useReplacements: vi.fn(),
-  };
+  return { ...actual, useChain: vi.fn(), useIsBestChain: vi.fn() };
 });
 
 const mockedUseChain = vi.mocked(useChain);
-const mockedConfirm = vi.mocked(confirmChain);
-const mockedUseReplacements = vi.mocked(useReplacements);
-
-function mockReplacements(options: ReplacementOption[]) {
-  mockedUseReplacements.mockReturnValue({
-    data: options,
-    isLoading: false,
-    isError: false,
-    refetch: vi.fn(),
-  } as never);
-}
+const mockedUseIsBestChain = vi.mocked(useIsBestChain);
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
   return {
@@ -84,7 +63,36 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockReplacements([]);
+    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: false });
+  });
+
+  it('shows the best-chain badge when the chain leads the options of its request', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+    mockedUseIsBestChain.mockReturnValue({ isBest: true, isLoading: false });
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('Лучшая цепочка для этого товара')).toBeInTheDocument();
+  });
+
+  // иначе плашка появлялась бы после отрисовки и сдвигала вниз уже прочитанное содержимое
+  it('keeps the skeleton until the best-chain check resolves', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: true });
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(
+      screen.queryByRole('heading', { name: 'Зеркальный фотоаппарат Canon', level: 2 }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the best-chain badge for a chain that does not lead', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.queryByText('Лучшая цепочка для этого товара')).not.toBeInTheDocument();
   });
 
   it('shows the received item with its description', () => {
@@ -119,66 +127,6 @@ describe('ChainDetailPage', () => {
     renderWithProviders(<ChainDetailPage />);
 
     expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeInTheDocument();
-  });
-
-  it('confirms participation from the chain item view', async () => {
-    mockedConfirm.mockResolvedValue({ chainId: 1, status: 'FROZEN' });
-    const user = userEvent.setup();
-    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
-
-    renderWithProviders(<ChainDetailPage />);
-
-    await user.click(screen.getByRole('button', { name: 'Требуются действия' }));
-    await user.click(await screen.findByRole('button', { name: 'Да' }));
-
-    await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
-  });
-
-  it('shows the hard lock plaque and the proceed button on a frozen chain', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(
-      screen.getByText('Товар жёстко заблокирован: изменить или удалить заявку нельзя'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
-  });
-
-  it('shows the consent badge with the approved count on a proposed chain', () => {
-    const chain = makeChain({ status: 'PROPOSED' });
-    chain.participants[0].vote = 'pending';
-    chain.participants[1].vote = 'approved';
-    mockedUseChain.mockReturnValue(queryOk(chain));
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.getByText('1/2 согласий')).toBeInTheDocument();
-  });
-
-  it('shows M/M consents on a frozen chain', () => {
-    const chain = makeChain({ status: 'FROZEN' });
-    chain.participants[0].vote = 'approved';
-    chain.participants[1].vote = 'approved';
-    mockedUseChain.mockReturnValue(queryOk(chain));
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.getByText('2/2 согласий')).toBeInTheDocument();
-  });
-
-  it('replaces the action with the confirmed line once my vote is approved', () => {
-    const chain = makeChain({ status: 'PROPOSED' });
-    chain.participants[0].vote = 'pending';
-    chain.participants[1].vote = 'approved';
-    mockedUseChain.mockReturnValue(queryOk(chain));
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.getByText('Вы подтвердили · ждём остальных')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
   // пул кандидатов может быть больше длины цепочки (§3.1): счётчик участников берём из length,
@@ -204,63 +152,6 @@ describe('ChainDetailPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Получаете: 5 вариантов', level: 2 }),
     ).toBeInTheDocument();
-  });
-
-  // непустой пул замен — единственный признак вакансии: в теле цепочки отказ не виден (TZ §2)
-  it('offers to pick a replacement when the pool is not empty', async () => {
-    const user = userEvent.setup();
-    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
-    mockReplacements([
-      {
-        requestId: 42,
-        offeredItemId: 17,
-        title: 'Кофемашина капсульная',
-        description: '',
-        wantedDescription: 'Ищу фотоаппарат',
-        reliability: 0.82,
-        respondedAt: '2026-08-09T12:00:00Z',
-      },
-    ]);
-
-    renderWithProviders(<ChainDetailPage />, {
-      routes: [{ path: '/chains/1/replacement', element: <div>экран замены</div> }],
-    });
-
-    expect(
-      screen.getByText('Участник отказался. Выберите замену, чтобы продолжить обмен'),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Выбрать замену' }));
-    expect(await screen.findByText('экран замены')).toBeInTheDocument();
-  });
-
-  // выключенный react-query-запрос сохраняет прошлые данные: без проверки статуса баннер
-  // «выберите замену» пережил бы подтверждение замены и висел бы на собранной цепочке
-  it('drops the replacement banner once the chain leaves PROPOSED', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
-    mockReplacements([
-      {
-        requestId: 42,
-        offeredItemId: 17,
-        title: 'Кофемашина капсульная',
-        description: '',
-        wantedDescription: 'Ищу фотоаппарат',
-        reliability: 0.82,
-        respondedAt: '2026-08-09T12:00:00Z',
-      },
-    ]);
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.queryByRole('button', { name: 'Выбрать замену' })).not.toBeInTheDocument();
-  });
-
-  it('leaves a healthy proposed chain without the replacement banner', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
-
-    renderWithProviders(<ChainDetailPage />);
-
-    expect(screen.queryByRole('button', { name: 'Выбрать замену' })).not.toBeInTheDocument();
   });
 
   it('shows an error state with retry when the chain fails to load', async () => {

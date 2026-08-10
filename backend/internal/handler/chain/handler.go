@@ -44,16 +44,17 @@ type chainResponse struct {
 }
 
 type chainParticipantResponse struct {
-	ClusterID              int64             `json:"clusterId"`
-	RequestID              int64             `json:"requestId"`
-	Position               int               `json:"position"`
-	IsCurrentUser          bool              `json:"isCurrentUser"`
-	OfferedItemID          int64             `json:"offeredItemId"`
-	OfferedItemTitle       string            `json:"offeredItemTitle"`
-	OfferedItemDescription string            `json:"offeredItemDescription"`
-	WantedDescription      string            `json:"wantedDescription"`
-	ImageURL               *string           `json:"imageUrl,omitempty"`
-	Vote                   *entity.VoteValue `json:"vote,omitempty"`
+	ClusterID              int64                `json:"clusterId"`
+	RequestID              int64                `json:"requestId"`
+	Position               int                  `json:"position"`
+	IsCurrentUser          bool                 `json:"isCurrentUser"`
+	OfferedItemID          int64                `json:"offeredItemId"`
+	OfferedItemTitle       string               `json:"offeredItemTitle"`
+	OfferedItemDescription string               `json:"offeredItemDescription"`
+	WantedDescription      string               `json:"wantedDescription"`
+	ImageURL               *string              `json:"imageUrl,omitempty"`
+	RequestStatus          entity.RequestStatus `json:"requestStatus"`
+	Vote                   *entity.VoteValue    `json:"vote,omitempty"`
 }
 
 type exchangeOptionsResponse struct {
@@ -112,6 +113,15 @@ type replacementResponse struct {
 	ImageURL          *string `json:"imageUrl,omitempty"`
 	Reliability       float64 `json:"reliability"`
 	RespondedAt       string  `json:"respondedAt"`
+}
+
+type handoffRequest struct {
+	ChainID   int64 `json:"chainId" validate:"required,gt=0"`
+	RequestID int64 `json:"requestId" validate:"required,gt=0"`
+}
+
+type receiptRequest struct {
+	RequestID int64 `json:"requestId" validate:"required,gt=0"`
 }
 
 // List возвращает актуальные цепочки аутентифицированного участника.
@@ -322,6 +332,7 @@ func newChainResponse(chain entity.Chain, userID string) chainResponse {
 			OfferedItemDescription: participant.OfferedItemDescription,
 			WantedDescription:      participant.WantedDescription,
 			ImageURL:               participant.ImageURL,
+			RequestStatus:          participant.RequestStatus,
 			Vote:                   participant.Vote,
 		}
 		response.Participants = append(response.Participants, participantResponse)
@@ -505,14 +516,72 @@ func (h *Handler) SelectReplacement(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "requestId": body.RequestID, "status": entity.ChainStatusProposed})
 }
 
+// Handoff accepts the temporary local callback that an Avito delivery flow has
+// handed over the item represented by the request.
+func (h *Handler) Handoff(c *gin.Context) {
+	var body handoffRequest
+	if err := validator.BindJSON(&body, c.Request); err != nil {
+		var jsonSyntaxErr *json.SyntaxError
+		if errors.As(err, &jsonSyntaxErr) {
+			api.SendError(c, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+
+	result, err := h.service.Handoff(c.Request.Context(), body.ChainID, body.RequestID)
+	if err != nil {
+		DetermineError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+// ConfirmReceipt lets the physical recipient acknowledge one handed-off item.
+func (h *Handler) ConfirmReceipt(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+	var body receiptRequest
+	if err := validator.BindJSON(&body, c.Request); err != nil {
+		var jsonSyntaxErr *json.SyntaxError
+		if errors.As(err, &jsonSyntaxErr) {
+			api.SendError(c, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+
+	result, err := h.service.ConfirmReceipt(c.Request.Context(), userID, chainID, body.RequestID)
+	if err != nil {
+		DetermineError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
 func DetermineError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, entity.ErrChainNotFound):
 		api.SendError(c, http.StatusNotFound, err.Error())
 	case errors.Is(err, entity.ErrChainNotProposed):
 		api.SendError(c, http.StatusConflict, err.Error())
+	case errors.Is(err, entity.ErrChainNotReadyForHandoff), errors.Is(err, entity.ErrChainHandoffPending):
+		api.SendError(c, http.StatusConflict, err.Error())
 	case errors.Is(err, entity.ErrChainVoteForbidden):
 		api.SendError(c, http.StatusForbidden, err.Error())
+	case errors.Is(err, entity.ErrChainReceiptForbidden):
+		api.SendError(c, http.StatusForbidden, err.Error())
+	case errors.Is(err, entity.ErrHandoffRequestInvalid):
+		api.SendError(c, http.StatusUnprocessableEntity, err.Error())
 	default:
 		api.SendError(c, http.StatusInternalServerError, "internal server error")
 	}

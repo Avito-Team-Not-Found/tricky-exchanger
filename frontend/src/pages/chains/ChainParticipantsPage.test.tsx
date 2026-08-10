@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  confirmChain,
   useChain,
+  useIsBestChain,
   voteForRequest,
   withdrawVote,
   type Chain,
@@ -24,16 +24,16 @@ vi.mock('@entities/chain', async (importOriginal) => {
   return {
     ...actual,
     useChain: vi.fn(),
+    useIsBestChain: vi.fn(),
     voteForRequest: vi.fn(),
     withdrawVote: vi.fn(),
-    confirmChain: vi.fn(),
   };
 });
 
 const mockedUseChain = vi.mocked(useChain);
+const mockedUseIsBestChain = vi.mocked(useIsBestChain);
 const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
-const mockedConfirm = vi.mocked(confirmChain);
 
 const MY_CANDIDATE: ChainParticipant = {
   clusterId: 1,
@@ -79,6 +79,16 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainParticipantsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: false });
+  });
+
+  it('shows the best-chain badge above the links when the chain leads', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+    mockedUseIsBestChain.mockReturnValue({ isBest: true, isLoading: false });
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    expect(screen.getByText('Лучшая цепочка для этого товара')).toBeInTheDocument();
   });
 
   it('shows the chain as links with position aliases and candidate items', () => {
@@ -179,8 +189,8 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // статус отклика — пилюля с подписью текстом, чтобы он читался не только по цвету (макет 4.8)
-    expect(screen.getByText('Ожидаем')).toBeInTheDocument();
+    // статус отклика — пилюля с глифом, чтобы он читался не только по цвету (макет 4.8)
+    expect(screen.getByText('⏳ Отклик отправлен')).toBeInTheDocument();
 
     await user.click(screen.getAllByRole('radio')[0]);
     await user.click(screen.getByRole('button', { name: 'Отозвать отклик' }));
@@ -191,152 +201,18 @@ describe('ChainParticipantsPage', () => {
     );
   });
 
-  // на собранной цепочке пилюли первого раунда заменяются голосами второго раунда, а отклики
-  // скрыты: у vote на PROPOSED другой смысл (SOFT-LOCK §8)
-  it('shows second-round confirm pills and hides vote actions on an assembled chain', () => {
+  // после замыкания кольца откликов цепочку переводит в PROPOSED сам бэкенд: статус отклика
+  // на получаемом кандидате остаётся, но отзыв/отклик уже не доступны — DELETE у non-CANDIDATE даёт 409
+  it('keeps the vote pill but hides the vote action on an assembled chain', () => {
     const voted = makeChain({ status: 'PROPOSED' });
-    voted.participants[0].vote = 'pending';
     voted.participants[1].vote = 'pending';
     mockedUseChain.mockReturnValue(queryOk(voted));
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // оба участника ещё не ответили — обе строки показывают «Ожидает ответа»
-    expect(screen.getAllByText('Ожидает ответа')).toHaveLength(2);
-    expect(screen.queryByText('Ожидаем')).not.toBeInTheDocument();
+    expect(screen.getByText('⏳ Отклик отправлен')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
-  });
-
-  // голос привязан к цели голосования: решение участника позиции p лежит в vote позиции p+1
-  // (SOFT-LOCK §3.3), поэтому пилюли строятся по сдвигу, а не по полю строки напрямую
-  it('renders each confirm vote state on the shifted position', () => {
-    const me = { ...MY_CANDIDATE, vote: 'pending' as const };
-    const second = { ...makeChain().participants[1], position: 2, vote: 'rejected' as const };
-    const third = {
-      clusterId: 3,
-      requestId: 303,
-      position: 3,
-      isCurrentUser: false,
-      offeredItemId: 3,
-      offeredItemTitle: 'Планшет',
-      offeredItemDescription: '',
-      wantedDescription: 'Хочу велосипед',
-      vote: 'approved' as const,
-    };
-    mockedUseChain.mockReturnValue(
-      queryOk(
-        makeChain({
-          length: 3,
-          currentPosition: 1,
-          receivesFromPosition: 2,
-          status: 'PROPOSED',
-          participants: [me, second, third],
-        }),
-      ),
-    );
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    // решение позиции 1 (я) — в vote позиции 2, и так по кольцу
-    expect(screen.getAllByText('Отказался')).toHaveLength(1);
-    expect(screen.getAllByText('Согласился')).toHaveLength(1);
-    expect(screen.getAllByText('Ожидает ответа')).toHaveLength(1);
-  });
-
-  it('marks a vacant position with the released pill', () => {
-    const me = { ...MY_CANDIDATE, vote: 'pending' as const };
-    const second = { ...makeChain().participants[1], position: 2, vote: 'pending' as const };
-    const third = {
-      clusterId: 3,
-      requestId: 303,
-      position: 3,
-      isCurrentUser: false,
-      offeredItemId: 3,
-      offeredItemTitle: 'Планшет',
-      offeredItemDescription: '',
-      wantedDescription: 'Хочу велосипед',
-    };
-    mockedUseChain.mockReturnValue(
-      queryOk(
-        makeChain({
-          length: 3,
-          status: 'PROPOSED',
-          participants: [me, second, third],
-        }),
-      ),
-    );
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    // участник позиции 2 отказался: голос удалён из следующей по кольцу позиции 3
-    expect(screen.getByText('Место освободилось')).toBeInTheDocument();
-  });
-
-  it('shows the consent badge over the assembled pill', () => {
-    const voted = makeChain({ status: 'PROPOSED' });
-    voted.participants[0].vote = 'pending';
-    voted.participants[1].vote = 'approved';
-    mockedUseChain.mockReturnValue(queryOk(voted));
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    expect(screen.getByText('1/2 согласий')).toBeInTheDocument();
-  });
-
-  it('shows M/M consents on a frozen chain', () => {
-    const voted = makeChain({ status: 'FROZEN' });
-    voted.participants[0].vote = 'approved';
-    voted.participants[1].vote = 'approved';
-    mockedUseChain.mockReturnValue(queryOk(voted));
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    expect(screen.getByText('2/2 согласий')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
-  });
-
-  it('replaces the action with the confirmed line once my vote is approved', () => {
-    const voted = makeChain({ status: 'PROPOSED' });
-    voted.participants[0].vote = 'pending';
-    voted.participants[1].vote = 'approved';
-    mockedUseChain.mockReturnValue(queryOk(voted));
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    expect(screen.getByText('Вы подтвердили · ждём остальных')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
-  });
-
-  // на собранной цепочке над списком — пилюля, внизу — подтверждение второго раунда (SOFT-LOCK §8)
-  it('shows the assembled pill and a confirm action on a PROPOSED chain', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeInTheDocument();
-  });
-
-  it('confirms participation from the participants screen', async () => {
-    mockedConfirm.mockResolvedValue({ chainId: 1, status: 'PROPOSED' });
-    const user = userEvent.setup();
-    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    await user.click(screen.getByRole('button', { name: 'Требуются действия' }));
-    await user.click(await screen.findByRole('button', { name: 'Да' }));
-
-    await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
-  });
-
-  it('shows the proceed action on a frozen chain', () => {
-    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
   });
 
   it('shows an error state with retry when the chain fails to load', async () => {
