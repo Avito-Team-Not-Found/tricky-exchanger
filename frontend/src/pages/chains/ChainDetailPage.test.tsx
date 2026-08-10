@@ -1,10 +1,10 @@
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { confirmChain, useChain, type Chain } from '@entities/chain';
 
-import { renderWithProviders } from '@shared/testing/renderWithProviders';
+import { createTestQueryClient, renderWithProviders } from '@shared/testing/renderWithProviders';
 
 import { ChainDetailPage } from './ChainDetailPage';
 
@@ -177,6 +177,28 @@ describe('ChainDetailPage', () => {
     renderWithProviders(<ChainDetailPage />);
 
     expect(screen.queryByText(/Осталось .* на ответ/)).not.toBeInTheDocument();
+  });
+
+  // просрочку снимает сам GET /chains/{id}: без перезапроса в момент дедлайна строка таймера
+  // исчезает, а «Требуются действия» живёт до следующего 30-секундного опроса
+  it('refetches the chain right after the response deadline passes', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ status: 'PROPOSED', freezeDeadlineAt: '2026-08-10T10:01:00Z' })),
+    );
+    const client = createTestQueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
+
+    renderWithProviders(<ChainDetailPage />, { client });
+    expect(invalidate).not.toHaveBeenCalled();
+
+    // минута до дедлайна и запас на расхождение часов клиента и сервера
+    act(() => {
+      vi.advanceTimersByTime(62_000);
+    });
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['chains', 1] });
   });
 
   it('replaces the action with the confirmed line once my vote is approved', () => {

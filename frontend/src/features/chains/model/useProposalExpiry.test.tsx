@@ -135,4 +135,57 @@ describe('useProposalExpiry', () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(invalidate).not.toHaveBeenCalled();
   });
+
+  // 4.7: списка рядом нет, дедлайн виден только в детали — таймер всё равно нужен
+  it('refetches the detail after the deadline without a list status', () => {
+    render([{ chainId: 7, detailStatus: 'PROPOSED', deadlineAt: '2026-08-10T10:01:00Z' }]);
+
+    act(() => {
+      vi.advanceTimersByTime(62_000);
+    });
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['chains', 7] });
+  });
+
+  // список остаётся протухшим на весь staleTime, если откат случился на 4.7 — возврат на 4.6
+  // показал бы PROPOSED с живыми кнопками
+  it('invalidates the offer list when the watched detail leaves PROPOSED', () => {
+    const { rerender } = render([
+      { chainId: 7, detailStatus: 'PROPOSED', deadlineAt: '2026-08-10T10:01:00Z' },
+    ]);
+
+    act(() => {
+      rerender({ states: [{ chainId: 7, detailStatus: 'CANDIDATE', deadlineAt: null }] });
+    });
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['exchange-options'] });
+  });
+
+  // деталь, открытая уже не в PROPOSED, ничего не говорит о свежести списка
+  it('keeps the list untouched for a detail that was never seen as PROPOSED', () => {
+    render([{ chainId: 7, detailStatus: 'COMPLETED', deadlineAt: null }]);
+
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  // обход должен дойти до конца массива: иначе статус второй цепочки не запомнится и её
+  // собственный откат позже уже не распознается
+  it('remembers detail statuses past the first stale entry', () => {
+    const { rerender } = render([
+      { chainId: 7, listStatus: 'PROPOSED', detailStatus: 'CANDIDATE', deadlineAt: null },
+      { chainId: 8, detailStatus: 'PROPOSED', deadlineAt: '2026-08-12T09:58:00Z' },
+    ]);
+    invalidate.mockClear();
+
+    act(() => {
+      rerender({
+        states: [
+          { chainId: 7, listStatus: 'CANDIDATE', detailStatus: 'CANDIDATE', deadlineAt: null },
+          { chainId: 8, detailStatus: 'CANDIDATE', deadlineAt: null },
+        ],
+      });
+    });
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['exchange-options'] });
+  });
 });

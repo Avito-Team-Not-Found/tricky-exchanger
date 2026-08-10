@@ -1,7 +1,7 @@
 import { Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainItemView, useChainConfirm } from '@features/chains';
+import { ChainItemView, useChainConfirm, useProposalExpiry } from '@features/chains';
 
 import { receivesItem, useChain } from '@entities/chain';
 
@@ -19,6 +19,15 @@ export function ChainDetailPage() {
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading, isError, refetch } = useChain(chainId);
   const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
+
+  // после дедлайна ответа бэкенд откатывает PROPOSED лениво — в самом GET /chains/{id}. Без
+  // перезапроса в момент дедлайна таймер молча исчезает (formatRemaining → null), а «Требуются
+  // действия» остаётся живым до следующего 30-секундного опроса и упирается в 410
+  useProposalExpiry(
+    chain
+      ? [{ chainId: chain.id, detailStatus: chain.status, deadlineAt: chain.freezeDeadlineAt }]
+      : [],
+  );
 
   const received = chain ? receivesItem(chain) : [];
   const single = received.length === 1 ? received[0] : null;
