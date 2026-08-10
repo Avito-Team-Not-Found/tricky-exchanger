@@ -69,7 +69,7 @@ describe('useItemForm', () => {
       await result.current.handleSubmit({
         title: '  Смарт-часы  ',
         description: 'Работают',
-        category: 'Личные вещи',
+        category: 'Велосипеды',
       });
     });
 
@@ -77,7 +77,7 @@ describe('useItemForm', () => {
       {
         title: 'Смарт-часы',
         description: 'Работают',
-        category: 'Личные вещи',
+        category: 'Велосипеды',
       },
       null,
     );

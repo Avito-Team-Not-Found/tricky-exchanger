@@ -6,6 +6,11 @@
   gap: var(--spacing-lg);
 }
 
+// плашка лучшей цепочки над схемой (макет 4.8, SCRUM-53): выравнивается по ширине текста
+.chain-detail__best {
+  display: flex;
+}
+
 .chain-detail__participants {
   display: flex;
   flex-direction: column;
@@ -239,6 +244,28 @@
 
 .chain-detail__item-action {
   flex-shrink: 0;
+}
+
+// строка получаемого звена выбираемая (SCRUM-52): клик по ней выделяет кандидата,
+// к которому применяется кнопка нижнего блока
+.chain-detail__item--selectable {
+  cursor: pointer;
+  padding: var(--spacing-sm);
+}
+
+.chain-detail__item--selected {
+  background: color-mix(in srgb, var(--color-accent-primary) 10%, transparent);
+  box-shadow: inset 0 0 0 2px var(--color-accent-primary);
+  border-radius: var(--radius-md);
+}
+
+// действие над выбранным кандидатом — липкая кнопка внизу, чтобы не уезжала за экран
+.chain-detail__actions {
+  position: sticky;
+  bottom: 0;
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-sm);
+  background: var(--color-bg-page);
 }
 
 @media (min-width: 768px) {

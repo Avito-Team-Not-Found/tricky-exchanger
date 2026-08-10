@@ -10,6 +10,7 @@ import {
 
 import { ProbabilityBadge } from '@shared/ui';
 
+import { BestChainBadge } from './BestChainBadge';
 import { ConsentBadge } from './ConsentBadge';
 
 import './ChainCard.scss';
@@ -17,6 +18,7 @@ import './ChainCard.scss';
 interface ChainCardProps {
   options: ExchangeOptions;
   option: ExchangeOption;
+  isBest: boolean;
   isVoting: boolean;
   isConfirming: boolean;
   locked?: boolean;
@@ -39,6 +41,7 @@ interface ChainCardProps {
 export function ChainCard({
   options,
   option,
+  isBest,
   isVoting,
   isConfirming,
   locked,
@@ -87,6 +90,8 @@ export function ChainCard({
           </div>
         )}
       </div>
+
+      {isBest ? <BestChainBadge /> : null}
 
       <p className="chain-card__title">{option.title}</p>
       <p className="chain-card__wanted">Хочет: {option.wantedDescription}</p>

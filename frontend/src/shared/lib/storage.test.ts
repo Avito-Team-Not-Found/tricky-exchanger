@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { tokenStorage, userStorage } from './storage';
+import { themeStorage, tokenStorage, userStorage } from './storage';
 
 describe('tokenStorage', () => {
   beforeEach(() => {
@@ -20,6 +20,26 @@ describe('tokenStorage', () => {
     tokenStorage.set('jwt-token');
     tokenStorage.remove();
     expect(tokenStorage.get()).toBeNull();
+  });
+});
+
+describe('themeStorage', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('returns null when nothing is stored', () => {
+    expect(themeStorage.get()).toBeNull();
+  });
+
+  it('round-trips the selected mode', () => {
+    themeStorage.set('dark');
+    expect(themeStorage.get()).toBe('dark');
+  });
+
+  it('ignores an unknown stored value', () => {
+    localStorage.setItem('tricky_exchanger_theme', 'sepia');
+    expect(themeStorage.get()).toBeNull();
   });
 });
 

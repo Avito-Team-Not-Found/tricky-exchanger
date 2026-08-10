@@ -158,6 +158,19 @@ export function chainLinks(chain: Chain): ChainLink[] {
     .map(([position, candidates]) => ({ position, candidates }));
 }
 
+// Лучшая цепочка среди вариантов одной заявки — с максимальной вероятностью успеха (score).
+// При равенстве score выигрывает меньший chainId: иначе отметка прыгала бы между равными
+// цепочками при каждом рефетче. Единственный вариант тоже лучший: на практике у заявки чаще
+// всего ровно одна цепочка, и без отметки плашка не появлялась бы почти нигде.
+export function bestChainId(options: ExchangeOptions[]): number | null {
+  if (options.length === 0) return null;
+  return options.reduce((best, option) =>
+    option.score > best.score || (option.score === best.score && option.chainId < best.chainId)
+      ? option
+      : best,
+  ).chainId;
+}
+
 // Что пользователь получит взамен: пул заявок следующего звена по кольцу (PROJECT.md §4.4).
 // Пока цепочка CANDIDATE, кандидатов несколько — UI сам решает, как их показать.
 export function receivesItem(chain: Chain): ChainParticipant[] {

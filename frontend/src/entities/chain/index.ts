@@ -1,5 +1,6 @@
 export {
   approvedVotes,
+  bestChainId,
   chainLinks,
   CONFIRM_VOTE_META,
   confirmVoteAt,
@@ -35,5 +36,11 @@ export {
   voteForRequest,
   withdrawVote,
 } from './api';
-export { chainQueryOptions, useChain, useChains, useExchangeOptions } from './hooks';
 export type { ThinkResult } from './api';
+export {
+  chainQueryOptions,
+  useChain,
+  useChains,
+  useExchangeOptions,
+  useIsBestChain,
+} from './hooks';

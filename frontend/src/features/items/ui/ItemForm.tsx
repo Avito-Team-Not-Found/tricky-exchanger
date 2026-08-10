@@ -4,7 +4,9 @@ import { DeleteOutlined, PictureOutlined, UploadOutlined } from '@ant-design/ico
 import { App as AntApp, Button, Form, Input, Select, Skeleton, Upload } from 'antd';
 import { useNavigate } from 'react-router';
 
-import { categoryOptions } from '@shared/config/categories';
+import { getItemImageError, ITEM_IMAGE_TYPES } from '@entities/item';
+
+import { categoryOptions, DESCRIPTION_MIN_LENGTH } from '@shared/config/categories';
 import { ErrorState } from '@shared/ui';
 
 import { useArchiveItem } from '../model/useArchiveItem';
@@ -23,7 +25,7 @@ interface ItemFormProps {
 
 export function ItemForm({ itemId, ref }: ItemFormProps) {
   const navigate = useNavigate();
-  const { modal } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const archiveItem = useArchiveItem(() => navigate('/products'));
   const {
     form,
@@ -98,9 +100,17 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
             // без фото сама карточка является триггером загрузки («Добавить фото»)
             <Upload
               className="item-form__photo-upload"
-              accept="image/*"
+              accept={ITEM_IMAGE_TYPES.join(',')}
               showUploadList={false}
               beforeUpload={(file) => {
+                // accept фильтрует диалог выбора, но файл можно притащить drag-and-drop'ом —
+                // тип и размер проверяем на месте, чтобы неверный файл не уходил на сервер
+                // и не откатывался 422 после успешного сохранения товара
+                const imageError = getItemImageError(file);
+                if (imageError) {
+                  message.error(imageError);
+                  return Upload.LIST_IGNORE;
+                }
                 handleImageSelected(file);
                 return Upload.LIST_IGNORE;
               }}
@@ -153,6 +163,16 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
         rules={[
           { required: true, message: 'Введите описание' },
           { max: 500, message: 'Описание не длиннее 500 символов' },
+          {
+            // кастомный validator вместо min: antd считает символы до обрезки, а на бэкенд
+            // уходит values.description.trim() — 50 пробелов прошли бы через min
+            validator(_, value: string | undefined) {
+              if (!value || value.trim().length >= DESCRIPTION_MIN_LENGTH) {
+                return Promise.resolve();
+              }
+              return Promise.reject(new Error('Пожалуйста, опишите товар подробнее'));
+            },
+          },
         ]}
       >
         <Input.TextArea placeholder="Описание товара" maxLength={500} showCount rows={4} />

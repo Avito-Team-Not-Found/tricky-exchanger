@@ -82,7 +82,9 @@ describe('RecoveryFlow', () => {
     await sendCode(user);
 
     expect(await screen.findByText('Введите код')).toBeInTheDocument();
-    expect(screen.getByText(/anna@example.com/)).toBeInTheDocument();
+    // на шаге кода адрес маскируется: показываем an**@example.com, а не anna@example.com
+    expect(screen.getByText(/an\*\*@example\.com/)).toBeInTheDocument();
+    expect(screen.queryByText(/anna@example\.com/)).not.toBeInTheDocument();
     expect(mockedSend).toHaveBeenCalledWith('anna@example.com');
   });
 
@@ -181,5 +183,25 @@ describe('RecoveryFlow', () => {
 
     await user.click(screen.getByRole('button', { name: /Войти/ }));
     expect(screen.getByText('login screen')).toBeInTheDocument();
+  });
+
+  // короткий пароль на шаге восстановления — ошибка после паузы, а не на каждой букве
+  it('shows a password length error after a short new password is typed', async () => {
+    const user = userEvent.setup();
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
+    mockedVerify.mockResolvedValue();
+    setup();
+
+    await sendCode(user);
+    await screen.findByText('Введите код');
+    await fillOtp(user, '482913');
+    await user.click(screen.getByRole('button', { name: /Подтвердить/ }));
+    await screen.findByRole('heading', { name: 'Новый пароль' });
+
+    await user.type(screen.getByLabelText(/Новый пароль/i), 'pass1');
+
+    expect(
+      await screen.findByText('Пароль должен быть не короче 8 символов', {}, { timeout: 3000 }),
+    ).toBeInTheDocument();
   });
 });

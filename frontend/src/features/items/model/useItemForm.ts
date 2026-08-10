@@ -13,6 +13,7 @@ import {
   type ItemsList,
 } from '@entities/item';
 
+import { DESCRIPTION_MIN_LENGTH } from '@shared/config/categories';
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
 type UploadedFile = Parameters<NonNullable<UploadProps['beforeUpload']>>[0];
@@ -84,7 +85,18 @@ export function useItemForm(itemId?: number) {
   const description = Form.useWatch('description', form);
   const category = Form.useWatch('category', form);
 
-  const fieldsValid = Boolean(title?.trim()) && Boolean(description?.trim()) && Boolean(category);
+  // товары, созданные до требования 50 символов, приходят с коротким описанием: antd не
+  // валидирует initialValues, поэтому без явной проверки кнопка молча оставалась бы
+  // заблокированной без единой подсказки на экране
+  useEffect(() => {
+    if (!item) return;
+    form.validateFields(['description']).catch(() => undefined);
+  }, [form, item]);
+
+  // гейт кнопки повторяет правило формы, иначе короткое описание уйдёт в молчаливый сабмит
+  const descriptionLength = description?.trim().length ?? 0;
+  const fieldsValid =
+    Boolean(title?.trim()) && descriptionLength >= DESCRIPTION_MIN_LENGTH && Boolean(category);
   const canSubmit = fieldsValid && hasPhoto && !submitting;
 
   function handleImageSelected(file: UploadedFile) {
@@ -123,7 +135,8 @@ export function useItemForm(itemId?: number) {
         okButtonProps: { danger: true },
         cancelText: 'Остаться',
         closable: false,
-        maskClosable: false,
+        centered: true,
+        mask: { closable: false },
         onOk: () => goBack(),
       });
       return;
@@ -134,7 +147,8 @@ export function useItemForm(itemId?: number) {
       okText: 'Сохранить изменения',
       cancelText: 'Назад',
       closable: false,
-      maskClosable: false,
+      centered: true,
+      mask: { closable: false },
       // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
       // берём значения синхронно и шлём сами (сюда попадаем только при canSubmit)
       onOk: () => {

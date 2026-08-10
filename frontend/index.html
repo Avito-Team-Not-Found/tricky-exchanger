@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1677ff" />
     <title>Меняйка</title>
+    <script>
+      // до первого кадра ставим сохранённую тему, иначе тёмная страница успевает мигнуть светлой
+      // (React выставляет data-theme только в useEffect). Ключ дублирует themeStorage в shared/lib/storage.ts
+      try {
+        var storedTheme = localStorage.getItem('tricky_exchanger_theme');
+        if (storedTheme === 'dark' || storedTheme === 'light') {
+          document.documentElement.dataset.theme = storedTheme;
+          document.documentElement.style.colorScheme = storedTheme;
+        }
+      } catch (e) {
+        /* localStorage недоступен (приватный режим / отключены куки) — остаётся светлая тема */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

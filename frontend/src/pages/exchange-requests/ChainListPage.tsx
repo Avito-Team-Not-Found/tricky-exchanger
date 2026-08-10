@@ -6,6 +6,7 @@ import { useChainConfirm, useChainVote, ChainCard } from '@features/chains';
 
 import {
   approvedVotes,
+  bestChainId,
   isAssembled,
   isHardLocked,
   useChains,
@@ -80,9 +81,14 @@ export function ChainListPage() {
     );
   }
 
-  const receiveOptions = options.flatMap((entry) =>
-    entry.receiveOptions.map((option) => ({ entry, option })),
-  );
+  // бэкенд отдаёт цепочки по дате создания (repository.go: ORDER BY c.created_at DESC), а экран
+  // показывает их по убыванию вероятности (DESIGN.md §4.6) — иначе лучшая цепочка с плашкой
+  // оказывается в середине списка. Сортировка стабильная, поэтому варианты одной цепочки
+  // сохраняют исходный порядок между собой
+  const receiveOptions = options
+    .flatMap((entry) => entry.receiveOptions.map((option) => ({ entry, option })))
+    .sort((a, b) => b.entry.score - a.entry.score);
+  const bestId = bestChainId(options);
 
   return (
     <div className="chain-list-page">
@@ -134,6 +140,7 @@ export function ChainListPage() {
                 key={`${entry.chainId}-${option.requestId}`}
                 options={entry}
                 option={option}
+                isBest={entry.chainId === bestId}
                 isVoting={isVoting}
                 isConfirming={isConfirming}
                 locked={hasAssembled && !isAssembled(entry.status)}

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   confirmChain,
   useChain,
+  useIsBestChain,
   voteForRequest,
   withdrawVote,
   type Chain,
@@ -24,6 +25,7 @@ vi.mock('@entities/chain', async (importOriginal) => {
   return {
     ...actual,
     useChain: vi.fn(),
+    useIsBestChain: vi.fn(),
     voteForRequest: vi.fn(),
     withdrawVote: vi.fn(),
     confirmChain: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('@entities/chain', async (importOriginal) => {
 });
 
 const mockedUseChain = vi.mocked(useChain);
+const mockedUseIsBestChain = vi.mocked(useIsBestChain);
 const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
 const mockedConfirm = vi.mocked(confirmChain);
@@ -79,6 +82,16 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainParticipantsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedUseIsBestChain.mockReturnValue({ isBest: false, isLoading: false });
+  });
+
+  it('shows the best-chain badge above the links when the chain leads', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+    mockedUseIsBestChain.mockReturnValue({ isBest: true, isLoading: false });
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    expect(screen.getByText('Лучшая цепочка для этого товара')).toBeInTheDocument();
   });
 
   it('shows the chain as links with position aliases and candidate items', () => {
@@ -112,7 +125,7 @@ describe('ChainParticipantsPage', () => {
 
     expect(screen.getByText('3 варианта')).toBeInTheDocument();
     // пул не получаемого звена сворачивается, а единственный кандидат получаемого звена
-    // по-прежнему откликаем — кнопка остаётся одна
+    // по-прежнему откликаем — кнопка внизу остаётся одна
     expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
   });
 
@@ -144,7 +157,9 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(2);
+    // каждая строка получаемого пула выбираемая, кнопка внизу одна — действует на выбранного
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
   });
 
   it('casts a vote for the concrete candidate', async () => {
@@ -161,6 +176,7 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
+    await user.click(screen.getAllByRole('radio')[0]);
     await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
     await waitFor(() =>
       expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
@@ -179,6 +195,7 @@ describe('ChainParticipantsPage', () => {
     // статус отклика — пилюля с подписью текстом, чтобы он читался не только по цвету (макет 4.8)
     expect(screen.getByText('Ожидаем')).toBeInTheDocument();
 
+    await user.click(screen.getAllByRole('radio')[0]);
     await user.click(screen.getByRole('button', { name: 'Отозвать отклик' }));
     await user.click(await screen.findByRole('button', { name: 'Да, отозвать' }));
 
