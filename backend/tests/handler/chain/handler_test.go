@@ -90,6 +90,25 @@ func TestGetReturnsNotFoundForUnavailableChain(t *testing.T) {
 	}
 }
 
+func TestGetReturnsGoneForExpiredConfirmation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	service := &fakeService{err: entity.ErrChainConfirmationExpired}
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c.Set("userID", userID)
+		c.Next()
+	})
+	engine.GET("/chains/:id", chainhandler.NewHandler(service).Get)
+
+	request := httptest.NewRequest(http.MethodGet, "/chains/7", nil)
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusGone {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestExchangeOptionsReturnsOnlyNextClusterMembers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	userID := uuid.MustParse("11111111-1111-1111-1111-111111111111")

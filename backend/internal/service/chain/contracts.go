@@ -20,7 +20,8 @@ type Repository interface {
 	UpsertPendingVote(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) (time.Time, error)
 	DeletePendingVote(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error
 	ListPendingVoteEdges(ctx context.Context, tx database.Tx, chainID int64) ([]entity.VoteEdge, error)
-	Propose(ctx context.Context, tx database.Tx, chainID int64, requestIDsByPosition []int64) error
+	Propose(ctx context.Context, tx database.Tx, chainID int64, requestIDsByPosition []int64, confirmationDeadline time.Time) error
+	ExpireProposalIfDue(ctx context.Context, tx database.Tx, chainID int64) (bool, error)
 	MarkRequestInProposal(ctx context.Context, tx database.Tx, requestID int64) error
 	RestoreActiveIfNoPendingVotes(ctx context.Context, tx database.Tx, requestID int64) error
 	LoadScoreFeatures(ctx context.Context, tx database.Tx, chainID int64) (cosines []float64, reliability []float64, sizes []int, err error)
