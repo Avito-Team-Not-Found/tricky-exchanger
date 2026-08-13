@@ -1,5 +1,4 @@
-// Package storage содержит инфраструктурный клиент объектного хранилища (MinIO,
-// S3-совместимое API) — используется для загрузки фото товаров.
+// Package storage — MinIO/S3 для фото товаров.
 package storage
 
 import (
@@ -11,38 +10,25 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// Config — параметры подключения к MinIO (см. internal/core/config).
 type Config struct {
-	// Endpoint — адрес MinIO для самого S3-клиента (в докер-сети это, например,
-	// "minio:9000" — так к нему стучится приложение из соседнего контейнера).
-	Endpoint  string
-	AccessKey string
-	SecretKey string
-	Bucket    string
-	UseSSL    bool
-	// PublicEndpoint — адрес, который подставляется в возвращаемый пользователю URL
-	// фото (то, что реально открывается в браузере с хост-машины, например
-	// "localhost:9000"). Если не задан, используется Endpoint.
-	PublicEndpoint string
-	// PublicUseSSL — схема https:// для публичных URL. Отдельно от UseSSL, потому
-	// что внутри docker-сети клиент ходит на minio:9000 по HTTP, а снаружи Caddy
-	// отдаёт те же объекты уже по HTTPS.
-	// nil = как UseSSL (обратная совместимость).
+	Endpoint       string // S3 внутри сети, напр. minio:9000
+	AccessKey      string
+	SecretKey      string
+	Bucket         string
+	UseSSL         bool
+	PublicEndpoint string // база для image_url в браузере; пусто = Endpoint
+	// PublicUseSSL отдельно от UseSSL: внутри сети HTTP, снаружи часто HTTPS (Caddy).
+	// nil = как UseSSL.
 	PublicUseSSL *bool
 }
 
-// Storage — S3-совместимое объектное хранилище для фото товаров.
-// Реализует internal/service/item.Storage.
 type Storage struct {
-	client *minio.Client
-	bucket string
-	// publicBaseURL — то, что подставляется в начало возвращаемого URL.
-	// Для дефолтной схемы (без CDN/reverse-proxy) это просто эндпоинт MinIO.
+	client        *minio.Client
+	bucket        string
 	publicBaseURL string
 }
 
-// New создаёт клиент MinIO и гарантирует существование бакета (на случай локального
-// запуска бэкенда без сервиса minio-init из docker-compose).
+// New — клиент + CreateBucket если нет (локальный запуск без minio-init).
 func New(ctx context.Context, cfg Config) (*Storage, error) {
 	client, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
@@ -62,9 +48,7 @@ func New(ctx context.Context, cfg Config) (*Storage, error) {
 		}
 	}
 
-	// Фото товаров отдаются напрямую по URL (например, в <img src>), поэтому бакет
-	// должен разрешать анонимное чтение объектов. На запись это не влияет — она
-	// всё равно возможна только с access/secret key.
+	// Публичное чтение объектов (img src); запись только с access/secret key.
 	if err := client.SetBucketPolicy(ctx, cfg.Bucket, publicReadPolicy(cfg.Bucket)); err != nil {
 		return nil, fmt.Errorf("minio bucket policy: %w", err)
 	}

@@ -9,8 +9,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 )
 
-// ItemRepository — то, что service/item ожидает от слоя хранения.
-// Реализация лежит в internal/repository/item.
 type ItemRepository interface {
 	Create(ctx context.Context, item *entity.Item) error
 	GetByID(ctx context.Context, id int64) (*entity.Item, error)
@@ -22,8 +20,6 @@ type ItemRepository interface {
 	HasActiveHardReservation(ctx context.Context, itemID int64) (bool, error)
 }
 
-// Storage — объектное хранилище фото товаров (MinIO/S3-совместимое).
-// Реализация лежит в internal/infrastructure/storage.
 type Storage interface {
 	Upload(ctx context.Context, objectName string, content io.Reader, size int64, contentType string) (url string, err error)
 }

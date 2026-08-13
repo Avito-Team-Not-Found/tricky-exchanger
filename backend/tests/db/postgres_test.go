@@ -8,7 +8,7 @@ import (
 	database "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 )
 
-// TestConnect_UnreachableDB проверяет критерий приёмки:
+// TestConnect_UnreachableDB проверяет, что
 // приложение возвращает понятную ошибку при недоступной БД.
 func TestConnect_UnreachableDB(t *testing.T) {
 	ctx := context.Background()

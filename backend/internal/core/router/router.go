@@ -17,8 +17,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/middleware"
 )
 
-// New создаёт gin.Engine и регистрирует маршруты приложения.
-// tokenParser проверяет JWT для защищённых маршрутов (см. middleware.Auth).
 func New(
 	tokenParser middleware.TokenParser,
 	pingH *PingHandler,
@@ -92,12 +90,11 @@ func New(
 			chains.POST("/:id/receipt", chainH.ConfirmReceipt)
 		}
 
-		// Временный callback для локального MVP. Перед внешним запуском
-		// на будущее защитим сейчас сделано для понимания как будет происходить подтверждение отправки
+		// Handoff callback (MVP без внешней auth; перед продом — защита).
 		integrations := api.Group("/integrations")
 		integrations.POST("/avito/handoffs", chainH.Handoff)
 
-		// восстановление пароля по коду с почты — не защищено, пользователь ещё не залогинен
+		// recovery без JWT: пользователь ещё не залогинен
 		recovery := api.Group("/account/password-recovery")
 		recovery.POST("/send-code/", userH.SendRecoveryCode)
 		recovery.POST("/verify-code/", userH.VerifyRecoveryCode)

@@ -1,9 +1,10 @@
 package codestore_test
 
 import (
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/codestore"
 	"testing"
 	"time"
+
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/codestore"
 )
 
 func TestStore_SaveAndGet(t *testing.T) {

@@ -16,12 +16,12 @@ var v10 *validator.Validate
 var schemaDecoder = schema.NewDecoder()
 
 var customValidators = map[string]func(fl validator.FieldLevel) bool{
-	"snake_case":     validateSnakeCase,
-	"not_empty":      validateNotEmpty,
-	"date":           validateDate,
-	"tag":            validateTag,
-	"recovery_code":  validateRecoveryCode,
-	"item_status":    validateItemStatus,
+	"snake_case":    validateSnakeCase,
+	"not_empty":     validateNotEmpty,
+	"date":          validateDate,
+	"tag":           validateTag,
+	"recovery_code": validateRecoveryCode,
+	"item_status":   validateItemStatus,
 }
 
 func init() {

@@ -56,3 +56,14 @@ func DBErrToErr(err error) (res error, ok bool) {
 		return nil, false
 	}
 }
+
+// MapDBErr возвращает mapped sentinel, если err — известный PgError; иначе исходный err.
+func MapDBErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if mappedErr, ok := DBErrToErr(err); ok {
+		return mappedErr
+	}
+	return err
+}

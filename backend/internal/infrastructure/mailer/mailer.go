@@ -1,23 +1,5 @@
-// Package mailer отправляет письма через внешний SMTP-сервер (net/smtp).
-//
-// Поддерживает три классических режима шифрования соединения:
-//
-//   - EncryptionPlain    — без шифрования вообще. Обычно порт 25. Учётные данные
-//     и письмо идут открытым текстом — использовать только для доверенных
-//     внутренних релеев без аутентификации, для реальных почтовых провайдеров
-//     не годится (они его просто не поддерживают для AUTH).
-//   - EncryptionSTARTTLS — соединение начинается как обычный plaintext TCP,
-//     клиент шлёт EHLO, сервер объявляет поддержку STARTTLS, клиент явно
-//     командой STARTTLS повышает уже открытое соединение до TLS — и только
-//     после этого идёт AUTH и само письмо. Обычно порт 587 (иногда 25).
-//   - EncryptionTLS      — TLS с первого байта (implicit TLS, как у HTTPS):
-//     TCP-соединение сразу оборачивается в TLS, plaintext-фазы нет вообще.
-//     Обычно порт 465 (RFC 8314 сейчас рекомендует именно его).
-//
-// Стандартный smtp.SendMail из net/smtp умеет только plain и (неявно, если
-// сервер его анонсирует) starttls — implicit TLS он не поддерживает вообще,
-// т.к. всегда сам поднимает обычное net.Dial. Поэтому здесь используется
-// низкоуровневый smtp.Client, чтобы явно управлять всеми тремя режимами.
+// Package mailer отправляет письма через SMTP (plain / starttls / tls).
+// net/smtp.SendMail не умеет implicit TLS, поэтому используется smtp.Client.
 package mailer
 
 import (
@@ -32,11 +14,8 @@ import (
 	"time"
 )
 
-// dialTimeout — чтобы send-code не висел бесконечно, если SMTP недоступен
-// (типичный кейс: у VPS открыт только IPv6 до mail.ru, а Docker ходит по IPv4).
 const dialTimeout = 10 * time.Second
 
-// Encryption — режим шифрования соединения с SMTP-сервером.
 type Encryption string
 
 const (
@@ -45,21 +24,16 @@ const (
 	EncryptionTLS      Encryption = "tls"
 )
 
-// ErrNotConfigured возвращается, если SMTP-хост не задан в конфиге —
-// значит, отправка почты не настроена (например, локально у разработчика).
+// ErrNotConfigured — SMTP_HOST не задан.
 var ErrNotConfigured = errors.New("smtp is not configured")
 
-// Config — параметры подключения к SMTP-серверу.
 type Config struct {
-	Host     string
-	Port     string
-	Username string
-	Password string
-	// From — адрес отправителя, попадает в заголовок "From" и в SMTP MAIL FROM.
-	From string
-	// Encryption — "plain" | "starttls" | "tls". Пустое значение трактуется как starttls
-	// (самый распространённый режим у почтовых провайдеров на порту 587).
-	Encryption Encryption
+	Host       string
+	Port       string
+	Username   string
+	Password   string
+	From       string
+	Encryption Encryption // plain | starttls | tls; пусто = starttls
 }
 
 func (c Config) encryption() Encryption {
@@ -69,7 +43,6 @@ func (c Config) encryption() Encryption {
 	return c.Encryption
 }
 
-// Service — отправитель почты поверх стандартного net/smtp.
 type Service struct {
 	cfg Config
 }
@@ -78,7 +51,6 @@ func NewService(cfg Config) *Service {
 	return &Service{cfg: cfg}
 }
 
-// SendRecoveryCode отправляет пользователю код восстановления пароля.
 func (s *Service) SendRecoveryCode(to, code string) error {
 	const subject = "Код для восстановления пароля"
 	body := fmt.Sprintf(
@@ -126,9 +98,8 @@ func (s *Service) send(to, subject, body string) error {
 		if ok, _ := client.Extension("AUTH"); !ok {
 			return fmt.Errorf("smtp server does not support AUTH")
 		}
-		// net/smtp.PlainAuth отказывается слать пароль без TLS, если хост не localhost.
-		// Для EncryptionPlain (локальный TLS-terminating relay на docker gateway) это
-		// ломает AUTH — используем свой Plain, который не делает эту проверку.
+		// PlainAuth из stdlib требует TLS, если хост не localhost.
+		// Для EncryptionPlain (TLS-terminating relay) нужен свой Plain без этой проверки.
 		auth := smtp.Auth(smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host))
 		if s.cfg.encryption() == EncryptionPlain {
 			auth = plainAuth{username: s.cfg.Username, password: s.cfg.Password}
@@ -160,15 +131,12 @@ func (s *Service) send(to, subject, body string) error {
 	return client.Quit()
 }
 
-// dial устанавливает соединение с сервером в соответствии с s.cfg.Encryption
-// и возвращает готовый к AUTH/MAIL/RCPT smtp.Client.
 func (s *Service) dial() (*smtp.Client, error) {
 	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
 	tlsCfg := &tls.Config{ServerName: s.cfg.Host}
 
 	switch s.cfg.encryption() {
 	case EncryptionTLS:
-		// implicit TLS — шифруем соединение сразу, до какого-либо SMTP-диалога.
 		dialer := &net.Dialer{Timeout: dialTimeout}
 		conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsCfg)
 		if err != nil {
@@ -195,7 +163,6 @@ func (s *Service) dial() (*smtp.Client, error) {
 			_ = client.Close()
 			return nil, fmt.Errorf("starttls: %w", err)
 		}
-		// После handshake снимаем дедлайн — письмо может уходить дольше dialTimeout.
 		_ = conn.SetDeadline(time.Time{})
 		return client, nil
 
@@ -218,8 +185,6 @@ func (s *Service) dial() (*smtp.Client, error) {
 	}
 }
 
-// buildMessage собирает MIME-письмо в кодировке UTF-8 (тема кодируется
-// RFC 2047 encoded-word, т.к. содержит кириллицу).
 func buildMessage(from, to, subject, body string) []byte {
 	var b strings.Builder
 
@@ -234,8 +199,7 @@ func buildMessage(from, to, subject, body string) []byte {
 	return []byte(b.String())
 }
 
-// plainAuth — PLAIN AUTH без требования TLS (см. send()). Нужен для SMTP-релея
-// на хосте VPS, где TLS уже терминирован, а до контейнера идёт plaintext.
+// plainAuth — PLAIN без требования TLS (для plaintext-релея за TLS-терминатором).
 type plainAuth struct {
 	username string
 	password string
