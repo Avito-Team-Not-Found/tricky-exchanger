@@ -1293,7 +1293,8 @@ func (r *Postgres) PrepareFrozenReplacement(ctx context.Context, tx database.Tx,
 func (r *Postgres) IsFrozenReplacement(ctx context.Context, tx database.Tx, chainID int64) (bool, error) {
 	var active bool
 	if err := tx.QueryRow(ctx, `
-		SELECT status = 'PROPOSED' AND invalid_reason = 'frozen_replacement'
+		SELECT status = 'PROPOSED'
+		   AND COALESCE(invalid_reason = 'frozen_replacement', FALSE)
 		FROM chains WHERE id = $1
 	`, chainID).Scan(&active); err != nil {
 		return false, fmt.Errorf("check frozen replacement: %w", err)
