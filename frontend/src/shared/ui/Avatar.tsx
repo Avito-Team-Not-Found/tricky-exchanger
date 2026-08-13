@@ -20,13 +20,13 @@ function initialsOf(name: string): string {
 interface AvatarProps {
   name: string;
   size?: AvatarSize;
-  // подпись вместо инициалов (в цепочке текущий пользователь помечен «Я», макет 4.6)
+  // подпись вместо инициалов (в цепочке текущий пользователь помечен «Я»)
   label?: string;
-  // эмодзи-псевдоним участника; рисуется вполовину диаметра — заметно крупнее подписи (макет 4.8)
+  // эмодзи-псевдоним участника; рисуется вполовину диаметра — заметно крупнее подписи
   emoji?: string;
 }
 
-// Круглый аватар без фото: фолбэк — инициалы на 15%-м акценте (DESIGN.md §2.9)
+// Круглый аватар без фото: фолбэк — инициалы на 15%-м акценте
 export function Avatar({ name, size = 'md', label, emoji }: AvatarProps) {
   const { token } = theme.useToken();
   const backgroundColor = `${token.colorPrimary}26`;

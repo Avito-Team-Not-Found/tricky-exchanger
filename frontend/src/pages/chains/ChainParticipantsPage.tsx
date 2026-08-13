@@ -1,7 +1,7 @@
 import { Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainDetail, useChainConfirm, useChainVote } from '@features/chains';
+import { ChainDetail, useChainConfirm } from '@features/chains';
 
 import { useChain } from '@entities/chain';
 
@@ -11,14 +11,13 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Схема участников цепочки (макет 4.8): строки по звеньям кольца с пулом кандидатов и
-// откликами на получаемом звене. Открывается с экрана товара цепочки (макет 4.7).
+// Схема участников цепочки: строки по звеньям кольца с пулом кандидатов и
+// статусами откликов. Открывается с экрана товара цепочки.
 export function ChainParticipantsPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading, isError, refetch } = useChain(chainId);
-  const { confirmVote, isVoting } = useChainVote(refetch);
   const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
 
   return (
@@ -33,17 +32,6 @@ export function ChainParticipantsPage() {
         ) : (
           <ChainDetail
             chain={chain}
-            isVoting={isVoting}
-            onVote={(candidate, active) =>
-              confirmVote(
-                {
-                  chainId: chain.id,
-                  requestId: chain.currentRequestId,
-                  targetRequestId: candidate.requestId,
-                },
-                active,
-              )
-            }
             onConfirm={() => openConfirm(chain.id)}
             onProceed={() => navigate(`/chains/${chain.id}/deal`)}
           />

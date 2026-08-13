@@ -1,4 +1,4 @@
-// контейнер схемы: растягивается на всю высоту экрана, чтобы кнопка действия прижалась к низу (макет 4.8)
+// контейнер схемы: растягивается на всю высоту экрана, чтобы кнопка действия прижалась к низу
 .chain-detail {
   display: flex;
   flex-direction: column;
@@ -15,7 +15,7 @@
   list-style: none;
 }
 
-// пилюля «Цепочка собрана» и бейдж согласий над списком при PROPOSED и дальше (SOFT-LOCK §8);
+// пилюля «Цепочка собрана» и бейдж согласий над списком при PROPOSED и дальше;
 // align-self: flex-start не даёт бейджам растянуться на всю ширину колонки
 .chain-detail__head {
   display: flex;
@@ -37,12 +37,12 @@
   white-space: nowrap;
 }
 
-// действие второго раунда внизу экрана (SOFT-LOCK §8); margin-top: auto прижимает к низу
+// действие второго раунда внизу экрана; margin-top: auto прижимает к низу
 .chain-detail__action {
   margin-top: auto;
 }
 
-// строка звена: подложка и рамка только у текущего пользователя (макет 4.8)
+// строка звена: подложка и рамка только у текущего пользователя
 .chain-detail__participant {
   display: flex;
   flex-direction: column;
@@ -73,7 +73,7 @@
 }
 
 // пилюля голоса второго раунда в шапке звена: та же стилистика, что у chain-detail__response,
-// но прижата к правому краю строки-шапки (SOFT-LOCK §8)
+// но прижата к правому краю строки-шапки
 .chain-detail__confirm {
   display: inline-flex;
   align-items: center;
@@ -107,7 +107,7 @@
   color: var(--color-text-secondary);
 }
 
-// подтвердил, ждём остальных: статусная строка вместо кнопки внизу (SOFT-LOCK §8)
+// подтвердил, ждём остальных: статусная строка вместо кнопки внизу
 .chain-detail__confirmed {
   margin: 0;
   padding: var(--spacing-xs) var(--spacing-sm);
@@ -121,7 +121,7 @@
   white-space: nowrap;
 }
 
-// пул кандидатов на получаемом звене — каждая запись откликается отдельно
+// пул кандидатов на получаемом звене — каждая запись со своим статусом отклика
 .chain-detail__candidates {
   display: flex;
   flex-direction: column;
@@ -131,7 +131,7 @@
   list-style: none;
 }
 
-// остальные звенья с несколькими кандидатами сворачиваются в счётчик (макет 4.8, §3.1)
+// остальные звенья с несколькими кандидатами сворачиваются в счётчик
 .chain-detail__collapsed {
   display: inline-flex;
   align-items: center;
@@ -144,7 +144,7 @@
   white-space: nowrap;
 }
 
-// одна запись кандидата: миниатюра, товар и «что хочет взамен», статус отклика, действие
+// одна запись кандидата: миниатюра, товар и «что хочет взамен», статус отклика
 .chain-detail__item {
   display: flex;
   align-items: center;
@@ -202,7 +202,7 @@
   white-space: nowrap;
 }
 
-// статус отклика — пилюля с 15%-й заливкой тона и текстом того же цвета (макет 4.8);
+// статус отклика — пилюля с 15%-й заливкой тона и текстом того же цвета;
 // margin-left: auto прижимает её к правому краю строки
 .chain-detail__response {
   display: inline-flex;
@@ -235,32 +235,6 @@
 .chain-detail__response--neutral {
   background: color-mix(in srgb, var(--color-text-secondary) 15%, transparent);
   color: var(--color-text-secondary);
-}
-
-.chain-detail__item-action {
-  flex-shrink: 0;
-}
-
-// строка получаемого звена выбираемая (SCRUM-52): клик по ней выделяет кандидата,
-// к которому применяется кнопка нижнего блока
-.chain-detail__item--selectable {
-  cursor: pointer;
-  padding: var(--spacing-sm);
-}
-
-.chain-detail__item--selected {
-  background: color-mix(in srgb, var(--color-accent-primary) 10%, transparent);
-  box-shadow: inset 0 0 0 2px var(--color-accent-primary);
-  border-radius: var(--radius-md);
-}
-
-// действие над выбранным кандидатом — липкая кнопка внизу, чтобы не уезжала за экран
-.chain-detail__actions {
-  position: sticky;
-  bottom: 0;
-  margin-top: var(--spacing-lg);
-  padding-top: var(--spacing-sm);
-  background: var(--color-bg-page);
 }
 
 @media (min-width: 768px) {

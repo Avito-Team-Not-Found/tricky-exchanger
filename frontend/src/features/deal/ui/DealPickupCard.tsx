@@ -8,8 +8,8 @@ interface DealPickupCardProps {
   onChange?: () => void;
 }
 
-// Карточка пункта выдачи (макет 4.9): иконка, название и адрес; адрес — клиентская имитация
-// (DEAL-PLAN.md §4.1), на бэкенде его нет.
+// Карточка пункта выдачи: иконка, название и адрес; адрес — клиентская имитация,
+// на бэкенде его нет.
 export function DealPickupCard({ address, onChange }: DealPickupCardProps) {
   return (
     <div className="deal-pickup">

@@ -193,7 +193,7 @@ describe('ItemForm', () => {
     expect(screen.getByTitle('Антиквариат')).toBeInTheDocument();
   });
 
-  // создание товара из формы запроса (PROJECT.md §2.4): фото не загрузилось — товар уже создан,
+  // создание товара из формы запроса: фото не загрузилось — товар уже создан,
   // ведём на редактирование, сохраняя returnTo=request, чтобы после дозагрузки вернуться в запрос
   it('redirects to edit with returnTo=request when the photo upload fails in create-from-request', async () => {
     const user = userEvent.setup();
@@ -299,5 +299,17 @@ describe('ItemForm', () => {
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedArchiveItem).toHaveBeenCalledWith(1);
+  });
+
+  // на форму обменянного товара можно попасть только по прямой ссылке — редактировать
+  // и удалять нечего, бэкенд отклоняет мутации архивного товара
+  it('opens an exchanged item read-only', () => {
+    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, status: 'ARCHIVED' }));
+    renderWithProviders(<ItemForm itemId={1} />);
+
+    expect(screen.getByText('Товар обменян и больше не редактируется')).toBeInTheDocument();
+    expect(screen.getByLabelText('Название')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Сохранить изменения/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Удалить товар/ })).not.toBeInTheDocument();
   });
 });

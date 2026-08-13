@@ -5,8 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   confirmChain,
   useChain,
-  voteForRequest,
-  withdrawVote,
   type Chain,
   type ChainParticipant,
 } from '@entities/chain';
@@ -24,21 +22,17 @@ vi.mock('@entities/chain', async (importOriginal) => {
   return {
     ...actual,
     useChain: vi.fn(),
-    voteForRequest: vi.fn(),
-    withdrawVote: vi.fn(),
     confirmChain: vi.fn(),
   };
 });
 
 const mockedUseChain = vi.mocked(useChain);
-const mockedVote = vi.mocked(voteForRequest);
-const mockedWithdraw = vi.mocked(withdrawVote);
 const mockedConfirm = vi.mocked(confirmChain);
 
 const MY_CANDIDATE: ChainParticipant = {
   clusterId: 1,
   requestId: 101,
-  position: 1,
+  position: 0,
   isCurrentUser: true,
   offeredItemId: 1,
   offeredItemTitle: 'Велосипед',
@@ -55,9 +49,9 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
     length: 2,
     version: 1,
     currentRequestId: 101,
-    currentPosition: 1,
-    givesToPosition: 2,
-    receivesFromPosition: 2,
+    currentPosition: 0,
+    givesToPosition: 1,
+    receivesFromPosition: 1,
     createdAt: '',
     updatedAt: '',
     participants: [
@@ -65,7 +59,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
       {
         clusterId: 2,
         requestId: 202,
-        position: 2,
+        position: 1,
         isCurrentUser: false,
         offeredItemId: 2,
         offeredItemTitle: 'Зеркальный фотоаппарат Canon',
@@ -99,7 +93,7 @@ describe('ChainParticipantsPage', () => {
     const pool = Array.from({ length: 3 }, (_, index) => ({
       clusterId: 1,
       requestId: 101 + index,
-      position: 1,
+      position: 0,
       isCurrentUser: index === 0,
       offeredItemId: 1,
       offeredItemTitle: `Мой товар ${index + 1}`,
@@ -114,17 +108,15 @@ describe('ChainParticipantsPage', () => {
     renderWithProviders(<ChainParticipantsPage />);
 
     expect(screen.getByText('3 варианта')).toBeInTheDocument();
-    // пул не получаемого звена сворачивается, а единственный кандидат получаемого звена
-    // по-прежнему откликаем — кнопка внизу остаётся одна
-    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
+    expect(screen.getByText('Зеркальный фотоаппарат Canon')).toBeInTheDocument();
   });
 
-  it('offers a vote on every candidate of the receiving position', () => {
+  it('shows all candidates of the receiving position', () => {
     const pool = [
       {
         clusterId: 2,
         requestId: 202,
-        position: 2,
+        position: 1,
         isCurrentUser: false,
         offeredItemId: 2,
         offeredItemTitle: 'Зеркальный фотоаппарат Canon',
@@ -132,11 +124,11 @@ describe('ChainParticipantsPage', () => {
         wantedDescription: 'Хочу велосипед',
         requestStatus: 'ACTIVE' as const,
       },
-      // кандидат без фото: imageUrl с omitempty может отсутствовать вовсе (PROJECT.md §4.4)
+      // кандидат без фото: imageUrl с omitempty может отсутствовать вовсе
       {
         clusterId: 2,
         requestId: 203,
-        position: 2,
+        position: 1,
         isCurrentUser: false,
         offeredItemId: 3,
         offeredItemTitle: 'Планшет',
@@ -149,55 +141,23 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // каждая строка получаемого пула выбираемая, кнопка внизу одна — действует на выбранного
-    expect(screen.getAllByRole('radio')).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
+    expect(screen.getByText('Зеркальный фотоаппарат Canon')).toBeInTheDocument();
+    expect(screen.getByText('Планшет')).toBeInTheDocument();
   });
 
-  it('casts a vote for the concrete candidate', async () => {
-    mockedVote.mockResolvedValue({
-      chainId: 1,
-      requestId: 101,
-      targetRequestId: 202,
-      vote: 'pending',
-      votedAt: '2026-08-08T12:00:00Z',
-      chainStatus: 'CANDIDATE',
-    });
-    const user = userEvent.setup();
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    await user.click(screen.getAllByRole('radio')[0]);
-    await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
-    await waitFor(() =>
-      expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
-    );
-  });
-
-  it('shows the vote status and withdraws it through the confirmation modal', async () => {
-    mockedWithdraw.mockResolvedValue(undefined);
-    const user = userEvent.setup();
+  it('shows the vote status of a responded candidate', () => {
     const voted = makeChain();
     voted.participants[1].vote = 'pending';
     mockedUseChain.mockReturnValue(queryOk(voted));
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // статус отклика — пилюля с подписью текстом, чтобы он читался не только по цвету (макет 4.8)
+    // статус отклика — пилюля с подписью текстом, чтобы он читался не только по цвету
     expect(screen.getByText('Ожидаем')).toBeInTheDocument();
-
-    await user.click(screen.getAllByRole('radio')[0]);
-    await user.click(screen.getByRole('button', { name: 'Отозвать отклик' }));
-    await user.click(await screen.findByRole('button', { name: 'Да, отозвать' }));
-
-    await waitFor(() =>
-      expect(mockedWithdraw).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
-    );
   });
 
   // на собранной цепочке пилюли первого раунда заменяются голосами второго раунда, а отклики
-  // скрыты: у vote на PROPOSED другой смысл (SOFT-LOCK §8)
+  // скрыты: у vote на PROPOSED другой смысл
   it('shows second-round confirm pills and hides vote actions on an assembled chain', () => {
     const voted = makeChain({ status: 'PROPOSED' });
     voted.participants[0].vote = 'pending';
@@ -214,14 +174,14 @@ describe('ChainParticipantsPage', () => {
   });
 
   // голос привязан к цели голосования: решение участника позиции p лежит в vote позиции p+1
-  // (SOFT-LOCK §3.3), поэтому пилюли строятся по сдвигу, а не по полю строки напрямую
+  // по кольцу, поэтому пилюли строятся по сдвигу, а не по полю строки напрямую
   it('renders each confirm vote state on the shifted position', () => {
     const me = { ...MY_CANDIDATE, vote: 'pending' as const };
-    const second = { ...makeChain().participants[1], position: 2, vote: 'thinking' as const };
+    const second = { ...makeChain().participants[1], position: 1, vote: 'thinking' as const };
     const third = {
       clusterId: 3,
       requestId: 303,
-      position: 3,
+      position: 2,
       isCurrentUser: false,
       offeredItemId: 3,
       offeredItemTitle: 'Планшет',
@@ -233,7 +193,7 @@ describe('ChainParticipantsPage', () => {
     const fourth = {
       clusterId: 4,
       requestId: 404,
-      position: 4,
+      position: 3,
       isCurrentUser: false,
       offeredItemId: 4,
       offeredItemTitle: 'Наушники',
@@ -246,8 +206,8 @@ describe('ChainParticipantsPage', () => {
       queryOk(
         makeChain({
           length: 4,
-          currentPosition: 1,
-          receivesFromPosition: 2,
+          currentPosition: 0,
+          receivesFromPosition: 1,
           status: 'PROPOSED',
           participants: [me, second, third, fourth],
         }),
@@ -256,7 +216,7 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // решение позиции 1 (я) — в vote позиции 2, и так по кольцу
+    // решение позиции 0 (я) — в vote позиции 1, и так по кольцу
     expect(screen.getAllByText('Думает')).toHaveLength(1);
     expect(screen.getAllByText('Согласился')).toHaveLength(1);
     expect(screen.getAllByText('Отказался')).toHaveLength(1);
@@ -265,11 +225,11 @@ describe('ChainParticipantsPage', () => {
 
   it('marks a vacant position with the released pill', () => {
     const me = { ...MY_CANDIDATE, vote: 'pending' as const };
-    const second = { ...makeChain().participants[1], position: 2, vote: 'pending' as const };
+    const second = { ...makeChain().participants[1], position: 1, vote: 'pending' as const };
     const third = {
       clusterId: 3,
       requestId: 303,
-      position: 3,
+      position: 2,
       isCurrentUser: false,
       offeredItemId: 3,
       offeredItemTitle: 'Планшет',
@@ -289,7 +249,7 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // участник позиции 2 отказался: голос удалён из следующей по кольцу позиции 3
+    // участник позиции 1 отказался: голос удалён из следующей по кольцу позиции 2
     expect(screen.getByText('Место освободилось')).toBeInTheDocument();
   });
 
@@ -328,7 +288,7 @@ describe('ChainParticipantsPage', () => {
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
-  // на собранной цепочке над списком — пилюля, внизу — подтверждение второго раунда (SOFT-LOCK §8)
+  // на собранной цепочке над списком — пилюля, внизу — подтверждение второго раунда
   it('shows the assembled pill and a confirm action on a PROPOSED chain', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 

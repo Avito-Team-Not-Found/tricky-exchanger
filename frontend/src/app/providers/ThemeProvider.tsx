@@ -21,7 +21,7 @@ const baseTokens = {
 
 // colorBgContainer — фон Input/Select/Card (--color-bg-page), colorBgElevated — приподнятые поверхности
 // вроде AuthCard/Segmented-трека (--color-bg-card). Перепутанные местами, они гасили контраст
-// InputBox на фоне карточки (DESIGN.md §1.9, Penpot InputBox = #FFFFFF на треке #F7F9FC).
+// InputBox на фоне карточки (#FFFFFF на треке #F7F9FC).
 const themeTokens: Record<ThemeMode, ThemeConfig['token']> = {
   light: {
     ...baseTokens,
@@ -46,18 +46,18 @@ const themeTokens: Record<ThemeMode, ThemeConfig['token']> = {
 };
 
 const sharedComponents: ThemeConfig['components'] = {
-  // Button Label из §1.4 — 16px/600; antd по умолчанию рисует 14px
+  // Button Label — 16px/600; antd по умолчанию рисует 14px
   Button: { fontWeight: 600, fontSize: 16 },
-  // Body 16px из дизайна (§1.4) — antd по умолчанию рисует текст ввода 14px, и он криво центрируется в поле 44px
+  // Body 16px — antd по умолчанию рисует текст ввода 14px, и он криво центрируется в поле 44px
   Input: { inputFontSize: 16 },
   Segmented: { borderRadius: 8, borderRadiusSM: 4 },
   Card: { borderRadiusLG: 12 },
   Modal: { borderRadiusLG: 12 },
 };
 
-// antd для трека берёт colorBgLayout, а для активного сегмента — colorBgElevated, т.е. наоборот макету
-// (Penpot: активный seg #FFFFFF на треке #F7F9FC) — без переопределения активный таб сливается с карточкой
-// скелетон — блоки bg-card с полосой border-default (DESIGN.md §2.14): дефолтные полупрозрачные
+// antd для трека берёт colorBgLayout, а для активного сегмента — colorBgElevated, т.е. наоборот
+// (активный seg #FFFFFF на треке #F7F9FC) — без переопределения активный таб сливается с карточкой
+// скелетон — блоки bg-card с полосой border-default: дефолтные полупрозрачные
 // заливки antd в тёмной теме заметно светлее карточек и выпадают из фона страницы
 const themeComponents: Record<ThemeMode, ThemeConfig['components']> = {
   light: {

@@ -3,7 +3,7 @@ import { useImperativeHandle, type Ref } from 'react';
 import { CheckCircleFilled, LockOutlined, PlusOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Form, Input, Radio, Select, Skeleton } from 'antd';
 
-import { ITEM_STATUS_META } from '@entities/item';
+import { ITEM_STATUS_META, isItemExchanged } from '@entities/item';
 
 import { categoryOptions, DESCRIPTION_MIN_LENGTH } from '@shared/config/categories';
 import { ErrorState } from '@shared/ui';
@@ -45,6 +45,9 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
     goCreateItem,
   } = useRequestForm(requestId);
   const removeRequest = useRemoveRequest(goToList);
+  // обменянные товары остаются в списке товаров как история — предлагать их в новой
+  // заявке нельзя, поэтому в пикер попадают только неотданные
+  const offerableItems = items.filter((item) => !isItemExchanged(item.status));
 
   useImperativeHandle(ref, () => ({ confirmLeave }), [confirmLeave]);
 
@@ -130,14 +133,14 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
           </p>
         ) : (
           <>
-            {items.length > 0 ? (
+            {offerableItems.length > 0 ? (
               <Form.Item
                 className="request-form__items-field"
                 name="offeredItemId"
                 rules={[{ required: true, message: 'Выберите товар' }]}
               >
                 <Radio.Group className="request-form__items" orientation="vertical">
-                  {items.map((item) => (
+                  {offerableItems.map((item) => (
                     <Radio
                       key={item.id}
                       value={item.id}

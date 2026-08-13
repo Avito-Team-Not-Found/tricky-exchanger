@@ -30,8 +30,8 @@ interface DealTransitViewProps {
   onOpenDetails: () => void;
 }
 
-// Статусы доставки товаров экрана сделки: пилюля по статусу заявки владельца товара (DEAL-PLAN.md
-// §4.3). Подпись текстом обязательна — статус не передаётся одним цветом (DESIGN.md §1.8).
+// Статусы доставки товаров экрана сделки: пилюля по статусу заявки владельца товара.
+// Подпись текстом обязательна — статус не передаётся одним цветом.
 function deliveryPill(status: ChainParticipant['requestStatus']): {
   label: string;
   tone: 'warning' | 'accent' | 'success';
@@ -47,10 +47,10 @@ function deliveryPill(status: ChainParticipant['requestStatus']): {
   }
 }
 
-// Экраны «Товары в пути» и «Все товары доставлены» (макет 4.9): пока отправили не все — ждём
+// Экраны «Товары в пути» и «Все товары доставлены»: пока отправили не все — ждём
 // остальных со статусом доставки каждого товара и заблокированной кнопкой получения, когда все
-// отправили — «Все товары доставлены» и кнопка «Я забрал товар». Кнопки-заглушки вместо ПВЗ
-// (DEAL-PLAN.md §4.5): «Я забрал товар» дёргает POST /chains/{id}/receipt.
+// отправили — «Все товары доставлены» и кнопка «Я забрал товар». Кнопки-заглушки вместо ПВЗ:
+// «Я забрал товар» дёргает POST /chains/{id}/receipt.
 export function DealTransitView({ chain, state, onOpenDetails }: DealTransitViewProps) {
   const { modal } = AntApp.useApp();
   const { confirmReceipt, isFulfilling } = useDealFulfillment(chain);
@@ -115,7 +115,7 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
     });
   };
 
-  // пока отправили не все — ждём остальных (макеты B/C «Товары в пути»)
+  // пока отправили не все — ждём остальных
   if (state.status === 'shipped-waiting') {
     return (
       <div className="deal-transit">
@@ -183,7 +183,7 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
   // in-transit: все отправили, мой товар уже в пункте выдачи — могу забрать
   const me = myParticipant(chain);
   const source = sourceParticipant(chain);
-  // в гонке статусов источник мог быть ещё LOCKED — кнопку держим заблокированной до рефетча (§11)
+  // в гонке статусов источник мог быть ещё LOCKED — кнопку держим заблокированной до рефетча
   const canReceive = source?.requestStatus === 'IN_PROGRESS';
 
   return (

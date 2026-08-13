@@ -1,4 +1,6 @@
-import { ITEM_STATUS_META, type Item } from '@entities/item';
+import type { KeyboardEvent } from 'react';
+
+import { ITEM_STATUS_META, isItemExchanged, type Item } from '@entities/item';
 
 import { StatusTag } from '@shared/ui';
 
@@ -11,25 +13,33 @@ interface ProductCardProps {
 
 export function ProductCard({ item, onClick }: ProductCardProps) {
   const statusMeta = ITEM_STATUS_META[item.status];
+  // обменянный товар уже отдан — карточка остаётся в списке как история сделок,
+  // но открывать её нечего: бэкенд отклоняет любые мутации архивного товара
+  const exchanged = isItemExchanged(item.status);
+  const label = item.category
+    ? `${item.title}, ${item.category}, ${statusMeta.label}`
+    : `${item.title}, ${statusMeta.label}`;
+
+  const interactiveProps = exchanged
+    ? {}
+    : {
+        role: 'button',
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onClick();
+          }
+        },
+      };
 
   return (
     <article
-      className="product-card"
-      role="button"
-      tabIndex={0}
-      aria-label={
-        item.category
-          ? `${item.title}, ${item.category}, ${statusMeta.label}`
-          : `${item.title}, ${statusMeta.label}`
-      }
-      onClick={onClick}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick();
-        }
-      }}
+      className={exchanged ? 'product-card product-card--exchanged' : 'product-card'}
+      aria-label={label}
+      {...interactiveProps}
     >
       <div className="product-card__photo">
         {item.imageUrl ? (

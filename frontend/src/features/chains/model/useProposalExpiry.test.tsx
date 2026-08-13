@@ -136,7 +136,7 @@ describe('useProposalExpiry', () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  // 4.7: списка рядом нет, дедлайн виден только в детали — таймер всё равно нужен
+  // списка рядом нет, дедлайн виден только в детали — таймер всё равно нужен
   it('refetches the detail after the deadline without a list status', () => {
     render([{ chainId: 7, detailStatus: 'PROPOSED', deadlineAt: '2026-08-10T10:01:00Z' }]);
 
@@ -147,8 +147,8 @@ describe('useProposalExpiry', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['chains', 7] });
   });
 
-  // список остаётся протухшим на весь staleTime, если откат случился на 4.7 — возврат на 4.6
-  // показал бы PROPOSED с живыми кнопками
+  // список остаётся протухшим на весь staleTime, если откат случился на экране детали — возврат
+  // к списку показал бы PROPOSED с живыми кнопками
   it('invalidates the offer list when the watched detail leaves PROPOSED', () => {
     const { rerender } = render([
       { chainId: 7, detailStatus: 'PROPOSED', deadlineAt: '2026-08-10T10:01:00Z' },

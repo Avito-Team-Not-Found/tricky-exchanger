@@ -6,6 +6,7 @@ import { App as AntApp } from 'antd';
 import {
   confirmHandoff,
   confirmReceipt,
+  invalidateChainQueries,
   sourceParticipant,
   type Chain,
   type FulfillmentResult,
@@ -17,7 +18,7 @@ import { DealSuccessModal } from '../ui/DealSuccessModal';
 
 export type DealFulfillmentKind = 'handoff' | 'receipt';
 
-// Коды ошибок ручек отправки/получения различаются только по 409 (DEAL-PLAN.md §2.2)
+// Коды ошибок ручек отправки/получения различаются только по 409
 const HANDOFF_ERROR_MESSAGES: Record<number, string> = {
   404: 'Цепочка не найдена',
   409: 'Цепочка ещё не готова к передаче товаров',
@@ -33,9 +34,8 @@ const RECEIPT_ERROR_MESSAGES: Record<number, string> = {
 
 // Подтверждение отправки и получения — одна мутация на оба действия (AGENTS.md: мутации не
 // копипастятся). requestId различается: для handoff — моя заявка (chain.currentRequestId),
-// для receipt — заявка звена-источника, чей товар я забираю (DEAL-PLAN.md §2.2). Статусы заявок
-// меняются, поэтому инвалидируем и «Мои запросы» (exchange-requests). 409 — не ошибка
-// пользователя: тост + перезагрузка данных.
+// для receipt — заявка звена-источника, чей товар я забираю. Статусы заявок меняются, поэтому
+// инвалидируем и «Мои запросы» (exchange-requests). 409 — не ошибка пользователя: тост + перезагрузка.
 export function useDealFulfillment(chain: Chain) {
   const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
@@ -44,11 +44,11 @@ export function useDealFulfillment(chain: Chain) {
 
   const mutation = useMutation<FulfillmentResult, Error, DealFulfillmentKind>({
     mutationFn: (kind) => {
-      const requestId =
-        kind === 'handoff' ? chain.currentRequestId : (sourceParticipant(chain)?.requestId ?? -1);
-      return kind === 'handoff'
-        ? confirmHandoff(chain.id, requestId)
-        : confirmReceipt(chain.id, requestId);
+      if (kind === 'handoff') return confirmHandoff(chain.id, chain.currentRequestId);
+      const source = sourceParticipant(chain);
+      // не должно случиться: кнопку получения UI держит заблокированной, пока источник не IN_PROGRESS
+      if (!source) return Promise.reject(new Error('Источник товара не найден'));
+      return confirmReceipt(chain.id, source.requestId);
     },
     onSuccess: (data, kind) => {
       invalidate();
@@ -73,9 +73,7 @@ export function useDealFulfillment(chain: Chain) {
   });
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ['chains'] });
-    queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
-    queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
+    invalidateChainQueries(queryClient);
   }
 
   function closeReceivedModal() {
@@ -103,7 +101,7 @@ export function useDealFulfillment(chain: Chain) {
   function run(kind: DealFulfillmentKind) {
     // модалку-подтверждение не показываем ни для отправки, ни для получения: отправку подтверждает
     // обязательное фото упаковки, получение необратимо, но ручки идемпотентны, а повторный клик
-    // гасится isPending (DEAL-PLAN §11)
+    // гасится isPending
     mutation.mutateAsync(kind).then(
       () => undefined,
       () => undefined,

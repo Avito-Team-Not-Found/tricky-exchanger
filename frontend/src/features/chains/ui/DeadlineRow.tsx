@@ -9,10 +9,10 @@ interface DeadlineRowProps {
   deadlineAt?: string | null;
 }
 
-// Таймер дедлайна ответа по собранной цепочке (макет 4.6/4.7, TimerRow): «Осталось … на ответ».
+// Таймер дедлайна ответа по собранной цепочке (TimerRow): «Осталось … на ответ».
 // Рендерит null, когда метки нет (статус не PROPOSED или дедлайн не задан/прошёл) — вызывающим
 // экранам не нужно дублировать условие. role="status" не ставим: живой регион, обновляемый раз
-// в 30 с, постоянно перебивал бы скринридер (DEADLINE-PLAN Р5)
+// в 30 с, постоянно перебивал бы скринридер
 export function DeadlineRow({ status, deadlineAt }: DeadlineRowProps) {
   const label = useDeadlineLabel(status, deadlineAt);
   if (!label) return null;

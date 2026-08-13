@@ -12,8 +12,8 @@ const EXPIRY_SLACK_MS = 2_000;
 export interface ProposalExpiryState {
   chainId: number;
   // статус из exchange-options — именно он определяет кнопки второго раунда на карточке.
-  // На 4.7 списка рядом нет, поэтому поле необязательное: там просрочка видна только как
-  // переход самой детали PROPOSED → CANDIDATE
+  // На экране детали цепочки списка рядом нет, поэтому поле необязательное: там просрочка
+  // видна только как переход самой детали PROPOSED → CANDIDATE
   listStatus?: ChainStatus;
   // статус и дедлайн из детали (GET /chains/{id}); undefined — деталь ещё не пришла
   detailStatus?: ChainStatus;
@@ -23,11 +23,11 @@ export interface ProposalExpiryState {
 // Просроченный PROPOSED бэкенд откатывает лениво и только в GET /chains/{id}
 // (service/chain: Get → ExpireProposalIfDue); ListForOffer этого не делает, поэтому
 // exchange-options продолжает отдавать PROPOSED, пока список не перезапросят. Без синхронизации
-// карточка 4.6 после дедлайна теряет таймер (деталь уже CANDIDATE, freezeDeadlineAt очищен),
+// карточка после дедлайна теряет таймер (деталь уже CANDIDATE, freezeDeadlineAt очищен),
 // но сохраняет «Требуются действия»/«Да» — и подтверждение упирается в 410.
 // Хук закрывает обе половины: в момент дедлайна дёргает деталь (её ответ и выполнит откат),
 // а как только деталь ушла из PROPOSED — инвалидирует список.
-// На 4.7 (ChainDetailPage) списка рядом нет, но нужно то же самое: без таймера деталь висит
+// На экране детали цепочки списка рядом нет, но нужно то же самое: без таймера деталь висит
 // в PROPOSED с живыми кнопками до следующего 30-секундного опроса, а список после отката
 // остаётся протухшим на весь staleTime — поэтому инвалидируем его и по переходу самой детали.
 export function useProposalExpiry(states: ProposalExpiryState[]): void {
@@ -45,8 +45,8 @@ export function useProposalExpiry(states: ProposalExpiryState[]): void {
     latest.current = states;
   });
 
-  // последний виденный статус детали по цепочке: на 4.7 сравнивать не с чем, и единственный
-  // признак отката — что деталь только что вышла из PROPOSED
+  // последний виденный статус детали по цепочке: на экране детали сравнивать не с чем,
+  // и единственный признак отката — что деталь только что вышла из PROPOSED
   const seenDetail = useRef(new Map<number, ChainStatus>());
 
   useEffect(() => {
@@ -64,8 +64,8 @@ export function useProposalExpiry(states: ProposalExpiryState[]): void {
 
   useEffect(() => {
     const timers = latest.current
-      // listStatus не проверяем: на 4.6 деталь запрашивают только для PROPOSED-вариантов,
-      // а на 4.7 списка нет вовсе
+      // listStatus не проверяем: на карточках деталь запрашивают только для PROPOSED-вариантов,
+      // а на экране детали списка нет вовсе
       .filter((state) => state.detailStatus === 'PROPOSED')
       .map((state) => {
         const deadline = Date.parse(state.deadlineAt ?? '');
