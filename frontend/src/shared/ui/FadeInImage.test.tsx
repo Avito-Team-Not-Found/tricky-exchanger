@@ -5,15 +5,6 @@ import { FadeInImage } from './FadeInImage';
 
 const originalComplete = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'complete');
 
-function getRoot(container: HTMLElement): HTMLElement {
-  return container.querySelector('.fade-in-image') as HTMLElement;
-}
-
-// foreground-картинка несёт fade-логику: bg-копия только фон, её load не запускает появление
-function getForeground(container: HTMLElement): HTMLImageElement {
-  return container.querySelector('.fade-in-image__fg') as HTMLImageElement;
-}
-
 afterEach(() => {
   if (originalComplete) {
     Object.defineProperty(HTMLImageElement.prototype, 'complete', originalComplete);
@@ -24,15 +15,16 @@ describe('FadeInImage', () => {
   it('keeps the image transparent until it loads', () => {
     const { container } = render(<FadeInImage src="a.jpg" alt="" />);
 
-    expect(getRoot(container)).not.toHaveClass('fade-in-image--loaded');
+    expect(container.querySelector('img')).not.toHaveClass('fade-in-image--loaded');
   });
 
   it('reveals the image when the load event fires', () => {
     const { container } = render(<FadeInImage src="a.jpg" alt="" />);
+    const img = container.querySelector('img')!;
 
-    fireEvent.load(getForeground(container));
+    fireEvent.load(img);
 
-    expect(getRoot(container)).toHaveClass('fade-in-image--loaded');
+    expect(img).toHaveClass('fade-in-image--loaded');
   });
 
   // кешированная картинка уже complete, и её load мог сработать раньше обработчика
@@ -44,27 +36,29 @@ describe('FadeInImage', () => {
 
     const { container } = render(<FadeInImage src="cached.jpg" alt="" />);
 
-    expect(getRoot(container)).toHaveClass('fade-in-image--loaded');
+    expect(container.querySelector('img')).toHaveClass('fade-in-image--loaded');
   });
 
   it('reveals a broken image instead of leaving it transparent', () => {
     const { container } = render(<FadeInImage src="broken.jpg" alt="" />);
+    const img = container.querySelector('img')!;
 
-    fireEvent.error(getForeground(container));
+    fireEvent.error(img);
 
-    expect(getRoot(container)).toHaveClass('fade-in-image--loaded');
+    expect(img).toHaveClass('fade-in-image--loaded');
   });
 
   it('hides again when the src changes and reveals on the new load', () => {
     const { container, rerender } = render(<FadeInImage src="a.jpg" alt="" />);
-    fireEvent.load(getForeground(container));
+    const img = () => container.querySelector('img')!;
+    fireEvent.load(img());
 
     rerender(<FadeInImage src="b.jpg" alt="" />);
 
-    expect(getRoot(container)).not.toHaveClass('fade-in-image--loaded');
+    expect(img()).not.toHaveClass('fade-in-image--loaded');
 
-    fireEvent.load(getForeground(container));
+    fireEvent.load(img());
 
-    expect(getRoot(container)).toHaveClass('fade-in-image--loaded');
+    expect(img()).toHaveClass('fade-in-image--loaded');
   });
 });

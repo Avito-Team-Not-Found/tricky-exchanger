@@ -30,37 +30,12 @@
 }
 
 .fade-in-image {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
   opacity: 0;
   transition: opacity var(--motion-duration-base) var(--motion-ease-out);
 }
 
 .fade-in-image--loaded {
   opacity: 1;
-}
-
-// заблюренная копия на фоне заполняет блок целиком, когда само фото меньше его
-.fade-in-image__bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(16px);
-  transform: scale(1.1);
-}
-
-// само фото вписывается целиком, не обрезается
-.fade-in-image__fg {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
 }
 
 .empty-state,

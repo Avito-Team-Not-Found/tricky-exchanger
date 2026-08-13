@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router';
 import { getItemImageError, isItemExchanged, ITEM_IMAGE_TYPES } from '@entities/item';
 
 import { categoryOptions, DESCRIPTION_MIN_LENGTH } from '@shared/config/categories';
-import { ErrorState, FadeInImage } from '@shared/ui';
+import { ErrorState } from '@shared/ui';
 
 import { useArchiveItem } from '../model/useArchiveItem';
 import { useItemForm } from '../model/useItemForm';
@@ -95,11 +95,7 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
           {hasPhoto ? (
             <div className="item-form__photo-preview item-form__photo-preview--filled">
               {previewUrl ? (
-                <FadeInImage
-                  className="item-form__photo-image"
-                  src={previewUrl}
-                  alt="Фото товара"
-                />
+                <img className="item-form__photo-image" src={previewUrl} alt="Фото товара" />
               ) : (
                 // файл выбран, но превью недоступно (окружение без Object URL API) —
                 // заглушка вместо <img> без src, который рисуется битой картинкой

@@ -25,23 +25,17 @@ export function FadeInImage({ src, alt, className }: FadeInImageProps) {
   );
 
   return (
-    <span
+    <img
+      key={src}
       className={`fade-in-image${image.loaded ? ' fade-in-image--loaded' : ''}${
         className ? ` ${className}` : ''
       }`}
-    >
-      {/* заблюренная копия заполняет блок, когда само фото меньше его */}
-      <img className="fade-in-image__bg" src={src} alt="" aria-hidden />
-      <img
-        className="fade-in-image__fg"
-        key={src}
-        src={src}
-        alt={alt}
-        ref={checkComplete}
-        onLoad={() => setImage((prev) => ({ ...prev, loaded: true }))}
-        // битый URL показываем как есть, а не прозрачной заглушкой
-        onError={() => setImage((prev) => ({ ...prev, loaded: true }))}
-      />
-    </span>
+      src={src}
+      alt={alt}
+      ref={checkComplete}
+      onLoad={() => setImage((prev) => ({ ...prev, loaded: true }))}
+      // битый URL показываем как есть, а не прозрачной заглушкой
+      onError={() => setImage((prev) => ({ ...prev, loaded: true }))}
+    />
   );
 }
