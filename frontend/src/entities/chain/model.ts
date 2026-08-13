@@ -8,11 +8,9 @@ export type ChainStatus =
 // 'thinking' клиент не выставляет — сервер возвращает такой голос по старым данным
 export type VoteValue = 'pending' | 'approved' | 'rejected' | 'thinking';
 
-// Инварианты модели:
-// - participants — пул кандидатов, а не участники: на CANDIDATE каждая позиция кольца развёрнута
-//   во все заявки своего кластера (participants.length на порядок больше length);
-// - vote привязан к цели голосования: решение участника позиции p лежит в vote следующей позиции;
-// - freezeDeadlineAt на PROPOSED — дедлайн ответа, на FROZEN — дедлайн отправки.
+// participants — пул кандидатов, а не участники: на CANDIDATE каждая позиция кольца развёрнута
+// во все заявки своего кластера. vote привязан к цели: решение позиции p лежит в vote следующей.
+// freezeDeadlineAt на PROPOSED — дедлайн ответа, на FROZEN — дедлайн отправки
 export interface ChainParticipant {
   clusterId: number;
   requestId: number;
