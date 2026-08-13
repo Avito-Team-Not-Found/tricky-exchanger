@@ -132,8 +132,8 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
         </div>
 
         <DealSafetyBanner
-          label="Сделка защищена"
-          message="Пользователи смогут получить товары только тогда, когда все товары будут доставлены."
+          label="Ваш товар в безопасности"
+          message="Ваш товар в безопасности: товары не будут отправлены, пока все участники не принесли их."
         />
 
         <section className="deal-transit__section">

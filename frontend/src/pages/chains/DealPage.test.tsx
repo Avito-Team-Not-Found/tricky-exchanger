@@ -123,6 +123,26 @@ describe('DealPage', () => {
     expect(screen.queryByRole('button', { name: 'Статусы отправки' })).not.toBeInTheDocument();
   });
 
+  // на «Вы отправили товар» модалка безопасности та же, что и на отправке, — про отправку,
+  // а не про доставку
+  it('opens the shipping-safety modal on the waiting screen, not a delivery one', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeShippedWaitingChain()));
+
+    renderDealPage();
+
+    await user.click(screen.getByRole('button', { name: 'Ваш товар в безопасности' }));
+
+    // модалка живёт в портале — ищем её по роли dialog
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText(/товары не будут отправлены, пока все участники не принесли их/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/получить товары только тогда, когда все товары будут доставлены/),
+    ).not.toBeInTheDocument();
+  });
+
   it('labels the waiting items as "Отправлен"/"Ожидает отправки" without checkmarks', () => {
     mockedUseChain.mockReturnValue(queryOk(makeShippedWaitingChain()));
 
