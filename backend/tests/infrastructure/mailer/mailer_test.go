@@ -28,7 +28,7 @@ func TestSendRecoveryCode_InvalidAddress(t *testing.T) {
 func TestSendChainFrozen_NotConfigured(t *testing.T) {
 	svc := mailer.NewService(mailer.Config{})
 
-	err := svc.SendChainFrozen("ivan@example.com", 7)
+	err := svc.SendChainFrozen("ivan@example.com", 7, "PlayStation 5", "iPhone 14")
 	if !errors.Is(err, mailer.ErrNotConfigured) {
 		t.Fatalf("expected ErrNotConfigured, got %v", err)
 	}
@@ -37,7 +37,7 @@ func TestSendChainFrozen_NotConfigured(t *testing.T) {
 func TestSendReplacementInvitation_NotConfigured(t *testing.T) {
 	svc := mailer.NewService(mailer.Config{})
 
-	err := svc.SendReplacementInvitation("ivan@example.com", 7)
+	err := svc.SendReplacementInvitation("ivan@example.com", 7, "PlayStation 5", "iPhone 14")
 	if !errors.Is(err, mailer.ErrNotConfigured) {
 		t.Fatalf("expected ErrNotConfigured, got %v", err)
 	}

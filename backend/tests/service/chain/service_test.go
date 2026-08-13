@@ -104,6 +104,9 @@ type fakeRepository struct {
 	proposed                []int64
 	proposalDeadline        time.Time
 	proposalExpired         bool
+	expiredChainIDs         []int64
+	expiredFrozenRequests   []int64
+	expiredFrozen           bool
 	upsertCalls             int
 	deleteCalls             int
 	markInProposal          int
@@ -197,6 +200,14 @@ func (r *fakeRepository) Propose(_ context.Context, _ database.Tx, _ int64, requ
 
 func (r *fakeRepository) ExpireProposalIfDue(_ context.Context, _ database.Tx, _ int64) (bool, error) {
 	return r.proposalExpired, nil
+}
+
+func (r *fakeRepository) ListExpiredChainIDs(_ context.Context, _ database.Tx) ([]int64, error) {
+	return append([]int64(nil), r.expiredChainIDs...), nil
+}
+
+func (r *fakeRepository) ExpireFrozenIfDue(_ context.Context, _ database.Tx, _ int64) ([]int64, bool, error) {
+	return append([]int64(nil), r.expiredFrozenRequests...), r.expiredFrozen, nil
 }
 
 func (r *fakeRepository) MarkRequestInProposal(_ context.Context, _ database.Tx, _ int64) error {
@@ -487,6 +498,45 @@ func (r *fakeRebuilder) RepairAffectedChains(_ context.Context, _ database.Tx, a
 func (r *fakeRebuilder) RebuildRequests(_ context.Context, _ database.Tx, requestIDs []int64) error {
 	r.rebuilt = append([]int64(nil), requestIDs...)
 	return nil
+}
+
+func TestExpireDueRebuildsRequestsReleasedFromFrozenChain(t *testing.T) {
+	repository := &fakeRepository{
+		expiredChainIDs:       []int64{7},
+		expiredFrozen:         true,
+		expiredFrozenRequests: []int64{10, 20, 30},
+	}
+	rebuilder := &fakeRebuilder{}
+	freezer := chainservice.NewFreezeService(repository, rebuilder)
+
+	if err := freezer.ExpireDue(context.Background(), nil); err != nil {
+		t.Fatalf("ExpireDue() error = %v", err)
+	}
+	want := []int64{10, 20, 30}
+	if len(rebuilder.rebuilt) != len(want) {
+		t.Fatalf("rebuilt = %v, want %v", rebuilder.rebuilt, want)
+	}
+	for i := range want {
+		if rebuilder.rebuilt[i] != want[i] {
+			t.Fatalf("rebuilt = %v, want %v", rebuilder.rebuilt, want)
+		}
+	}
+}
+
+func TestExpireDueDoesNotRebuildRolledBackProposal(t *testing.T) {
+	repository := &fakeRepository{
+		expiredChainIDs: []int64{7},
+		proposalExpired: true,
+	}
+	rebuilder := &fakeRebuilder{}
+	freezer := chainservice.NewFreezeService(repository, rebuilder)
+
+	if err := freezer.ExpireDue(context.Background(), nil); err != nil {
+		t.Fatalf("ExpireDue() error = %v", err)
+	}
+	if len(rebuilder.rebuilt) != 0 {
+		t.Fatalf("rebuilt = %v, want none", rebuilder.rebuilt)
+	}
 }
 
 func TestConfirmKeepsProposedUntilEveryParticipantApproves(t *testing.T) {
