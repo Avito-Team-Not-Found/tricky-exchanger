@@ -203,11 +203,6 @@ func (s *Service) Vote(ctx context.Context, userID string, chainID int64, input 
 	if err != nil {
 		return entity.ChainVote{}, err
 	}
-	if result.ChainStatus == entity.ChainStatusProposed && s.notifier != nil {
-		if chain, loadErr := s.repository.Get(ctx, userID, chainID); loadErr == nil {
-			_ = s.notifier.NotifyChainProposed(ctx, chainID, chain.Participants)
-		}
-	}
 	return result, nil
 }
 
@@ -429,6 +424,7 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 
 	var resultStatus entity.ChainStatus
 	var proposalExpired bool
+	var frozenNow bool
 	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
 		status, length, err := s.repository.LockForVote(ctx, tx, chainID)
 		if err != nil {
@@ -492,6 +488,7 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 		if err := s.freezer.Freeze(ctx, tx, chainID); err != nil {
 			return err
 		}
+		frozenNow = true
 		resultStatus = entity.ChainStatusFrozen
 		return s.refreshScore(ctx, tx, chainID, entity.ChainStatusFrozen, ranker.EventConfirm)
 	})
@@ -500,6 +497,9 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 	}
 	if proposalExpired {
 		return entity.ChainStatus(""), entity.ErrChainConfirmationExpired
+	}
+	if frozenNow && s.notifier != nil {
+		_ = s.notifier.NotifyChainFrozen(ctx, chainID)
 	}
 	return resultStatus, nil
 }
@@ -616,6 +616,7 @@ func (s *Service) SelectReplacement(ctx context.Context, userID string, chainID,
 		return entity.ErrInvalidVoteTarget
 	}
 	var proposalExpired bool
+	var replacementSelected bool
 	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
 		status, _, err := s.repository.LockForVote(ctx, tx, chainID)
 		if err != nil {
@@ -632,13 +633,20 @@ func (s *Service) SelectReplacement(ctx context.Context, userID string, chainID,
 		if status != entity.ChainStatusProposed {
 			return entity.ErrChainNotProposed
 		}
-		return s.repository.SelectReplacement(ctx, tx, userID, chainID, replacementRequestID)
+		if err := s.repository.SelectReplacement(ctx, tx, userID, chainID, replacementRequestID); err != nil {
+			return err
+		}
+		replacementSelected = true
+		return nil
 	})
 	if err != nil {
 		return err
 	}
 	if proposalExpired {
 		return entity.ErrChainConfirmationExpired
+	}
+	if replacementSelected && s.notifier != nil {
+		_ = s.notifier.NotifyReplacementInvited(ctx, chainID, replacementRequestID)
 	}
 	return nil
 }
@@ -777,4 +785,11 @@ func (s *Service) LoadChainRequestIDs(ctx context.Context, tx database.Tx, chain
 		return nil, entity.ErrChainRepositoryNotConfigured
 	}
 	return s.repository.LoadChainRequestIDs(ctx, tx, chainID)
+}
+
+func (s *Service) LoadActiveChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	if s.repository == nil {
+		return nil, entity.ErrChainRepositoryNotConfigured
+	}
+	return s.repository.LoadActiveChainRequestIDs(ctx, tx, chainID)
 }

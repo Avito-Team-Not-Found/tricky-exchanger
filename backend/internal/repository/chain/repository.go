@@ -1047,7 +1047,7 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 			  AND 1 - (candidate_item.embedding <=> previous_offer.want_embedding) >= $4
 			  AND 1 - (next_item.embedding <=> candidate.want_embedding) >= $4
 		)
-		`, clusterID, requestID, chainID).Scan(&replacementAvailable); err != nil {
+		`, clusterID, requestID, chainID, r.matchingThreshold).Scan(&replacementAvailable); err != nil {
 			if mappedErr, ok := repository.DBErrToErr(err); ok {
 				return false, "", mappedErr
 			}
@@ -1242,7 +1242,15 @@ func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID
 				  WHERE current.chain_id = $1 AND current.request_id = candidate.id
 			  )
 		)
-	`, chainID, oldRequestID, replacementRequestID).Scan(&valid); err != nil {
+	`,
+		chainID,
+		oldRequestID,
+		replacementRequestID,
+		actorRequestID,
+		nextRequestID,
+		position,
+		r.matchingThreshold,
+	).Scan(&valid); err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
 			return mappedErr
 		}
@@ -1433,6 +1441,33 @@ func (r *Postgres) LoadChainRequestIDs(ctx context.Context, tx database.Tx, chai
 		return nil, err
 	}
 	return ids, nil
+}
+
+// LoadActiveChainRequestIDs returns only requests that can seed candidate
+// rebuilding. A request locked by the chain being frozen must not be sent back
+// through cluster synchronization.
+func (r *Postgres) LoadActiveChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT cp.request_id
+		FROM chain_participants AS cp
+		JOIN exchange_offers AS eo ON eo.id = cp.request_id
+		WHERE cp.chain_id = $1 AND eo.status = 'ACTIVE'
+		ORDER BY cp.position
+	`, chainID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // LockRequestsForFreeze сериализует подтверждения пересекающихся цепочек.
@@ -1889,7 +1924,14 @@ func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx dat
 			SELECT DISTINCT cp_outside.chain_id
 			FROM chain_participants AS cp_outside
 			JOIN chain_participants AS frozen
-			  ON frozen.chain_id = $1 AND frozen.request_id = cp_outside.request_id
+			  ON frozen.chain_id = $1
+			 AND (
+				 frozen.request_id = cp_outside.request_id
+				 OR (
+					 frozen.cluster_id IS NOT NULL
+					 AND frozen.cluster_id = cp_outside.cluster_id
+				 )
+			 )
 			WHERE cp_outside.chain_id <> $1
 		`, chainID)
 		if err != nil {

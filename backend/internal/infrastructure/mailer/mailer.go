@@ -89,6 +89,24 @@ func (s *Service) SendRecoveryCode(to, code string) error {
 	return s.send(to, subject, body)
 }
 
+// SendChainFrozen informs a participant that every member confirmed the exchange.
+func (s *Service) SendChainFrozen(to string, chainID int64) error {
+	return s.send(
+		to,
+		"Обмен подтверждён всеми участниками",
+		fmt.Sprintf("Цепочка обмена №%d собрана и заморожена. Все участники подтвердили участие, товары зарезервированы для этой сделки.", chainID),
+	)
+}
+
+// SendReplacementInvitation asks a candidate to explicitly accept a fast replacement.
+func (s *Service) SendReplacementInvitation(to string, chainID int64) error {
+	return s.send(
+		to,
+		"Приглашение в обмен",
+		fmt.Sprintf("Вас пригласили заменить участника в цепочке обмена №%d. Откройте предложение в приложении и самостоятельно подтвердите участие или откажитесь.", chainID),
+	)
+}
+
 func (s *Service) send(to, subject, body string) error {
 	if _, err := mail.ParseAddress(to); err != nil {
 		return fmt.Errorf("invalid recipient address %q: %w", to, err)

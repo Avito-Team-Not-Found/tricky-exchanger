@@ -24,3 +24,21 @@ func TestSendRecoveryCode_InvalidAddress(t *testing.T) {
 		t.Fatal("expected error for invalid recipient address")
 	}
 }
+
+func TestSendChainFrozen_NotConfigured(t *testing.T) {
+	svc := mailer.NewService(mailer.Config{})
+
+	err := svc.SendChainFrozen("ivan@example.com", 7)
+	if !errors.Is(err, mailer.ErrNotConfigured) {
+		t.Fatalf("expected ErrNotConfigured, got %v", err)
+	}
+}
+
+func TestSendReplacementInvitation_NotConfigured(t *testing.T) {
+	svc := mailer.NewService(mailer.Config{})
+
+	err := svc.SendReplacementInvitation("ivan@example.com", 7)
+	if !errors.Is(err, mailer.ErrNotConfigured) {
+		t.Fatalf("expected ErrNotConfigured, got %v", err)
+	}
+}

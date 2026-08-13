@@ -39,6 +39,7 @@ type Repository interface {
 	LockRequestsInChain(ctx context.Context, tx database.Tx, chainID int64) error
 	MarkItemsUnavailable(ctx context.Context, tx database.Tx, chainID int64) error
 	LoadChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
+	LoadActiveChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
 	LockRequestsForFreeze(ctx context.Context, tx database.Tx, requestIDs []int64) error
 	LoadRequestLiveChainStatus(ctx context.Context, tx database.Tx, requestID int64) (entity.ChainStatus, error)
 	FindParticipantEdge(ctx context.Context, tx database.Tx, chainID int64, userID string) (requestID, targetRequestID int64, err error)
@@ -63,5 +64,6 @@ type Repository interface {
 // (например, письма о замыкании цикла). Подключается явно; до подключения
 // сервис работает без уведомлений.
 type Notifier interface {
-	NotifyChainProposed(ctx context.Context, chainID int64, participants []entity.ChainParticipant) error
+	NotifyChainFrozen(ctx context.Context, chainID int64) error
+	NotifyReplacementInvited(ctx context.Context, chainID, requestID int64) error
 }
