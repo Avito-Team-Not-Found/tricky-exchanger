@@ -26,6 +26,7 @@ type CycleSearcher interface {
 type ChainLifecycle interface {
 	SaveCandidates(ctx context.Context, tx database.Tx, drafts []entity.ChainDraft) error
 	LoadChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
+	LoadActiveChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
 	ListChainsContainingRequest(ctx context.Context, tx database.Tx, requestID int64) ([]int64, error)
 	DeleteRequestParticipation(ctx context.Context, tx database.Tx, requestID int64) error
 	DeleteChain(ctx context.Context, tx database.Tx, chainID int64) error
@@ -193,7 +194,7 @@ func (f *MatchingFacade) RemoveRequest(ctx context.Context, tx database.Tx, requ
 // оставшегося участника каждой, либо удаляет опустевшие.
 func (f *MatchingFacade) RepairAffectedChains(ctx context.Context, tx database.Tx, affected []int64) error {
 	for _, chainID := range affected {
-		requestIDs, err := f.chains.LoadChainRequestIDs(ctx, tx, chainID)
+		requestIDs, err := f.chains.LoadActiveChainRequestIDs(ctx, tx, chainID)
 		if err != nil {
 			return err
 		}
@@ -204,7 +205,7 @@ func (f *MatchingFacade) RepairAffectedChains(ctx context.Context, tx database.T
 		if len(requestIDs) == 0 {
 			continue
 		}
-		// Новый круг поиска от первого оставшегося участника.
+		// Новый круг поиска от первого оставшегося активного участника.
 		if _, err := f.RebuildForRequest(ctx, tx, requestIDs[0]); err != nil {
 			return err
 		}

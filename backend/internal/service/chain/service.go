@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
@@ -93,6 +95,9 @@ func (s *Service) List(ctx context.Context, userID string) ([]entity.Chain, erro
 	if s.repository == nil {
 		return nil, entity.ErrChainRepositoryNotConfigured
 	}
+	if err := s.expireDue(ctx); err != nil {
+		return nil, err
+	}
 	return s.repository.List(ctx, userID)
 }
 
@@ -104,6 +109,9 @@ func (s *Service) ListForOffer(ctx context.Context, userID string, offerID int64
 	if offerID <= 0 {
 		return nil, entity.ErrExchangeOfferNotFound
 	}
+	if err := s.expireDue(ctx); err != nil {
+		return nil, err
+	}
 	return s.repository.ListForOffer(ctx, userID, offerID)
 }
 
@@ -112,27 +120,22 @@ func (s *Service) Get(ctx context.Context, userID string, chainID int64) (entity
 	if s.repository == nil {
 		return entity.Chain{}, entity.ErrChainRepositoryNotConfigured
 	}
-	if err := s.expireProposalSilently(ctx, chainID); err != nil {
+	if err := s.expireDue(ctx); err != nil {
 		return entity.Chain{}, err
 	}
 	return s.repository.Get(ctx, userID, chainID)
 }
 
-func (s *Service) expireProposalSilently(ctx context.Context, chainID int64) error {
+func (s *Service) expireDue(ctx context.Context) error {
+	if s.freezer == nil {
+		return nil
+	}
 	if s.transactions == nil {
 		return entity.ErrChainRepositoryNotConfigured
 	}
-	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
-		_, err := s.repository.ExpireProposalIfDue(ctx, tx, chainID)
-		if err != nil {
-			return err
-		}
-		return nil
+	return s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		return s.freezer.ExpireDue(ctx, tx)
 	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // Vote records an idempotent response and atomically proposes a chain when the
@@ -145,6 +148,9 @@ func (s *Service) Vote(ctx context.Context, userID string, chainID int64, input 
 		return entity.ChainVote{}, entity.ErrInvalidVoteTarget
 	}
 	if err := validator.Validate(&input); err != nil {
+		return entity.ChainVote{}, err
+	}
+	if err := s.expireDue(ctx); err != nil {
 		return entity.ChainVote{}, err
 	}
 	result := entity.ChainVote{
@@ -203,11 +209,6 @@ func (s *Service) Vote(ctx context.Context, userID string, chainID int64, input 
 	if err != nil {
 		return entity.ChainVote{}, err
 	}
-	if result.ChainStatus == entity.ChainStatusProposed && s.notifier != nil {
-		if chain, loadErr := s.repository.Get(ctx, userID, chainID); loadErr == nil {
-			_ = s.notifier.NotifyChainProposed(ctx, chainID, chain.Participants)
-		}
-	}
 	return result, nil
 }
 
@@ -221,6 +222,9 @@ func (s *Service) WithdrawVote(ctx context.Context, userID string, chainID int64
 		return entity.ErrInvalidVoteTarget
 	}
 	if err := validator.Validate(&input); err != nil {
+		return err
+	}
+	if err := s.expireDue(ctx); err != nil {
 		return err
 	}
 
@@ -426,9 +430,13 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 	if chainID <= 0 {
 		return entity.ChainStatus(""), entity.ErrInvalidVoteTarget
 	}
+	if err := s.expireDue(ctx); err != nil {
+		return entity.ChainStatus(""), err
+	}
 
 	var resultStatus entity.ChainStatus
 	var proposalExpired bool
+	var frozenNow bool
 	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
 		status, length, err := s.repository.LockForVote(ctx, tx, chainID)
 		if err != nil {
@@ -492,6 +500,7 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 		if err := s.freezer.Freeze(ctx, tx, chainID); err != nil {
 			return err
 		}
+		frozenNow = true
 		resultStatus = entity.ChainStatusFrozen
 		return s.refreshScore(ctx, tx, chainID, entity.ChainStatusFrozen, ranker.EventConfirm)
 	})
@@ -500,6 +509,12 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 	}
 	if proposalExpired {
 		return entity.ChainStatus(""), entity.ErrChainConfirmationExpired
+	}
+	if frozenNow && s.notifier != nil {
+		if notifyErr := s.notifier.NotifyChainFrozen(ctx, chainID); notifyErr != nil {
+			logrus.WithError(notifyErr).WithField("chain_id", chainID).
+				Error("failed to send frozen chain notifications")
+		}
 	}
 	return resultStatus, nil
 }
@@ -512,6 +527,9 @@ func (s *Service) Think(ctx context.Context, userID string, chainID int64) error
 	}
 	if chainID <= 0 {
 		return entity.ErrInvalidVoteTarget
+	}
+	if err := s.expireDue(ctx); err != nil {
+		return err
 	}
 	var proposalExpired bool
 	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
@@ -554,6 +572,9 @@ func (s *Service) Decline(ctx context.Context, userID string, chainID int64) (bo
 	}
 	if chainID <= 0 {
 		return false, "", entity.ErrInvalidVoteTarget
+	}
+	if err := s.expireDue(ctx); err != nil {
+		return false, "", err
 	}
 	var replacementAvailable bool
 	resultStatus := entity.ChainStatusCandidate
@@ -602,7 +623,7 @@ func (s *Service) ListReplacements(ctx context.Context, userID string, chainID i
 	if chainID <= 0 {
 		return nil, entity.ErrInvalidVoteTarget
 	}
-	if err := s.expireProposalSilently(ctx, chainID); err != nil {
+	if err := s.expireDue(ctx); err != nil {
 		return nil, err
 	}
 	return s.repository.ListReplacementOptions(ctx, userID, chainID)
@@ -615,7 +636,11 @@ func (s *Service) SelectReplacement(ctx context.Context, userID string, chainID,
 	if chainID <= 0 || replacementRequestID <= 0 {
 		return entity.ErrInvalidVoteTarget
 	}
+	if err := s.expireDue(ctx); err != nil {
+		return err
+	}
 	var proposalExpired bool
+	var replacementSelected bool
 	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
 		status, _, err := s.repository.LockForVote(ctx, tx, chainID)
 		if err != nil {
@@ -632,13 +657,25 @@ func (s *Service) SelectReplacement(ctx context.Context, userID string, chainID,
 		if status != entity.ChainStatusProposed {
 			return entity.ErrChainNotProposed
 		}
-		return s.repository.SelectReplacement(ctx, tx, userID, chainID, replacementRequestID)
+		if err := s.repository.SelectReplacement(ctx, tx, userID, chainID, replacementRequestID); err != nil {
+			return err
+		}
+		replacementSelected = true
+		return nil
 	})
 	if err != nil {
 		return err
 	}
 	if proposalExpired {
 		return entity.ErrChainConfirmationExpired
+	}
+	if replacementSelected && s.notifier != nil {
+		if notifyErr := s.notifier.NotifyReplacementInvited(ctx, chainID, replacementRequestID); notifyErr != nil {
+			logrus.WithError(notifyErr).WithFields(logrus.Fields{
+				"chain_id":   chainID,
+				"request_id": replacementRequestID,
+			}).Error("failed to send replacement invitation")
+		}
 	}
 	return nil
 }
@@ -651,6 +688,9 @@ func (s *Service) Handoff(ctx context.Context, chainID, requestID int64) (Fulfil
 	}
 	if chainID <= 0 || requestID <= 0 {
 		return FulfillmentResult{}, entity.ErrHandoffRequestInvalid
+	}
+	if err := s.expireDue(ctx); err != nil {
+		return FulfillmentResult{}, err
 	}
 
 	result := FulfillmentResult{ChainID: chainID, RequestID: requestID}
@@ -696,6 +736,9 @@ func (s *Service) ConfirmReceipt(
 	}
 	if chainID <= 0 || requestID <= 0 {
 		return FulfillmentResult{}, entity.ErrHandoffRequestInvalid
+	}
+	if err := s.expireDue(ctx); err != nil {
+		return FulfillmentResult{}, err
 	}
 
 	result := FulfillmentResult{ChainID: chainID, RequestID: requestID}
@@ -777,4 +820,11 @@ func (s *Service) LoadChainRequestIDs(ctx context.Context, tx database.Tx, chain
 		return nil, entity.ErrChainRepositoryNotConfigured
 	}
 	return s.repository.LoadChainRequestIDs(ctx, tx, chainID)
+}
+
+func (s *Service) LoadActiveChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	if s.repository == nil {
+		return nil, entity.ErrChainRepositoryNotConfigured
+	}
+	return s.repository.LoadActiveChainRequestIDs(ctx, tx, chainID)
 }

@@ -1,0 +1,206 @@
+{
+  "info": {
+    "name": "Tricky Exchanger - Multiple Fast Replacement Options",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Проверка быстрой замены: после отказа последнего неподтвердившего участника API должен вернуть два кандидата из одного кластера."
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const name = pm.info.requestName;",
+          "const role = (name.match(/^([ABCXY])\\b/) || [, 'A'])[1];",
+          "const fixtures = {",
+          "  A: ['Nintendo Switch OLED', 'Игровая консоль Nintendo Switch в отличном состоянии.', 'Apple iPad Air 5', 'Игры и приставки', 'Планшеты и электронные книги'],",
+          "  B: ['Apple iPad Air 5', 'Планшет Apple iPad Air пятого поколения, бережное использование.', 'Amazon Kindle Paperwhite', 'Планшеты и электронные книги', 'Книги и журналы'],",
+          "  X: ['Apple iPad Air 5', 'Планшет Apple iPad Air пятого поколения, бережное использование.', 'Amazon Kindle Paperwhite', 'Планшеты и электронные книги', 'Книги и журналы'],",
+          "  Y: ['Apple iPad Air 5', 'Планшет Apple iPad Air пятого поколения, бережное использование.', 'Amazon Kindle Paperwhite', 'Планшеты и электронные книги', 'Книги и журналы'],",
+          "  C: ['Amazon Kindle Paperwhite', 'Электронная книга Kindle Paperwhite с подсветкой.', 'Nintendo Switch OLED', 'Книги и журналы', 'Игры и приставки']",
+          "};",
+          "if (name === 'A · Register') pm.collectionVariables.set('run', Date.now());",
+          "const f = fixtures[role];",
+          "pm.variables.set('role', role);",
+          "pm.variables.set('run', pm.collectionVariables.get('run'));",
+          "pm.variables.set('email', role === 'X' ? pm.variables.replaceIn('{{notification_email}}') : 'replacement-' + pm.collectionVariables.get('run') + '-' + role + '@example.test');",
+          "pm.variables.set('token', pm.collectionVariables.get('token_' + role));",
+          "pm.variables.set('item', pm.collectionVariables.get('item_' + role));",
+          "pm.variables.set('offer', pm.collectionVariables.get('offer_' + role));",
+          "pm.variables.set('chain', pm.collectionVariables.get('chain'));",
+          "if (f) {",
+          "  pm.variables.set('title', JSON.stringify(f[0]));",
+          "  pm.variables.set('description', JSON.stringify(f[1]));",
+          "  pm.variables.set('wanted', JSON.stringify(f[2]));",
+          "  pm.variables.set('category', JSON.stringify(f[3]));",
+          "  pm.variables.set('wantedCategory', JSON.stringify(f[4]));",
+          "}",
+          "const targets = { A: 'B', B: 'C', C: 'A' };",
+          "if (targets[role]) pm.variables.set('target', pm.collectionVariables.get('offer_' + targets[role]));"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const name = pm.info.requestName;",
+          "const role = (name.match(/^([ABCXY])\\b/) || [, 'A'])[1];",
+          "pm.test(name + ' returns 2xx', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+          "if (name.endsWith('· Register')) pm.collectionVariables.set('token_' + role, pm.response.json().token);",
+          "if (name.endsWith('· Create item')) pm.collectionVariables.set('item_' + role, pm.response.json().id);",
+          "if (name.endsWith('· Create offer')) pm.collectionVariables.set('offer_' + role, pm.response.json().id);",
+          "if (name === 'A · Find exact three-person candidate') {",
+          "  const ids = ['A', 'B', 'C'].map(r => Number(pm.collectionVariables.get('offer_' + r)));",
+          "  const chain = pm.response.json().find(c => c.status === 'CANDIDATE' && ids.every(id => c.participants.some(p => Number(p.requestId) === id)));",
+          "  pm.test('Candidate A → B → C exists', () => pm.expect(chain).to.exist);",
+          "  if (chain) pm.collectionVariables.set('chain', chain.id);",
+          "}",
+          "if (name === 'B · Decline as last unconfirmed participant') pm.test('Fast replacement is available', () => pm.expect(pm.response.json().replacementAvailable).to.eql(true));",
+          "if (name === 'A · Get replacement options') {",
+          "  const options = pm.response.json();",
+          "  const expected = ['X', 'Y'].map(r => Number(pm.collectionVariables.get('offer_' + r)));",
+          "  pm.test('At least two replacements are returned', () => pm.expect(options.length).to.be.at.least(2));",
+          "  pm.test('Both X and Y from B cluster are returned', () => expected.forEach(id => pm.expect(options.some(o => Number(o.requestId) === id)).to.eql(true)));",
+          "}",
+          "if (name === 'A · Get chain after selecting X') {",
+          "  const approved = pm.response.json().participants.filter(p => p.vote === 'approved').length;",
+          "  pm.test('Only the unchanged participant remains confirmed', () => pm.expect(approved).to.eql(1));",
+          "  pm.test('A must reconfirm the new edge to X', () => pm.expect(pm.response.json().participants.some(p => Number(p.requestId) === Number(pm.collectionVariables.get('offer_X')) && p.vote === 'pending')).to.eql(true));",
+          "}",
+          "if (name === 'X · Decline before A reconfirms') {",
+          "  pm.test('Fast replacement stops without N-1 confirmations', () => pm.expect(pm.response.json().replacementAvailable).to.eql(false));",
+          "  pm.test('Chain rolls back to CANDIDATE', () => pm.expect(pm.response.json().status).to.eql('CANDIDATE'));",
+          "}",
+          "if (name === 'A · Get rolled back chain') {",
+          "  const chain = pm.response.json();",
+          "  pm.test('Rolled back chain still exists', () => pm.expect(chain.id).to.eql(Number(pm.collectionVariables.get('chain'))));",
+          "  pm.test('Rolled back chain is CANDIDATE', () => pm.expect(chain.status).to.eql('CANDIDATE'));",
+          "  pm.test('All three cluster positions remain linked', () => pm.expect(new Set(chain.participants.map(p => p.position)).size).to.eql(3));",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "01 · Two options for fast replacement",
+      "item": [
+        {
+          "name": "A · Register",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"fullName\":\"Replacement {{role}}\",\"email\":\"{{email}}\",\"password\":\"TestPass123!\"}" }, "url": "{{base_url}}/api/v1/auth/register" }
+        },
+        {
+          "name": "B · Register",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"fullName\":\"Replacement {{role}}\",\"email\":\"{{email}}\",\"password\":\"TestPass123!\"}" }, "url": "{{base_url}}/api/v1/auth/register" }
+        },
+        {
+          "name": "X · Register",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"fullName\":\"Replacement {{role}}\",\"email\":\"{{email}}\",\"password\":\"TestPass123!\"}" }, "url": "{{base_url}}/api/v1/auth/register" }
+        },
+        {
+          "name": "Y · Register",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"fullName\":\"Replacement {{role}}\",\"email\":\"{{email}}\",\"password\":\"TestPass123!\"}" }, "url": "{{base_url}}/api/v1/auth/register" }
+        },
+        {
+          "name": "C · Register",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"fullName\":\"Replacement {{role}}\",\"email\":\"{{email}}\",\"password\":\"TestPass123!\"}" }, "url": "{{base_url}}/api/v1/auth/register" }
+        },
+        {
+          "name": "A · Create item",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"title\":{{title}},\"description\":{{description}},\"category\":{{category}}}" }, "url": "{{base_url}}/api/v1/items" }
+        },
+        {
+          "name": "B · Create item",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"title\":{{title}},\"description\":{{description}},\"category\":{{category}}}" }, "url": "{{base_url}}/api/v1/items" }
+        },
+        {
+          "name": "X · Create item",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"title\":{{title}},\"description\":{{description}},\"category\":{{category}}}" }, "url": "{{base_url}}/api/v1/items" }
+        },
+        {
+          "name": "Y · Create item",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"title\":{{title}},\"description\":{{description}},\"category\":{{category}}}" }, "url": "{{base_url}}/api/v1/items" }
+        },
+        {
+          "name": "C · Create item",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"title\":{{title}},\"description\":{{description}},\"category\":{{category}}}" }, "url": "{{base_url}}/api/v1/items" }
+        },
+        {
+          "name": "A · Create offer",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"offeredItemId\":{{item}},\"wantedDescription\":{{wanted}},\"wantedCategory\":{{wantedCategory}}}" }, "url": "{{base_url}}/api/v1/exchange-offers" }
+        },
+        {
+          "name": "B · Create offer",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"offeredItemId\":{{item}},\"wantedDescription\":{{wanted}},\"wantedCategory\":{{wantedCategory}}}" }, "url": "{{base_url}}/api/v1/exchange-offers" }
+        },
+        {
+          "name": "X · Create offer",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"offeredItemId\":{{item}},\"wantedDescription\":{{wanted}},\"wantedCategory\":{{wantedCategory}}}" }, "url": "{{base_url}}/api/v1/exchange-offers" }
+        },
+        {
+          "name": "Y · Create offer",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"offeredItemId\":{{item}},\"wantedDescription\":{{wanted}},\"wantedCategory\":{{wantedCategory}}}" }, "url": "{{base_url}}/api/v1/exchange-offers" }
+        },
+        {
+          "name": "C · Create offer",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"offeredItemId\":{{item}},\"wantedDescription\":{{wanted}},\"wantedCategory\":{{wantedCategory}}}" }, "url": "{{base_url}}/api/v1/exchange-offers" }
+        },
+        {
+          "name": "A · Find exact three-person candidate",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/api/v1/chains" }
+        },
+        {
+          "name": "A · Vote for B",
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"requestId\":{{offer}},\"targetRequestId\":{{target}}}" }, "url": "{{base_url}}/api/v1/chains/{{chain}}/votes" }
+        },
+        {
+          "name": "B · Vote for C",
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"requestId\":{{offer}},\"targetRequestId\":{{target}}}" }, "url": "{{base_url}}/api/v1/chains/{{chain}}/votes" }
+        },
+        {
+          "name": "C · Vote for A",
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"requestId\":{{offer}},\"targetRequestId\":{{target}}}" }, "url": "{{base_url}}/api/v1/chains/{{chain}}/votes" }
+        },
+        {
+          "name": "A · Confirm",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/api/v1/chains/{{chain}}/confirm" }
+        },
+        {
+          "name": "C · Confirm",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/api/v1/chains/{{chain}}/confirm" }
+        },
+        {
+          "name": "B · Decline as last unconfirmed participant",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/api/v1/chains/{{chain}}/decline" }
+        },
+        {
+          "name": "A · Get replacement options",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/api/v1/chains/{{chain}}/replacements" }
+        },
+        {
+          "name": "A · Select X as replacement",
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"requestId\":{{offer_X}}}" }, "url": "{{base_url}}/api/v1/chains/{{chain}}/replacement" }
+        },
+        {
+          "name": "A · Get chain after selecting X",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/api/v1/chains/{{chain}}" }
+        },
+        {
+          "name": "X · Decline before A reconfirms",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/api/v1/chains/{{chain}}/decline" }
+        },
+        {
+          "name": "A · Get rolled back chain",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/api/v1/chains/{{chain}}" }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "notification_email", "value": "mychinnik@yandex.ru" },
+    { "key": "run", "value": "" }
+  ]
+}

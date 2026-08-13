@@ -67,6 +67,40 @@ func (s *FreezeService) Freeze(ctx context.Context, tx database.Tx, chainID int6
 	return nil
 }
 
+// ExpireDue applies every elapsed chain deadline in the caller transaction.
+// It is intentionally request-driven: each public chain API call invokes it,
+// which keeps externally visible state current without a background worker.
+func (s *FreezeService) ExpireDue(ctx context.Context, tx database.Tx) error {
+	if s.repository == nil {
+		return entity.ErrChainRepositoryNotConfigured
+	}
+	chainIDs, err := s.repository.ListExpiredChainIDs(ctx, tx)
+	if err != nil {
+		return err
+	}
+	released := make([]int64, 0)
+	for _, chainID := range chainIDs {
+		expired, err := s.repository.ExpireProposalIfDue(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if expired {
+			continue
+		}
+		requestIDs, expired, err := s.repository.ExpireFrozenIfDue(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if expired {
+			released = append(released, requestIDs...)
+		}
+	}
+	if len(released) > 0 && s.rebuilder != nil {
+		return s.rebuilder.RebuildRequests(ctx, tx, released)
+	}
+	return nil
+}
+
 func (s *FreezeService) assertNoDoubleFreeze(ctx context.Context, tx database.Tx, requestIDs []int64) error {
 	for _, requestID := range requestIDs {
 		status, err := s.repository.LoadRequestLiveChainStatus(ctx, tx, requestID)

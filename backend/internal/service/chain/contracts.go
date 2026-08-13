@@ -22,6 +22,8 @@ type Repository interface {
 	ListPendingVoteEdges(ctx context.Context, tx database.Tx, chainID int64) ([]entity.VoteEdge, error)
 	Propose(ctx context.Context, tx database.Tx, chainID int64, requestIDsByPosition []int64, confirmationDeadline time.Time) error
 	ExpireProposalIfDue(ctx context.Context, tx database.Tx, chainID int64) (bool, error)
+	ListExpiredChainIDs(ctx context.Context, tx database.Tx) ([]int64, error)
+	ExpireFrozenIfDue(ctx context.Context, tx database.Tx, chainID int64) ([]int64, bool, error)
 	MarkRequestInProposal(ctx context.Context, tx database.Tx, requestID int64) error
 	RestoreActiveIfNoPendingVotes(ctx context.Context, tx database.Tx, requestID int64) error
 	LoadScoreFeatures(ctx context.Context, tx database.Tx, chainID int64) (cosines []float64, reliability []float64, sizes []int, err error)
@@ -39,6 +41,7 @@ type Repository interface {
 	LockRequestsInChain(ctx context.Context, tx database.Tx, chainID int64) error
 	MarkItemsUnavailable(ctx context.Context, tx database.Tx, chainID int64) error
 	LoadChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
+	LoadActiveChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error)
 	LockRequestsForFreeze(ctx context.Context, tx database.Tx, requestIDs []int64) error
 	LoadRequestLiveChainStatus(ctx context.Context, tx database.Tx, requestID int64) (entity.ChainStatus, error)
 	FindParticipantEdge(ctx context.Context, tx database.Tx, chainID int64, userID string) (requestID, targetRequestID int64, err error)
@@ -63,5 +66,6 @@ type Repository interface {
 // (например, письма о замыкании цикла). Подключается явно; до подключения
 // сервис работает без уведомлений.
 type Notifier interface {
-	NotifyChainProposed(ctx context.Context, chainID int64, participants []entity.ChainParticipant) error
+	NotifyChainFrozen(ctx context.Context, chainID int64) error
+	NotifyReplacementInvited(ctx context.Context, chainID, requestID int64) error
 }

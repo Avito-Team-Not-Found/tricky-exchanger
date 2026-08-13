@@ -105,6 +105,10 @@ func (s *Service) Synchronize(ctx context.Context, tx database.Tx, offerID int64
 			return err
 		}
 		clusterID = &createdID
+	} else if err := s.repository.ConsolidateCandidateClusters(
+		ctx, tx, *clusterID, candidateIDs, vectors, s.threshold, s.directionMargin,
+	); err != nil {
+		return err
 	}
 
 	if err := s.repository.AddMember(ctx, tx, *clusterID, offerID); err != nil {
