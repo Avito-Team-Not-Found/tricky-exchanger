@@ -114,6 +114,7 @@ services:
         condition: service_completed_successfully
     environment:
       - SERVER_PORT=8080
+      - GIN_MODE=release
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable
       - JWT_SECRET=${JWT_SECRET}
