@@ -2,8 +2,6 @@ package chain
 
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
 )
 
 // Postgres хранит цепочки и их участников в PostgreSQL.
@@ -11,8 +9,6 @@ type Postgres struct {
 	pool              *pgxpool.Pool
 	matchingThreshold float64
 }
-
-var _ chainservice.Repository = (*Postgres)(nil)
 
 // NewRepository создаёт репозиторий цепочек.
 func NewRepository(pool *pgxpool.Pool, thresholds ...float64) *Postgres {

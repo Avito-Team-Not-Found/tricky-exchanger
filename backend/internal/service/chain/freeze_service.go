@@ -18,43 +18,43 @@ type ChainRebuilder interface {
 }
 
 type FreezeService struct {
-	repository Repository
-	rebuilder  ChainRebuilder
+	store     FreezeStore
+	rebuilder ChainRebuilder
 }
 
-func NewFreezeService(repository Repository, rebuilder ChainRebuilder) *FreezeService {
-	return &FreezeService{repository: repository, rebuilder: rebuilder}
+func NewFreezeService(store FreezeStore, rebuilder ChainRebuilder) *FreezeService {
+	return &FreezeService{store: store, rebuilder: rebuilder}
 }
 
 func (s *FreezeService) Freeze(ctx context.Context, tx database.Tx, chainID int64) error {
-	if s.repository == nil {
+	if s.store == nil {
 		return entity.ErrChainRepositoryNotConfigured
 	}
-	requestIDs, err := s.repository.LoadChainRequestIDs(ctx, tx, chainID)
+	requestIDs, err := s.store.LoadChainRequestIDs(ctx, tx, chainID)
 	if err != nil {
 		return err
 	}
-	if err := s.repository.LockRequestsForFreeze(ctx, tx, requestIDs); err != nil {
+	if err := s.store.LockRequestsForFreeze(ctx, tx, requestIDs); err != nil {
 		return err
 	}
 	if err := s.assertNoDoubleFreeze(ctx, tx, requestIDs); err != nil {
 		return err
 	}
 	deadline := time.Now().Add(FreezeTTL)
-	if err := s.repository.FreezeChain(ctx, tx, chainID, deadline); err != nil {
+	if err := s.store.FreezeChain(ctx, tx, chainID, deadline); err != nil {
 		return err
 	}
-	if err := s.repository.LockRequestsInChain(ctx, tx, chainID); err != nil {
+	if err := s.store.LockRequestsInChain(ctx, tx, chainID); err != nil {
 		return err
 	}
-	if err := s.repository.MarkItemsUnavailable(ctx, tx, chainID); err != nil {
+	if err := s.store.MarkItemsUnavailable(ctx, tx, chainID); err != nil {
 		return err
 	}
-	released, err := s.repository.ReleaseUnselectedFromChain(ctx, tx, chainID)
+	released, err := s.store.ReleaseUnselectedFromChain(ctx, tx, chainID)
 	if err != nil {
 		return err
 	}
-	affected, err := s.repository.ReleaseCompetitorsFromOtherChains(ctx, tx, chainID)
+	affected, err := s.store.ReleaseCompetitorsFromOtherChains(ctx, tx, chainID)
 	if err != nil {
 		return err
 	}
@@ -71,23 +71,23 @@ func (s *FreezeService) Freeze(ctx context.Context, tx database.Tx, chainID int6
 // It is intentionally request-driven: each public chain API call invokes it,
 // which keeps externally visible state current without a background worker.
 func (s *FreezeService) ExpireDue(ctx context.Context, tx database.Tx) error {
-	if s.repository == nil {
+	if s.store == nil {
 		return entity.ErrChainRepositoryNotConfigured
 	}
-	chainIDs, err := s.repository.ListExpiredChainIDs(ctx, tx)
+	chainIDs, err := s.store.ListExpiredChainIDs(ctx, tx)
 	if err != nil {
 		return err
 	}
 	released := make([]int64, 0)
 	for _, chainID := range chainIDs {
-		expired, err := s.repository.ExpireProposalIfDue(ctx, tx, chainID)
+		expired, err := s.store.ExpireProposalIfDue(ctx, tx, chainID)
 		if err != nil {
 			return err
 		}
 		if expired {
 			continue
 		}
-		requestIDs, expired, err := s.repository.ExpireFrozenIfDue(ctx, tx, chainID)
+		requestIDs, expired, err := s.store.ExpireFrozenIfDue(ctx, tx, chainID)
 		if err != nil {
 			return err
 		}
@@ -103,7 +103,7 @@ func (s *FreezeService) ExpireDue(ctx context.Context, tx database.Tx) error {
 
 func (s *FreezeService) assertNoDoubleFreeze(ctx context.Context, tx database.Tx, requestIDs []int64) error {
 	for _, requestID := range requestIDs {
-		status, err := s.repository.LoadRequestLiveChainStatus(ctx, tx, requestID)
+		status, err := s.store.LoadRequestLiveChainStatus(ctx, tx, requestID)
 		if err != nil {
 			return err
 		}
