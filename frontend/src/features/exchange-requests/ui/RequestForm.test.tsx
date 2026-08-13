@@ -173,7 +173,7 @@ describe('RequestForm', () => {
     await user.type(screen.getByLabelText('Что вы хотите получить'), 'x'.repeat(24));
     await pickCategory(user);
 
-    expect(await screen.findByText('Пожалуйста, опишите желаемое подробнее')).toBeInTheDocument();
+    expect(await screen.findByText('Пожалуйста, опишите подробнее')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
   });
 
@@ -182,7 +182,7 @@ describe('RequestForm', () => {
     mockedUseRequest.mockReturnValue(queryOk({ ...liveRequest, wantedDescription: 'Ноутбук' }));
     renderWithProviders(<RequestForm requestId={1} />);
 
-    expect(await screen.findByText('Пожалуйста, опишите желаемое подробнее')).toBeInTheDocument();
+    expect(await screen.findByText('Пожалуйста, опишите подробнее')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Сохранить запрос/ })).toBeDisabled();
   });
 
