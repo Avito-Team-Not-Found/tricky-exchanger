@@ -9,7 +9,7 @@
   display: none;
 }
 
-// таймер дедлайна отправки — строка с предупреждающей пилюлей; значение не передаётся цветом
+// значение не передаётся одним цветом
 .deal-ship__timer {
   display: inline-flex;
   align-items: center;
@@ -68,13 +68,6 @@
   gap: var(--spacing-sm);
 }
 
-.deal-ship__pickup-note {
-  margin: 0;
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-body);
-  color: var(--color-text-secondary);
-}
-
 .deal-ship__photo {
   display: flex;
   flex-direction: column;
@@ -92,8 +85,7 @@
   color: var(--color-status-error);
 }
 
-// блок загрузки фото: сплошная рамка, bg-card, кликабелен. Размер повторяет превью
-// фото (aspect-ratio 16/10) — иначе при прикреплении снимка блок «прыгает» по высоте
+// размер повторяет превью фото — иначе при прикреплении снимка блок «прыгает»
 .deal-ship__photo-upload {
   display: flex;
   flex-direction: column;
@@ -138,7 +130,6 @@
   gap: var(--spacing-sm);
 }
 
-// модалка выбора ПВЗ: селект со списком и полем «Другой адрес», кнопка сохранения
 .deal-pickup-form {
   display: flex;
   flex-direction: column;

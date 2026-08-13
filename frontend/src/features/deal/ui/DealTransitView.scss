@@ -26,7 +26,6 @@
   color: var(--color-text-primary);
 }
 
-// счётчик доставки — пилюля в тоне успеха
 .deal-transit__count {
   flex-shrink: 0;
   padding: var(--spacing-xs) var(--spacing-sm);
@@ -39,7 +38,6 @@
   white-space: nowrap;
 }
 
-// строка товара: миниатюра, название, пилюля статуса и переход в трекинг
 .deal-transit__items {
   display: flex;
   flex-direction: column;
@@ -102,7 +100,7 @@
   white-space: nowrap;
 }
 
-// пилюля статуса доставки товара — 15%-я заливка тона и подпись текстом
+// подпись текстом обязательна — статус не передаётся одним цветом
 .deal-transit__item-pill {
   display: inline-flex;
   align-items: center;
@@ -146,7 +144,6 @@
   color: var(--color-text-secondary);
 }
 
-// строка спора: «Проблемы с товаром?» + ghost-кнопка «Открыть спор»
 .deal-transit__dispute {
   display: flex;
   align-items: center;
@@ -160,7 +157,6 @@
   color: var(--color-text-primary);
 }
 
-// после открытия спора строка заменяется статусной пилюлей «Жалоба на рассмотрении»
 .deal-transit__disputed {
   margin: 0;
   padding: var(--spacing-sm) var(--spacing-md);

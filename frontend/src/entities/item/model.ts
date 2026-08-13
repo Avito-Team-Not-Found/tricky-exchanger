@@ -27,16 +27,14 @@ export interface ItemsList {
   total: number;
 }
 
-// типы фото, которые принимает бэкенд (service/item/service.go) — список для accept-атрибута
-// и клиентской проверки, чтобы неверный файл не уходил на сервер уже после сохранения товара
+// список повторяет то, что принимает бэкенд
 export const ITEM_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 // максимальный размер фото товара — совпадает с лимитом бэкенда (5 МиБ)
 export const ITEM_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
-// Проверка фото на месте выбора: accept фильтрует диалог выбора, но файл можно притащить
-// drag-and-drop'ом или выбрать через «Все файлы» — неверный файл не должен уходить на сервер
-// и откатываться 422 уже после успешного сохранения товара.
+// accept фильтрует только диалог выбора: файл можно притащить drag-and-drop'ом, и тогда 422
+// прилетит уже после успешного сохранения товара
 export function getItemImageError(file: { type: string; size: number }): string | null {
   if (!ITEM_IMAGE_TYPES.includes(file.type as (typeof ITEM_IMAGE_TYPES)[number])) {
     return 'Фото должно быть в формате JPG, PNG или WEBP';
@@ -47,8 +45,7 @@ export function getItemImageError(file: { type: string; size: number }): string 
   return null;
 }
 
-// ARCHIVED бэкенд ставит товару, когда сделка закрыта и товар уже отдан, — для владельца
-// это не «архив», а завершённый обмен; удаление товара архива не создаёт (запись удаляется).
+// ARCHIVED — это завершённый обмен, а не «архив»: удаление товара архива не создаёт
 export const ITEM_STATUS_META: Record<ItemStatus, { label: string; tone: StatusTone }> = {
   ACTIVE: { label: 'Активен', tone: 'success' },
   UNAVAILABLE: { label: 'Зарезервирован', tone: 'warning' },

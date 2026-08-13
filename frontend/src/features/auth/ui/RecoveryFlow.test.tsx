@@ -185,7 +185,6 @@ describe('RecoveryFlow', () => {
     expect(screen.getByText('login screen')).toBeInTheDocument();
   });
 
-  // короткий пароль на шаге восстановления — ошибка после паузы, а не на каждой букве
   it('shows a password length error after a short new password is typed', async () => {
     const user = userEvent.setup();
     mockedSend.mockResolvedValue({ message: 'code_sent' });

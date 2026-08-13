@@ -8,7 +8,6 @@ import {
   confirmChain,
   declineChain,
   invalidateChainQueries,
-  type ChainStatus,
   type ConfirmResult,
   type DeclineResult,
 } from '@entities/chain';
@@ -17,23 +16,13 @@ import { getErrorMessage } from '@shared/lib/errorMessage';
 
 import { FreezeDecisionModal } from '../ui/FreezeDecisionModal';
 
-// Отказ не всегда ломает цепочку: сервер откатывает её в CANDIDATE, оставляет PROPOSED
-// с вакансией под замену или распускает совсем — исход виден только из ответа
-const DECLINE_MESSAGE: Partial<Record<ChainStatus, string>> = {
-  BROKEN: 'Вы вышли из сделки. Цепочка распалась',
-  CANDIDATE: 'Вы вышли из сделки. Цепочка вернулась к сбору откликов',
-  PROPOSED: 'Вы вышли из сделки. Участники подбирают замену',
-};
+import { declineMessage } from './declineMessage';
 
-// Подтверждение участия во втором раунде — единая точка для всех экранов цепочки: модалка
-// «Готовность к сделке» + POST /chains/{id}/confirm. Статус из ответа решает тост: PROPOSED —
-// ждём остальных, FROZEN — сделка подтверждена. Отказ идёт через отдельное подтверждение
-// и POST /chains/{id}/decline. Любая ошибка инвалидирует кэш и перезагружает данные.
 export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
   const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
-  // модалка живёт в портале вне дерева роутов: сама она уход с экрана не переживает, её надо
-  // закрывать руками, иначе останется висеть поверх нового экрана с живой кнопкой «Да»
+  // модалка живёт в портале вне дерева роутов — иначе останется висеть поверх нового экрана
+  // с живой кнопкой «Да»
   const decision = useRef<{ destroy: () => void } | null>(null);
 
   const mutation = useMutation<ConfirmResult, Error, number>({
@@ -48,9 +37,8 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
   const declineMutation = useMutation<DeclineResult, Error, number>({
     mutationFn: (chainId) => declineChain(chainId),
     onSuccess: (data) => {
-      message.success(DECLINE_MESSAGE[data.status] ?? 'Вы вышли из сделки');
+      message.success(declineMessage(data.status));
       invalidate();
-      // цепочки больше нет — остаться на её экране нельзя
       if (data.status === 'BROKEN') {
         closeDecision();
         onNotFound?.();
@@ -70,8 +58,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
 
   function handleError(error: Error, fallback: string) {
     invalidate();
-    // дедлайн истёк: цепочку откатил сервер, подтверждать нечего — предупреждение и перезагрузка,
-    // карточка перерисуется в статус, который вернул бэкенд
+    // дедлайн истёк, цепочку уже откатил сервер — подтверждать нечего
     if (isAxiosError(error) && error.response?.status === 410) {
       closeDecision();
       message.warning('Время на ответ истекло, цепочка распалась');
@@ -89,7 +76,6 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
         fallback,
       ),
     );
-    // цепочки нет — решать по ней больше нечего: закрываем модалку и уходим к списку,
     // перезагружать данные удалённой цепочки уже некому
     if (isAxiosError(error) && error.response?.status === 404) {
       closeDecision();
@@ -99,8 +85,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     refetch?.();
   }
 
-  // отказ необратим и меняет судьбу всей цепочки, поэтому подтверждается отдельно; какой из трёх
-  // исходов случится, клиент заранее не знает — формулировка обтекаемая
+  // какой из трёх исходов случится, клиент заранее не знает — формулировка обтекаемая
   function openDecline(chainId: number) {
     modal.confirm({
       title: 'Отказаться от сделки?',
@@ -111,7 +96,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
       cancelText: 'Отмена',
       centered: true,
       // reject гасится здесь: antd пробрасывает его наружу необработанным, а про ошибку уже
-      // рассказал тост мутации — модалка закрывается, решение остаётся за модалкой
+      // рассказал тост мутации
       onOk: () => declineMutation.mutateAsync(chainId).then(closeDecision, () => {}),
     });
   }

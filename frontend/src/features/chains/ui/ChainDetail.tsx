@@ -11,6 +11,7 @@ import {
   myParticipant,
   needsMyAction,
   participantAlias,
+  receivesItem,
   VACANCY_META,
   VOTE_META,
   type Chain,
@@ -28,20 +29,26 @@ import './ChainDetail.scss';
 
 interface ChainDetailProps {
   chain: Chain;
+  // заявка выбранного варианта получения: звено-источник показывается только ею
+  receiveRequestId?: number;
   onConfirm: () => void;
   onProceed: () => void;
 }
 
-// Схема цепочки: строки по звеньям кольца. Отклик на кандидата — на экране товара цепочки
-// и на карточке списка, здесь только статусы откликов и действие второго раунда
-export function ChainDetail({ chain, onConfirm, onProceed }: ChainDetailProps) {
+// откликаться отсюда нельзя: здесь только статусы откликов и действие второго раунда
+export function ChainDetail({ chain, receiveRequestId, onConfirm, onProceed }: ChainDetailProps) {
   const { token } = theme.useToken();
-  const links = chainLinks(chain);
+  // звено-источник сужается до выбранного варианта: его кандидаты — заявки разных
+  // пользователей, а строка звена рисует одного участника
+  const links = chainLinks(chain).map((link) =>
+    link.position === chain.receivesFromPosition
+      ? { ...link, candidates: receivesItem(chain, receiveRequestId) }
+      : link,
+  );
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
   const assembled = isAssembled(chain.status);
-  // голос привязан к цели голосования, а не к голосующему: решение участника позиции p лежит
-  // в vote следующей по кольцу позиции; на CANDIDATE сдвига нет — там это отклики
+  // на CANDIDATE сдвига целей нет — там vote означает отклик первого раунда
   const showConfirmPills = chain.status !== 'CANDIDATE';
 
   return (
@@ -126,7 +133,6 @@ function ChainLinkRow({ link, isMine, isReceiveLink, canVote, confirmVote }: Cha
       {candidates.length === 1 ? (
         <ChainLinkItem participant={candidates[0]} canVote={canVote} />
       ) : isReceiveLink ? (
-        // на получаемом звене пул показан полностью — у каждой записи свой статус отклика
         <ul className="chain-detail__candidates">
           {candidates.map((candidate) => (
             <li key={candidate.requestId} className="chain-detail__candidate">
@@ -135,7 +141,6 @@ function ChainLinkRow({ link, isMine, isReceiveLink, canVote, confirmVote }: Cha
           ))}
         </ul>
       ) : (
-        // кандидаты остальных звеньев для отклика не нужны — сворачиваем их в счётчик
         <span className="chain-detail__collapsed">
           {candidates.length} {plural(candidates.length, ['вариант', 'варианта', 'вариантов'])}
         </span>
@@ -144,7 +149,7 @@ function ChainLinkRow({ link, isMine, isReceiveLink, canVote, confirmVote }: Cha
   );
 }
 
-// пилюля голоса второго раунда в шапке строки звена; null — вакансия после отказа
+// null — вакансия после отказа
 function ConfirmVotePill({ vote }: { vote: VoteValue | null }) {
   const meta = vote === null ? VACANCY_META : CONFIRM_VOTE_META[vote];
   return (
@@ -159,8 +164,7 @@ interface ChainLinkItemProps {
   canVote: boolean;
 }
 
-// Одна запись кандидата в звене: миниатюра, товар и «что хочет взамен», статус отклика.
-// Пилюли первого раунда на собранной цепочке не показываются — там у vote другой смысл.
+// на собранной цепочке пилюли первого раунда не показываются — там у vote другой смысл
 function ChainLinkItem({ participant, canVote }: ChainLinkItemProps) {
   const voteMeta = canVote && participant.vote ? VOTE_META[participant.vote] : null;
 

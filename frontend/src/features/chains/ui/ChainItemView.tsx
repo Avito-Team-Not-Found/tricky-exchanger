@@ -24,6 +24,8 @@ import './ChainItemView.scss';
 
 interface ChainItemViewProps {
   chain: Chain;
+  // заявка выбранного варианта получения: экран показывает именно её товар
+  receiveRequestId?: number;
   isVoting: boolean;
   onVote: (candidate: ChainParticipant, active: boolean) => void;
   onOpenParticipants: () => void;
@@ -31,11 +33,9 @@ interface ChainItemViewProps {
   onProceed: () => void;
 }
 
-// Экран цепочки: товар, который пользователь получит в обмене, его описание,
-// отклик на кандидата получаемого звена и переход к схеме участников;
-// действие зависит от статуса цепочки
 export function ChainItemView({
   chain,
+  receiveRequestId,
   isVoting,
   onVote,
   onOpenParticipants,
@@ -43,14 +43,12 @@ export function ChainItemView({
   onProceed,
 }: ChainItemViewProps) {
   const { token } = theme.useToken();
-  const received = receivesItem(chain);
+  const received = receivesItem(chain, receiveRequestId);
   const single = received.length === 1 ? received[0] : null;
   const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);
   const shipRequired = needsShipment(chain.status);
-  // кандидат, на которого действует отклик: при pending-отклике кнопка становится
-  // «Отозвать отклик», при отсутствии отклика — «Откликнуться» (как на карточке списка);
-  // при approved/rejected отклика кнопки нет (DELETE их не снимает)
+  // approved/rejected отклик снять нельзя (DELETE их не снимает) — кнопки для них нет
   const voteCandidate =
     received.find((candidate) => candidate.vote === 'pending') ??
     received.find((candidate) => !candidate.vote) ??

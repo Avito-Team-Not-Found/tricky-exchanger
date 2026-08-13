@@ -2,12 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  confirmChain,
-  useChain,
-  type Chain,
-  type ChainParticipant,
-} from '@entities/chain';
+import { confirmChain, useChain, type Chain, type ChainParticipant } from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -145,6 +140,42 @@ describe('ChainParticipantsPage', () => {
     expect(screen.getByText('Планшет')).toBeInTheDocument();
   });
 
+  // пул получаемого звена — заявки разных людей, поэтому по ссылке показываем только выбранную
+  it('keeps only the selected option on the receiving link', () => {
+    const pool = [
+      {
+        clusterId: 2,
+        requestId: 202,
+        position: 1,
+        isCurrentUser: false,
+        offeredItemId: 2,
+        offeredItemTitle: 'Зеркальный фотоаппарат Canon',
+        offeredItemDescription: '',
+        wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
+      },
+      {
+        clusterId: 2,
+        requestId: 203,
+        position: 1,
+        isCurrentUser: false,
+        offeredItemId: 3,
+        offeredItemTitle: 'Планшет',
+        offeredItemDescription: '',
+        wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
+      },
+    ];
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ participants: [MY_CANDIDATE, ...pool] })));
+
+    renderWithProviders(<ChainParticipantsPage />, {
+      initialEntries: ['/chains/1/participants?option=203'],
+    });
+
+    expect(screen.getByText('Планшет')).toBeInTheDocument();
+    expect(screen.queryByText('Зеркальный фотоаппарат Canon')).not.toBeInTheDocument();
+  });
+
   it('shows the vote status of a responded candidate', () => {
     const voted = makeChain();
     voted.participants[1].vote = 'pending';
@@ -152,12 +183,10 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // статус отклика — пилюля с подписью текстом, чтобы он читался не только по цвету
     expect(screen.getByText('Ожидаем')).toBeInTheDocument();
   });
 
-  // на собранной цепочке пилюли первого раунда заменяются голосами второго раунда, а отклики
-  // скрыты: у vote на PROPOSED другой смысл
+  // у vote на PROPOSED другой смысл, поэтому отклики первого раунда скрыты
   it('shows second-round confirm pills and hides vote actions on an assembled chain', () => {
     const voted = makeChain({ status: 'PROPOSED' });
     voted.participants[0].vote = 'pending';
@@ -166,15 +195,13 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // оба участника ещё не ответили — обе строки показывают «Ожидает ответа»
     expect(screen.getAllByText('Ожидает ответа')).toHaveLength(2);
     expect(screen.queryByText('Ожидаем')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
   });
 
-  // голос привязан к цели голосования: решение участника позиции p лежит в vote позиции p+1
-  // по кольцу, поэтому пилюли строятся по сдвигу, а не по полю строки напрямую
+  // голос привязан к цели: решение позиции p лежит в vote позиции p+1 по кольцу
   it('renders each confirm vote state on the shifted position', () => {
     const me = { ...MY_CANDIDATE, vote: 'pending' as const };
     const second = { ...makeChain().participants[1], position: 1, vote: 'thinking' as const };
@@ -288,7 +315,6 @@ describe('ChainParticipantsPage', () => {
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
-  // на собранной цепочке над списком — пилюля, внизу — подтверждение второго раунда
   it('shows the assembled pill and a confirm action on a PROPOSED chain', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 

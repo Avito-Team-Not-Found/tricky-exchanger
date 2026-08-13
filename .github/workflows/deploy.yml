@@ -178,10 +178,27 @@ jobs:
             export DOCKER_IMAGE_PREFIX="$IMAGE_PREFIX"
             export IMAGE_TAG="$IMAGE_TAG"
 
+            # Зафиксировать тег выкладки в .env, чтобы ручной compose up
+            # не откатывался на IMAGE_TAG=latest из старого файла.
+            if grep -q '^IMAGE_TAG=' .env; then
+              sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${IMAGE_TAG}/" .env
+            else
+              echo "IMAGE_TAG=${IMAGE_TAG}" >> .env
+            fi
+            if grep -q '^DOCKER_IMAGE_PREFIX=' .env; then
+              sed -i "s|^DOCKER_IMAGE_PREFIX=.*|DOCKER_IMAGE_PREFIX=${IMAGE_PREFIX}|" .env
+            else
+              echo "DOCKER_IMAGE_PREFIX=${IMAGE_PREFIX}" >> .env
+            fi
+
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d db
             sleep 8
             docker compose -f docker-compose.prod.yml run --rm migrate
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker compose -f docker-compose.prod.yml up -d --force-recreate caddy
+
+            # Проверка, что наружу отвечает backend, а не HTML фронта
+            curl -fsS --max-time 15 https://menyayka.tech/healthz | grep -q '"status"'
+
             docker image prune -f

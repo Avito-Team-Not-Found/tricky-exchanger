@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -83,6 +83,7 @@ function renderDealPage(routes: { path: string; element: ReactNode }[] = []) {
 describe('DealPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it('renders the ship screen with a photo-gated handoff button', () => {
@@ -91,6 +92,7 @@ describe('DealPage', () => {
     renderDealPage();
 
     expect(screen.getByText('Что нужно сделать')).toBeInTheDocument();
+    expect(screen.getByText('Где будем получать?')).toBeInTheDocument();
     const button = screen.getByRole('button', { name: 'Я отправил товар' });
     expect(button).toBeDisabled();
     expect(screen.getByText('Прикрепите фото товара перед отправкой')).toBeInTheDocument();
@@ -102,7 +104,6 @@ describe('DealPage', () => {
     const { container } = renderDealPage();
 
     expect(screen.getByText('Все товары доставлены')).toBeInTheDocument();
-    // «Все товары доставлены» — зелёный блок
     const hero = container.querySelector('.deal-hero--success');
     expect(hero).toBeInTheDocument();
     expect(hero).toHaveTextContent('Все товары доставлены');
@@ -117,8 +118,27 @@ describe('DealPage', () => {
 
     expect(screen.getByText('Вы отправили товар')).toBeInTheDocument();
     expect(screen.getByText('1 из 2 отправлено')).toBeInTheDocument();
-    // статусы отправки открываются кнопкой «Посмотреть детали цепочки» — отдельной ссылки нет
+    // отдельной ссылки на статусы нет — они открываются «Посмотреть детали цепочки»
     expect(screen.queryByRole('button', { name: 'Статусы отправки' })).not.toBeInTheDocument();
+  });
+
+  // модалка на экране ожидания — про отправку, а не про доставку
+  it('opens the shipping-safety modal on the waiting screen, not a delivery one', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeShippedWaitingChain()));
+
+    renderDealPage();
+
+    await user.click(screen.getByRole('button', { name: 'Ваш товар в безопасности' }));
+
+    // модалка живёт в портале — ищем её по роли dialog
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByText(/товары не будут отправлены, пока все участники не принесли их/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/получить товары только тогда, когда все товары будут доставлены/),
+    ).not.toBeInTheDocument();
   });
 
   it('labels the waiting items as "Отправлен"/"Ожидает отправки" without checkmarks', () => {
@@ -150,6 +170,7 @@ describe('DealPage', () => {
 
     expect(screen.getByText('Обмен завершён')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'К моим запросам' })).toBeInTheDocument();
+    expect(screen.getByText('У вас есть 24 часа на возврат товара.')).toBeInTheDocument();
   });
 
   it('redirects to the chain screen when the deal is not reachable', async () => {
@@ -160,7 +181,30 @@ describe('DealPage', () => {
     expect(await screen.findByText('детали цепочки')).toBeInTheDocument();
   });
 
-  it('shows the received confirmation modal after the receipt without a confirm dialog', async () => {
+  it('shows the received screen with the confirmation text on the page, not in a modal', async () => {
+    const chain = makeChain('IN_PROGRESS');
+    chain.participants[1].requestStatus = 'DONE';
+    mockedUseChain.mockReturnValue(queryOk(chain));
+
+    renderDealPage();
+
+    expect(screen.getByText('Вы забрали товар')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Спасибо! Мы отметили, что вы забрали товар\. Обмен завершится, как только все участники/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Не используйте товар, пока не подтвердят получение.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('После получения всеми участниками товара у вас будет 24 часа на возврат.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('confirms the receipt without a confirm dialog or a modal', async () => {
     mockedReceipt.mockResolvedValue({ chainId: 1, requestId: 202, status: 'IN_PROGRESS' });
     mockedUseChain.mockReturnValue(queryOk(makeChain('IN_PROGRESS')));
     const user = userEvent.setup();
@@ -170,14 +214,12 @@ describe('DealPage', () => {
     await user.click(screen.getByRole('button', { name: 'Я забрал товар' }));
 
     await waitFor(() => expect(mockedReceipt).toHaveBeenCalledWith(1, 202));
-    // подтверждение получения не требуется — «Забрать товар?» не показывается
     expect(screen.queryByText('Забрать товар?')).not.toBeInTheDocument();
-    expect(await screen.findByText('Получение подтверждено')).toBeInTheDocument();
+    expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
   });
 
   it('opens the receipt statuses from the details button on the received screen', async () => {
     const user = userEvent.setup();
-    // источник DONE — ветка received-waiting «Вы забрали товар»
     const chain = makeChain('IN_PROGRESS');
     chain.participants[1].requestStatus = 'DONE';
     mockedUseChain.mockReturnValue(queryOk(chain));
@@ -187,10 +229,49 @@ describe('DealPage', () => {
     ]);
 
     expect(screen.getByText('Вы забрали товар')).toBeInTheDocument();
-    // отдельной ссылки на статусы нет — они открываются «Посмотреть детали цепочки»
     expect(screen.queryByRole('button', { name: 'Статусы получения' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Посмотреть детали цепочки' }));
     expect(await screen.findByText('статусы получения')).toBeInTheDocument();
+  });
+
+  it('gates the dispute on a selected reason and then shows the complaint modal', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain('IN_PROGRESS')));
+
+    renderDealPage();
+
+    await user.click(screen.getByRole('button', { name: 'Открыть спор' }));
+
+    // модалка живёт в портале — ищем её по роли dialog, чтобы не спутать с кнопкой экрана
+    const dialog = await screen.findByRole('dialog');
+    const withinDialog = within(dialog);
+    const confirm = withinDialog.getByRole('button', { name: 'Открыть спор' });
+    expect(confirm).toBeDisabled();
+    for (const reason of ['Товар не тот', 'Товар испорчен', 'Другое']) {
+      expect(withinDialog.getByRole('radio', { name: reason })).toBeInTheDocument();
+    }
+
+    await user.click(withinDialog.getByRole('radio', { name: 'Товар испорчен' }));
+    expect(confirm).toBeEnabled();
+
+    await user.click(confirm);
+    expect(await screen.findByText('Жалоба отправлена')).toBeInTheDocument();
+  });
+
+  it('does not open a dispute when the reason modal is cancelled', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain('IN_PROGRESS')));
+
+    renderDealPage();
+
+    await user.click(screen.getByRole('button', { name: 'Открыть спор' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Отмена' }));
+
+    // jsdom не доигрывает анимации antd — модалка остаётся в DOM с классом ухода
+    await waitFor(() => expect(document.querySelector('.ant-modal')).toHaveClass('ant-zoom-leave'));
+    expect(screen.getByText('Проблемы с товаром?')).toBeInTheDocument();
+    expect(screen.queryByText('Жалоба на рассмотрении')).not.toBeInTheDocument();
   });
 });

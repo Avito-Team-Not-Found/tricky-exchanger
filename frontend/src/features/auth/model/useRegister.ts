@@ -43,7 +43,6 @@ export function useRegister() {
       );
       applySession(session);
     } catch (error) {
-      // 409 — email занят, 400 — невалидные данные (пароль короче 8 символов и т.п.)
       message.error(
         getErrorMessage(error, { 409: 'Пользователь с таким email уже зарегистрирован' }),
       );

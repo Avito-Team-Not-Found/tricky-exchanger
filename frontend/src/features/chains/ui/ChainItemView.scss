@@ -6,7 +6,6 @@
   flex: 1;
 }
 
-// крупное фото получаемого товара — верхний блок экрана
 .chain-item__photo {
   position: relative;
   width: 100%;
@@ -16,8 +15,6 @@
   background: var(--color-bg-page);
 }
 
-// position: absolute уводит картинку из потока — иначе портретная фотография растягивает
-// контейнер и ломает aspect-ratio 343:280 (та же проблема, что и в ProductCard)
 .chain-item__photo-img {
   position: absolute;
   inset: 0;
@@ -57,8 +54,6 @@
   color: var(--color-text-secondary);
 }
 
-// пилюля «Цепочка собрана» — тот же стиль, что у остальных таких бейджей (15%-я заливка success),
-// прижата к правому краю мета-строки
 .chain-item__ready {
   display: inline-flex;
   align-items: center;
@@ -72,14 +67,12 @@
   white-space: nowrap;
 }
 
-// пилюля «Цепочка собрана» + бейдж согласий в правом краю мета-строки
 .chain-item__badges {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
 }
 
-// подтвердил, ждём остальных: статусная строка вместо второй кнопки
 .chain-item__confirmed {
   margin: 0;
   padding: var(--spacing-xs) var(--spacing-sm);
@@ -93,7 +86,6 @@
   white-space: nowrap;
 }
 
-// плашка жёсткой блокировки — Caption text-secondary сразу под мета-строкой
 .chain-item__lock {
   margin: 0;
   font-size: var(--font-size-caption);
@@ -101,8 +93,7 @@
   color: var(--color-text-secondary);
 }
 
-// низ экрана — кнопки в колонку: «Посмотреть всю цепочку», затем действие второго раунда;
-// margin-top: auto прижимает блок к низу экрана, когда контент не заполняет высоту
+// margin-top: auto прижимает блок к низу, когда контент не заполняет высоту
 .chain-item__actions {
   display: flex;
   flex-direction: column;

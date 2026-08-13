@@ -13,8 +13,7 @@ interface ProductCardProps {
 
 export function ProductCard({ item, onClick }: ProductCardProps) {
   const statusMeta = ITEM_STATUS_META[item.status];
-  // обменянный товар уже отдан — карточка остаётся в списке как история сделок,
-  // но открывать её нечего: бэкенд отклоняет любые мутации архивного товара
+  // обменянный товар остаётся в списке как история, но открывать его нечего
   const exchanged = isItemExchanged(item.status);
   const label = item.category
     ? `${item.title}, ${item.category}, ${statusMeta.label}`

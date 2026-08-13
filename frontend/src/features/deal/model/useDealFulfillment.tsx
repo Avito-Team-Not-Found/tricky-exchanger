@@ -1,5 +1,3 @@
-import { useRef } from 'react';
-
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 
@@ -13,8 +11,6 @@ import {
 } from '@entities/chain';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
-
-import { DealSuccessModal } from '../ui/DealSuccessModal';
 
 export type DealFulfillmentKind = 'handoff' | 'receipt';
 
@@ -32,15 +28,11 @@ const RECEIPT_ERROR_MESSAGES: Record<number, string> = {
   422: 'Заявка не является закреплённым товаром этой цепочки',
 };
 
-// Подтверждение отправки и получения — одна мутация на оба действия (AGENTS.md: мутации не
-// копипастятся). requestId различается: для handoff — моя заявка (chain.currentRequestId),
-// для receipt — заявка звена-источника, чей товар я забираю. Статусы заявок меняются, поэтому
-// инвалидируем и «Мои запросы» (exchange-requests). 409 — не ошибка пользователя: тост + перезагрузка.
+// одна мутация на оба действия, различается только requestId: для handoff — моя заявка,
+// для receipt — заявка звена-источника, чей товар я забираю
 export function useDealFulfillment(chain: Chain) {
-  const { message, modal } = AntApp.useApp();
+  const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
-  // модалка успеха живёт в портале вне дерева роутов и сама уход с экрана не переживает
-  const success = useRef<{ destroy: () => void } | null>(null);
 
   const mutation = useMutation<FulfillmentResult, Error, DealFulfillmentKind>({
     mutationFn: (kind) => {
@@ -53,9 +45,8 @@ export function useDealFulfillment(chain: Chain) {
     onSuccess: (data, kind) => {
       invalidate();
       if (kind === 'receipt') {
-        // на завершённой цепочке экран и так перейдёт в «Обмен завершён» — модалка успеха лишняя
+        // экран сам перейдёт в нужное состояние — отдельная модалка успеха не нужна
         if (data.status === 'COMPLETED') message.success('Обмен завершён');
-        else openReceivedModal();
         return;
       }
       message.success('Отправка подтверждена');
@@ -76,32 +67,9 @@ export function useDealFulfillment(chain: Chain) {
     invalidateChainQueries(queryClient);
   }
 
-  function closeReceivedModal() {
-    success.current?.destroy();
-    success.current = null;
-  }
-
-  function openReceivedModal() {
-    success.current = modal.confirm({
-      icon: null,
-      centered: true,
-      width: 311,
-      content: (
-        <DealSuccessModal
-          emoji="🎉"
-          title="Получение подтверждено"
-          text="Спасибо! Мы отметили, что вы забрали товар. Обмен завершится, как только все участники подтвердят получение."
-          onClose={closeReceivedModal}
-        />
-      ),
-      footer: null,
-    });
-  }
-
   function run(kind: DealFulfillmentKind) {
-    // модалку-подтверждение не показываем ни для отправки, ни для получения: отправку подтверждает
-    // обязательное фото упаковки, получение необратимо, но ручки идемпотентны, а повторный клик
-    // гасится isPending
+    // модалку-подтверждение не показываем: отправку подтверждает обязательное фото упаковки,
+    // а ручки идемпотентны — повторный клик гасится isPending
     mutation.mutateAsync(kind).then(
       () => undefined,
       () => undefined,

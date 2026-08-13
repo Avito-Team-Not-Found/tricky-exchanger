@@ -1,4 +1,4 @@
-// fieldset переопределяет браузерные стили: поле — декоративная обёртка радиогруппы (TZ §8)
+// fieldset переопределяет браузерные стили: поле — декоративная обёртка радиогруппы
 .replacement-fieldset {
   margin: 0;
   padding: 0;
@@ -53,7 +53,7 @@
   display: flex;
 }
 
-// «Показать ещё» — полновесный тач-таргет 44px (TZ §8), не link-мелочь
+// «Показать ещё» — полновесный тач-таргет 44px, не link-мелочь
 .replacement-more {
   align-self: flex-start;
   min-height: 44px;
@@ -61,7 +61,6 @@
   padding: 0 var(--spacing-sm);
 }
 
-// sticky-футер выбора (TZ §5.1): нижний край мобильного экрана занимают кнопки действия
 .replacement-footer {
   position: sticky;
   bottom: 0;
@@ -72,7 +71,7 @@
   background: var(--color-bg-page);
 }
 
-// secondary 44px по макету — antd default controlHeight 44, large (52) только у primary
+// secondary 44px — antd default controlHeight 44, large (52) только у primary
 .replacement-footer__secondary {
   height: 44px;
 }
@@ -146,7 +145,7 @@
   color: var(--color-text-secondary);
 }
 
-// ряд миниатюр: на узком экране при длинной цепочке скроллится по горизонтали, тело — нет (TZ §5.5)
+// при длинной цепочке ряд скроллится по горизонтали, а тело экрана — нет
 .replacement-summary__chain {
   display: flex;
   align-items: center;

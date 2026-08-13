@@ -134,11 +134,9 @@ describe('useReplacementSelection', () => {
 
     expect(mockedSelect).toHaveBeenCalledWith(1, 42);
     await waitFor(() => expect(result.current.stage).toBe('waiting'));
-    // и карточка цепочки, и пул замен лежат под ['chains'] — одна инвалидация покрывает оба
     expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toContainEqual(['chains']);
   });
 
-  // список протухающий: конфликт — повод перезапросить пул, а не повторить действие (TZ §1)
   it('re-fetches the pool and stays selecting when the candidate is gone', async () => {
     mockedSelect.mockRejectedValue(axiosError(422));
     const { result } = await renderSelecting();
@@ -164,7 +162,7 @@ describe('useReplacementSelection', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/chains/1'));
   });
 
-  // сервер не идемпотентен: повторный PUT тем же requestId вернул бы 422 (TZ §7.2)
+  // сервер не идемпотентен: повторный PUT тем же requestId вернул бы 422
   it('sends a single request when invite is called twice in a row', async () => {
     mockedSelect.mockImplementation(() => new Promise(() => {}));
     const { result } = await renderSelecting();
@@ -193,7 +191,6 @@ describe('useReplacementSelection', () => {
     expect(mockedSelect).not.toHaveBeenCalled();
   });
 
-  // цепочки после расформирования больше нет — возврат на /chains/{id} дал бы 404 (TZ §3.3)
   it('confirms abandoning and leaves for the request options', async () => {
     mockedDecline.mockResolvedValue({ chainId: 1, status: 'BROKEN', replacementAvailable: false });
     const { result } = await renderSelecting();
@@ -208,7 +205,6 @@ describe('useReplacementSelection', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/exchange-requests/101'));
   });
 
-  // 404 цепочки — не ошибка загрузки, а штатный откат «Замена не состоялась» (TZ §4.1)
   it('treats a missing chain as a rollback rather than a load failure', async () => {
     mockChainQuery(undefined, { isError: true, error: axiosError(404) });
     const { result } = await renderSelecting();
@@ -247,7 +243,6 @@ describe('useReplacementSelection', () => {
     expect(result.current.isError).toBe(false);
   });
 
-  // выбор указывает на исчезнувшую заявку — кнопка обязана погаснуть, а не молча ничего не делать
   it('drops a selection that no longer exists in the refreshed pool', async () => {
     const { result, rerender } = await renderSelecting();
     expect(result.current.selectedId).toBe(OPTION.requestId);
@@ -293,8 +288,7 @@ describe('useReplacementSelection', () => {
     expect(result.current.stage).toBe('waiting');
   });
 
-  // Отказ приглашённого не меняет статус цепочки: сервер снова открывает вакансию на его позиции,
-  // и без этого экран навсегда застревал на «Ждём ответа кандидата» — пул при этом уже не пуст.
+  // отказ приглашённого не меняет статус цепочки — вновь открытую вакансию видно только по пулу
   it('returns to selecting when the invited candidate declined and the vacancy reopened', async () => {
     mockedSelect.mockResolvedValue({ chainId: 1, requestId: 42, status: 'PROPOSED' });
     const { result, rerender } = await renderSelecting();
@@ -304,7 +298,6 @@ describe('useReplacementSelection', () => {
     });
     await waitFor(() => expect(result.current.stage).toBe('waiting'));
 
-    // приглашённый отказался — на его позиции снова вакансия, в пуле уже другие кандидаты
     const other: ReplacementOption = { ...OPTION, requestId: 99, title: 'Фотоаппарат плёночный' };
     mockedUseReplacements.mockReturnValue({
       data: [other],
@@ -335,8 +328,6 @@ describe('useReplacementSelection', () => {
     expect(replacementInvited.get(1)).not.toBeNull();
   });
 
-  // после перезагрузки карточка приглашённого берётся из сохранённой записи, а не из памяти:
-  // иначе экран ожидания показывает «пустую» замену
   it('restores the invited candidate card after a reload', async () => {
     mockedSelect.mockResolvedValue({ chainId: 1, requestId: 42, status: 'PROPOSED' });
     const first = await renderSelecting();
@@ -359,7 +350,6 @@ describe('useReplacementSelection', () => {
     expect(result.current.invitedOption).toEqual(OPTION);
   });
 
-  // иначе следующая замена по той же цепочке открылась бы сразу на чужом экране ожидания
   it('forgets the invitation once the chain leaves PROPOSED', async () => {
     replacementInvited.set(1, OPTION);
     // кандидат отказался — цепочка вернулась в CANDIDATE, запись протухла
@@ -374,7 +364,49 @@ describe('useReplacementSelection', () => {
     expect(result.current.stage).toBe('selecting');
   });
 
-  // расформированная цепочка обязана исчезнуть из «Вариантов обмена» сразу (staleTime 60s)
+  // отказ расформировывает цепочку не всегда: сервер вправе откатить её в CANDIDATE, и обещать
+  // «Цепочка расформирована» тогда нельзя — исход виден только из ответа
+  it('reports the real outcome when the chain survives the refusal', async () => {
+    mockedDecline.mockResolvedValue({ chainId: 1, status: 'CANDIDATE', replacementAvailable: true });
+    const { result } = await renderSelecting();
+
+    act(() => result.current.abandon());
+    const confirm = await screen.findByRole('button', { name: 'Да, отказаться' });
+    await act(async () => {
+      confirm.click();
+    });
+
+    expect(
+      await screen.findByText('Вы вышли из сделки. Цепочка вернулась к сбору откликов'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Цепочка расформирована')).not.toBeInTheDocument();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/exchange-requests/101'));
+  });
+
+  // маршрут тот же, параметр другой — роутер элемент не размонтирует, и без пересинхронизации
+  // приглашение первой цепочки открывало бы вторую сразу на «Ждём ответа кандидата»
+  it('forgets the previous chain state when the chain id changes', async () => {
+    replacementInvited.set(1, OPTION);
+    mockedUseReplacements.mockReturnValue({
+      data: [OPTION],
+      isLoading: false,
+      isError: false,
+      refetch: refetchOptions,
+    } as never);
+    const { result, rerender } = renderHook((chainId: number) => useReplacementSelection(chainId), {
+      wrapper,
+      initialProps: 1,
+    });
+    act(() => result.current.setSelectedId(OPTION.requestId));
+    expect(result.current.stage).toBe('waiting');
+
+    rerender(2);
+
+    expect(result.current.stage).toBe('selecting');
+    expect(result.current.invitedOption).toBeNull();
+    expect(result.current.selectedId).toBeNull();
+  });
+
   it('invalidates the request options after disbanding and after inviting', async () => {
     mockedDecline.mockResolvedValue({ chainId: 1, status: 'BROKEN', replacementAvailable: false });
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');

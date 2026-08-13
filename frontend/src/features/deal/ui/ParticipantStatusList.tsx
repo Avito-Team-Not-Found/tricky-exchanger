@@ -17,9 +17,7 @@ interface ParticipantStatusListProps {
   mode: DealStatusMode;
 }
 
-// Списки «Статусы отправки» и «Статусы получения»: строки участников с псевдонимами
-// вместо имён и пилюлей статуса. Позиция p отдаёт свой товар и получает товар
-// следующей по кольцу позиции — строка «отдаёт → получает» и статус получения строятся по ней.
+// позиция p получает товар следующей по кольцу позиции — по ней и строится статус получения
 export function ParticipantStatusList({ chain, mode }: ParticipantStatusListProps) {
   const me = myParticipant(chain);
   const participants = [...chain.participants].sort((a, b) => a.position - b.position);

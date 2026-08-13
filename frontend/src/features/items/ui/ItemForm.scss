@@ -3,7 +3,6 @@
   flex-direction: column;
 }
 
-// стандартный отступ между полями 24px — как в формах авторизации (без дополнительного flex-gap)
 .item-form .ant-form-item {
   margin-bottom: var(--spacing-lg);
 }
@@ -16,7 +15,6 @@
   padding: var(--spacing-md) 0;
 }
 
-// плашка «товар обменян» — как замок в форме заявки: форма остаётся видимой, но только на просмотр
 .item-form__lock {
   display: flex;
   align-items: center;
@@ -34,7 +32,6 @@
   font-size: 16px;
 }
 
-// фото: широкая карточка 343×213, пустая — кликабельная «Добавить фото»
 .item-form__photo-preview {
   position: relative;
   display: flex;
@@ -58,8 +55,6 @@
   border: none;
 }
 
-// position: absolute уводит картинку из потока — иначе портретная фотография растягивает
-// контейнер и ломает aspect-ratio 343:213 (та же проблема, что и в ProductCard)
 .item-form__photo-image {
   position: absolute;
   inset: 0;
@@ -79,8 +74,8 @@
   color: var(--color-text-secondary);
 }
 
-// antd Upload оборачивает триггер в inline-обёртки (.ant-upload / .ant-upload-select),
-// которые схлопывают карточку до высоты контента — форсируем блочную ширину на всех уровнях
+// antd Upload оборачивает триггер в inline-обёртки, схлопывающие карточку до высоты
+// контента — форсируем блочную ширину на всех уровнях
 .item-form__photo,
 .item-form__photo-upload,
 .item-form__photo-upload .ant-upload,
@@ -94,14 +89,12 @@
   display: block !important;
 }
 
-// «Удалить фото» — красный (danger) и по центру под карточкой.
-// flex (а не block) обязателен: при display: block иконка и текст перестают быть flex-элементами
-// и gap не работает — они слипаются
+// flex (а не block) обязателен: при display: block иконка и текст перестают быть
+// flex-элементами и gap между ними не работает
 .item-form__photo-remove {
   display: flex;
   width: fit-content;
   margin: var(--spacing-sm) auto 0;
-  // увеличенный зазор между иконкой корзины и текстом (antd по умолчанию ставит 8px)
   gap: var(--spacing-md) !important;
 }
 
@@ -109,12 +102,11 @@
   margin-top: var(--spacing-sm);
 }
 
-// заметный отступ между «Сохранить» и «Удалить товар»
 .item-form__archive {
   margin-top: var(--spacing-md);
 }
 
-// antd v6 вешает счётчик символов вплотную к нижней грани поля — отодвигаем его и резервируем место
+// antd v6 вешает счётчик вплотную к нижней грани поля — резервируем под него место
 .item-form .ant-input-data-count {
   bottom: -32px;
 }
@@ -123,7 +115,6 @@
   margin-bottom: var(--spacing-sm);
 }
 
-// описание растягивается по вертикали, но не выше ~8 строк
 .item-form .ant-input-textarea-show-count textarea {
   resize: vertical;
   max-height: 200px;

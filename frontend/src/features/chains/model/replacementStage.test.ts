@@ -11,7 +11,7 @@ describe('replacementStage', () => {
     expect(replacementStage('PROPOSED', true)).toBe('waiting');
   });
 
-  // подтверждение кандидата — последнее недостающее, поэтому цепочка сразу уходит в FROZEN (TZ §4)
+  // подтверждение кандидата — последнее недостающее, поэтому цепочка сразу уходит в FROZEN
   it('reports success once the chain is frozen', () => {
     expect(replacementStage('FROZEN', true)).toBe('succeeded');
   });
@@ -21,8 +21,7 @@ describe('replacementStage', () => {
     expect(replacementStage('BROKEN', true)).toBe('rolledBack');
   });
 
-  // выбор кандидата рисуется только для PROPOSED: для остальных статусов пул не запрашивается,
-  // и пустой список предложил бы расформировать живую цепочку
+  // вне PROPOSED пул не запрашивается, и пустой список предложил бы расформировать живую цепочку
   it('never offers the candidate list outside a proposed chain', () => {
     expect(replacementStage('IN_PROGRESS', false)).toBe('rolledBack');
     expect(replacementStage('COMPLETED', false)).toBe('rolledBack');

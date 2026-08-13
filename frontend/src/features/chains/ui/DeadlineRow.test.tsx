@@ -19,8 +19,28 @@ describe('DeadlineRow', () => {
     expect(screen.getByText('Осталось 1 мин на ответ')).toBeInTheDocument();
   });
 
-  it('renders nothing outside PROPOSED even with a deadline set', () => {
+  it('renders nothing on a frozen chain by default, even with a deadline set', () => {
     const { container } = render(<DeadlineRow status="FROZEN" deadlineAt="2026-08-10T10:01:00Z" />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('renders the shipping deadline on a frozen chain when requested', () => {
+    render(<DeadlineRow status="FROZEN" deadlineAt="2026-08-10T10:01:00Z" showShipDeadline />);
+
+    expect(screen.getByText('Осталось 1 мин на отправку')).toBeInTheDocument();
+  });
+
+  it('renders nothing on a frozen chain when the shipping deadline is missing', () => {
+    const { container } = render(<DeadlineRow status="FROZEN" showShipDeadline />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('renders nothing on a candidate chain even when requested', () => {
+    const { container } = render(
+      <DeadlineRow status="CANDIDATE" deadlineAt="2026-08-10T10:01:00Z" showShipDeadline />,
+    );
 
     expect(container).toBeEmptyDOMElement();
   });

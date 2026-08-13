@@ -2,7 +2,13 @@ import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { useChainConfirm, useChainVote, useProposalExpiry, ChainCard } from '@features/chains';
+import {
+  receiveOptionQuery,
+  useChainConfirm,
+  useChainVote,
+  useProposalExpiry,
+  ChainCard,
+} from '@features/chains';
 
 import {
   approvedVotes,
@@ -20,10 +26,8 @@ import { EmptyState, ErrorState } from '@shared/ui';
 
 import './ChainListPage.scss';
 
-// Варианты обмена по заявке: пул кандидатов следующего звена,
-// на каждого можно откликнуться или отозвать отклик. Когда одна из цепочек замкнулась
-// (PROPOSED) или заморожена — остальные варианты приглушены и недоступны; при заморозке
-// сделки дополнительно баннер, а кнопка правки запроса заблокирована.
+// как только одна из цепочек замкнулась или заморожена, остальные варианты заявки
+// приглушаются и становятся недоступны
 export function ChainListPage() {
   const { requestId: requestIdParam } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
@@ -42,20 +46,16 @@ export function ChainListPage() {
   // деталь заявки не отдаёт снимок отдаваемого товара — берём его из кеша товаров
   const offeredItem = itemsQuery.data?.items.find((item) => item.id === request?.offeredItemId);
 
-  // exchange-options не отдаёт ни число согласий второго раунда, ни дедлайн ответа: и то и другое
-  // для PROPOSED-цепочек берётся из детали (GET /chains/{id}) — см. approvedCountFor/deadlineAtFor
-  const proposedChainIds = options
-    .filter((entry) => entry.status === 'PROPOSED')
+  // ни счётчика согласий, ни дедлайнов exchange-options не отдаёт — их берём из детали цепочки
+  const detailChainIds = options
+    .filter((entry) => entry.status === 'PROPOSED' || entry.status === 'FROZEN')
     .map((entry) => entry.chainId);
-  const proposedQueries = useChains(proposedChainIds);
+  const detailQueries = useChains(detailChainIds);
   const detailByChain = new Map<number, Chain>();
-  proposedQueries.forEach((query, index) => {
-    if (query.data) detailByChain.set(proposedChainIds[index], query.data);
+  detailQueries.forEach((query, index) => {
+    if (query.data) detailByChain.set(detailChainIds[index], query.data);
   });
 
-  // exchange-options не откатывает просроченный PROPOSED (это делает только GET /chains/{id}),
-  // поэтому после дедлайна список надо перезапросить — иначе карточка останется с живыми
-  // кнопками второго раунда
   useProposalExpiry(
     options.map((entry) => ({
       chainId: entry.chainId,
@@ -100,9 +100,8 @@ export function ChainListPage() {
     );
   }
 
-  // бэкенд отдаёт цепочки по дате создания (repository.go: ORDER BY c.created_at DESC), а экран
-  // показывает их по убыванию вероятности. Сортировка стабильная, поэтому
-  // варианты одной цепочки сохраняют исходный порядок между собой
+  // бэкенд отдаёт цепочки по дате создания, а экран показывает их по убыванию вероятности;
+  // сортировка стабильная, поэтому варианты одной цепочки сохраняют исходный порядок
   const receiveOptions = options
     .flatMap((entry) => entry.receiveOptions.map((option) => ({ entry, option })))
     .sort((a, b) => b.entry.score - a.entry.score);
@@ -161,7 +160,9 @@ export function ChainListPage() {
                 locked={hasAssembled && !isAssembled(entry.status)}
                 approvedCount={approvedCountFor(entry)}
                 deadlineAt={deadlineAtFor(entry)}
-                onOpen={() => navigate(`/chains/${entry.chainId}`)}
+                onOpen={() =>
+                  navigate(`/chains/${entry.chainId}${receiveOptionQuery(option.requestId)}`)
+                }
                 onProceed={() => navigate(`/chains/${entry.chainId}/deal`)}
                 onConfirm={(chainId) => openConfirm(chainId)}
                 onVote={(active) =>

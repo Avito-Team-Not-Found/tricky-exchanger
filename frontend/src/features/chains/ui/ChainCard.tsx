@@ -22,11 +22,9 @@ interface ChainCardProps {
   option: ExchangeOption;
   isVoting: boolean;
   locked?: boolean;
-  // число согласий второго раунда: на FROZEN всегда = length, на PROPOSED — из деталей цепочки
-  // (exchange-options его не отдаёт); undefined — бейдж не рисуем, пока счётчик неизвестен
+  // exchange-options счётчик не отдаёт: undefined — бейдж не рисуем, пока он неизвестен
   approvedCount?: number;
-  // дедлайн ответа по собранной цепочке — тоже из детали (GET /chains/{id}), exchange-options
-  // его не отдаёт; без даты таймер не рисуем
+  // exchange-options дедлайн не отдаёт — без даты таймер не рисуем
   deadlineAt?: string | null;
   onOpen: () => void;
   onProceed: () => void;
@@ -34,8 +32,6 @@ interface ChainCardProps {
   onConfirm: (chainId: number) => void;
 }
 
-// Карточка варианта обмена: один конкретный получаемый товар из пула кандидатов
-// следующего звена; действие и бейджи зависят от статуса цепочки
 export function ChainCard({
   options,
   option,
@@ -52,9 +48,8 @@ export function ChainCard({
   const canVote = options.status === 'CANDIDATE';
   const canAct = canVote && (!option.vote || option.vote === 'pending');
   const hardLocked = isHardLocked(options.status);
-  // на FROZEN сделка началась, товар ещё не отправлен — вместо «Перейти к сделке» зовём действовать
+  // на FROZEN сделка началась, но товар не отправлен — зовём действовать, а не «к сделке»
   const shipRequired = needsShipment(options.status);
-  // на COMPLETED жёсткой блокировки уже нет, но сделку открыть нужно — кнопка по hasDeal
   const dealReady = hasDeal(options.status) && !shipRequired;
   // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя;
   // на CANDIDATE то же поле — отклик первого раунда, myVote им не считается
@@ -119,7 +114,7 @@ export function ChainCard({
         )}
       </div>
 
-      <DeadlineRow status={options.status} deadlineAt={deadlineAt} />
+      <DeadlineRow status={options.status} deadlineAt={deadlineAt} showShipDeadline />
 
       {canAct ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>

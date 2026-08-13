@@ -19,9 +19,8 @@ const baseTokens = {
   controlHeightLG: 52,
 } satisfies ThemeConfig['token'];
 
-// colorBgContainer — фон Input/Select/Card (--color-bg-page), colorBgElevated — приподнятые поверхности
-// вроде AuthCard/Segmented-трека (--color-bg-card). Перепутанные местами, они гасили контраст
-// InputBox на фоне карточки (#FFFFFF на треке #F7F9FC).
+// colorBgContainer — фон Input/Select/Card, colorBgElevated — приподнятые поверхности вроде
+// AuthCard: перепутанные местами, они гасят контраст поля на фоне карточки
 const themeTokens: Record<ThemeMode, ThemeConfig['token']> = {
   light: {
     ...baseTokens,
@@ -55,10 +54,9 @@ const sharedComponents: ThemeConfig['components'] = {
   Modal: { borderRadiusLG: 12 },
 };
 
-// antd для трека берёт colorBgLayout, а для активного сегмента — colorBgElevated, т.е. наоборот
-// (активный seg #FFFFFF на треке #F7F9FC) — без переопределения активный таб сливается с карточкой
-// скелетон — блоки bg-card с полосой border-default: дефолтные полупрозрачные
-// заливки antd в тёмной теме заметно светлее карточек и выпадают из фона страницы
+// antd берёт для трека colorBgLayout, а для активного сегмента colorBgElevated, т.е. наоборот —
+// без переопределения активный таб сливается с карточкой; полупрозрачные заливки скелетона
+// в тёмной теме заметно светлее карточек и выпадают из фона страницы
 const themeComponents: Record<ThemeMode, ThemeConfig['components']> = {
   light: {
     ...sharedComponents,

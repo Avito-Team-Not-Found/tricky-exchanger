@@ -1,7 +1,12 @@
 import { Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainDetail, useChainConfirm } from '@features/chains';
+import {
+  ChainDetail,
+  receiveOptionQuery,
+  useChainConfirm,
+  useReceiveOption,
+} from '@features/chains';
 
 import { useChain } from '@entities/chain';
 
@@ -11,18 +16,20 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Схема участников цепочки: строки по звеньям кольца с пулом кандидатов и
-// статусами откликов. Открывается с экрана товара цепочки.
 export function ChainParticipantsPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
+  const receiveRequestId = useReceiveOption();
   const { data: chain, isLoading, isError, refetch } = useChain(chainId);
   const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
 
   return (
     <div className="chain-detail-page">
-      <ChainPageHeader title="Цепочка обмена" onBack={() => navigate(`/chains/${chainId}`)} />
+      <ChainPageHeader
+        title="Цепочка обмена"
+        onBack={() => navigate(`/chains/${chainId}${receiveOptionQuery(receiveRequestId)}`)}
+      />
 
       <div className="chain-detail-page__body">
         {isLoading ? (
@@ -32,6 +39,7 @@ export function ChainParticipantsPage() {
         ) : (
           <ChainDetail
             chain={chain}
+            receiveRequestId={receiveRequestId}
             onConfirm={() => openConfirm(chain.id)}
             onProceed={() => navigate(`/chains/${chain.id}/deal`)}
           />

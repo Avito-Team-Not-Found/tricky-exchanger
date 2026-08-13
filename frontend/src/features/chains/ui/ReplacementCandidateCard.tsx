@@ -8,13 +8,12 @@ interface ReplacementCandidateCardProps {
   option: ReplacementOption;
   selected?: boolean;
   disabled?: boolean;
-  // без onSelect — карточка для просмотра приглашённого кандидата (TZ §5.4): без radio и рамки
+  // без onSelect карточка только для просмотра — без radio и рамки
   onSelect?: () => void;
 }
 
-// Карточка кандидата на замену (TZ §5.2): фото, название и метка актуальности. В выбираемом виде
-// вся карточка — один label вокруг нативного radio, чтобы тач-таргет был больше минимума 44×44;
-// состояние читается скринридером из самого radio, рамка выбранной карточки — дублирующая индикация.
+// вся карточка — один label вокруг нативного radio: так тач-таргет больше минимума 44×44,
+// а состояние читается скринридером из самого radio
 export function ReplacementCandidateCard({
   option,
   selected = false,
@@ -33,7 +32,7 @@ export function ReplacementCandidateCard({
   const photo = (
     <span className="replacement-card__photo">
       {option.imageUrl ? (
-        // description не показывается на карточке, но остаётся доступным как подсказка фото (TZ §5.2)
+        // description на карточке не показывается, но остаётся доступным как подсказка фото
         <img
           className="replacement-card__image"
           src={option.imageUrl}

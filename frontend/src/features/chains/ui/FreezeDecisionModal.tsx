@@ -10,9 +10,8 @@ export interface FreezeDecisionModalProps {
   onDecline: () => void;
 }
 
-// Модалка «Готовность к сделке»: заголовок, вопрос и кнопки «Да»/«Отказ»/«Закрыть»
-// блоками в колонку. `title` confirm-модалки не используется — он рендерится дважды (в заголовке
-// модалки и в confirm-title), поэтому заголовок живёт здесь же в контенте.
+// `title` confirm-модалки не используется: он рендерится дважды, поэтому заголовок живёт
+// здесь же в контенте
 export function FreezeDecisionModal({ onClose, onConfirm, onDecline }: FreezeDecisionModalProps) {
   const [pending, setPending] = useState(false);
 

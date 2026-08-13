@@ -104,7 +104,7 @@ describe('LoginForm', () => {
 
   it('shows the same toast for an unregistered email', async () => {
     const user = userEvent.setup();
-    // бэкенд осознанно отвечает 401 в обоих случаях — текст для юзера не должен их различать
+    // текст для пользователя не должен различать «нет email» и «неверный пароль»
     const error = new AxiosError('Unauthorized');
     Object.assign(error, { response: { status: 401 } });
     mockedLoginRequest.mockRejectedValue(error);
@@ -118,7 +118,6 @@ describe('LoginForm', () => {
     expect(store.getState().user.token).toBeNull();
   });
 
-  // короткий пароль отбивается на месте (после дебаунса), а не молчаливым 401 от сервера
   it('shows a password length error after a short password is typed', async () => {
     const user = userEvent.setup();
     setup();

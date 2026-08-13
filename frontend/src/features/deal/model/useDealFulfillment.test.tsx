@@ -125,7 +125,7 @@ describe('useDealFulfillment', () => {
     });
   });
 
-  it('opens the received modal after a receipt', async () => {
+  it('does not open a modal after a receipt — the screen shows the result', async () => {
     mockedReceipt.mockResolvedValue({ chainId: 1, requestId: 202, status: 'IN_PROGRESS' });
     const { result } = renderHook(() => useDealFulfillment(makeChain()), { wrapper });
 
@@ -133,10 +133,11 @@ describe('useDealFulfillment', () => {
       await result.current.confirmReceipt();
     });
 
-    expect(await screen.findByText('Получение подтверждено')).toBeInTheDocument();
+    // после инвалидации экран сам перейдёт в «Вы забрали товар»
+    expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
   });
 
-  it('toasts a completed deal and skips the received modal', async () => {
+  it('toasts a completed deal without a received modal', async () => {
     mockedReceipt.mockResolvedValue({ chainId: 1, requestId: 202, status: 'COMPLETED' });
     const { result } = renderHook(() => useDealFulfillment(makeChain()), { wrapper });
 

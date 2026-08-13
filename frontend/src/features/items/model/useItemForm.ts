@@ -44,13 +44,11 @@ export function useItemForm(itemId?: number) {
   const isLoading = isEdit && itemQuery.isPending;
   const isLoadError = isEdit && itemQuery.isError;
 
-  // форма монтируется только после загрузки данных (ItemForm рендерит Skeleton), поэтому initialValues достаточно
   const initialValues: Partial<ItemFormValues> | undefined = useMemo(() => {
     if (!item) return undefined;
     return {
       title: item.title,
       description: item.description,
-      // пустая категория (товар старше миграции) не должна выглядеть как выбранная —
       // Select с value='' рисует пустой чип вместо placeholder'а
       category: item.category || undefined,
     };
@@ -73,8 +71,7 @@ export function useItemForm(itemId?: number) {
     return () => URL.revokeObjectURL(pendingPreview);
   }, [pendingPreview]);
 
-  // выбран новый файл — показываем только его (даже если превью ещё не готово),
-  // иначе — текущее фото с сервера. Показывать старое фото вместо нового нельзя: это враньё
+  // показывать старое фото вместо только что выбранного нельзя — это враньё
   const previewUrl = pendingFile
     ? pendingPreview
     : isEdit && item?.imageUrl && !removingImage
@@ -85,15 +82,11 @@ export function useItemForm(itemId?: number) {
   const description = Form.useWatch('description', form);
   const category = Form.useWatch('category', form);
 
-  // товары, созданные до требования 50 символов, приходят с коротким описанием: antd не
-  // валидирует initialValues, поэтому без явной проверки кнопка молча оставалась бы
-  // заблокированной без единой подсказки на экране
   useEffect(() => {
     if (!item) return;
     form.validateFields(['description']).catch(() => undefined);
   }, [form, item]);
 
-  // гейт кнопки повторяет правило формы, иначе короткое описание уйдёт в молчаливый сабмит
   const descriptionLength = description?.trim().length ?? 0;
   const fieldsValid =
     Boolean(title?.trim()) && descriptionLength >= DESCRIPTION_MIN_LENGTH && Boolean(category);
@@ -111,7 +104,6 @@ export function useItemForm(itemId?: number) {
     setDirty(true);
   }
 
-  // любой ввод в поля формы помечает её как изменённую
   function handleValuesChange() {
     setDirty(true);
   }
@@ -120,7 +112,6 @@ export function useItemForm(itemId?: number) {
     navigate(returnToRequest ? '/exchange-requests/new' : '/products');
   }
 
-  // уход с формы с несохранёнными изменениями — только через подтверждение
   function confirmLeave() {
     if (!dirty) {
       goBack();
@@ -165,19 +156,15 @@ export function useItemForm(itemId?: number) {
       const payload: ItemPayload = {
         title: values.title.trim(),
         description: values.description.trim(),
-        // поле обязательное, до сабмита пустым не доходит; ?? '' — страховка от PATCH
-        // без ключа, который оставил бы на сервере прежнее значение
+        // ?? '' — страховка от PATCH без ключа: он оставил бы на сервере прежнее значение
         category: values.category ?? '',
       };
       if (isEdit) {
         await updateItem(itemId as number, payload, pendingFile ?? undefined);
         message.success('Товар обновлён');
         queryClient.invalidateQueries({ queryKey: ['items'] });
-        // карточки заявок показывают название отдаваемого товара (offeredItemTitle) —
-        // без инвалидации список заявок ещё минуту показывает старое название
+        // карточки заявок показывают название товара — иначе там ещё минуту старое
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
-        // правка после «создать товар из формы запроса»: сохранение
-        // фото возвращает в форму запроса с выбором этого товара, а не в список товаров
         navigate(returnToRequest ? `/exchange-requests/new?offeredItemId=${itemId}` : '/products');
       } else {
         const created = await createItem(payload, pendingFile);
@@ -203,15 +190,9 @@ export function useItemForm(itemId?: number) {
             ? 'Товар обновлён, но фото не загрузилось — попробуйте загрузить его ещё раз'
             : 'Товар создан, но фото не загрузилось. Добавьте его на экране редактирования',
         );
-        // товар создан/обновлён на сервере, но клиентский список его ещё не знает —
-        // иначе /products ещё 60 с отдаёт кеш без изменений
         queryClient.invalidateQueries({ queryKey: ['items'] });
-        // название товара уже могло поменяться — карточки заявок (offeredItemTitle)
-        // иначе ещё минуту показывают старый текст
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
         if (!isEdit) {
-          // возврат в форму запроса сохраняется: после дозагрузки фото
-          // пользователь снова попадёт в форму запроса с выбором созданного товара
           navigate(
             returnToRequest
               ? `/products/${error.item.id}/edit?returnTo=request`

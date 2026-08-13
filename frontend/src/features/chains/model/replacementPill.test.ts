@@ -13,7 +13,6 @@ describe('replacementPillMeta', () => {
     expect(replacementPillMeta(daysAgo(13), NOW)).toEqual({ text: 'Актуальна', tone: 'success' });
   });
 
-  // граница включающая: ровно 14 дней ещё считается актуальным
   it('keeps the boundary day inside the current window', () => {
     expect(replacementPillMeta(daysAgo(14), NOW)).toEqual({ text: 'Актуальна', tone: 'success' });
   });

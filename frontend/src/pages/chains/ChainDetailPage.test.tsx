@@ -1,5 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useSearchParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -89,6 +90,12 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
   };
 }
 
+// целевой экран перехода: показывает, какой вариант получения доехал до схемы участников
+function OptionProbe() {
+  const [searchParams] = useSearchParams();
+  return <div>участники: {searchParams.get('option')}</div>;
+}
+
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -174,8 +181,7 @@ describe('ChainDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
   });
 
-  // у нескольких кандидатов на получаемом звене кнопка отклика действует на кандидата
-  // с pending-откликом, иначе на первого без отклика — тот же выбор, что на карточке
+  // кнопка отклика действует на кандидата с pending-откликом, иначе на первого без отклика
   it('responds to the first candidate without a vote when the pool has several', async () => {
     const pool = Array.from({ length: 2 }, (_, index) => ({
       clusterId: 2,
@@ -201,6 +207,58 @@ describe('ChainDetailPage', () => {
     );
   });
 
+  it('shows the option from the link when the receiving pool has several', async () => {
+    const pool = Array.from({ length: 2 }, (_, index) => ({
+      clusterId: 2,
+      requestId: 202 + index,
+      position: 2,
+      isCurrentUser: false,
+      offeredItemId: 20 + index,
+      offeredItemTitle: `Фотоаппарат ${index + 1}`,
+      offeredItemDescription: '',
+      wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
+    }));
+    mockedVote.mockResolvedValue({
+      chainId: 1,
+      requestId: 101,
+      targetRequestId: 203,
+      vote: 'pending',
+      votedAt: '2026-08-08T12:00:00Z',
+      chainStatus: 'CANDIDATE',
+    });
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ participants: [makeChain().participants[0], ...pool] })),
+    );
+
+    renderWithProviders(<ChainDetailPage />, { initialEntries: ['/chains/1?option=203'] });
+
+    expect(screen.getByRole('heading', { name: 'Фотоаппарат 2', level: 2 })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
+    await waitFor(() =>
+      expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 203 }),
+    );
+  });
+
+  it('carries the selected option to the participants screen', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+
+    renderWithProviders(<ChainDetailPage />, {
+      initialEntries: ['/chains/1?option=202'],
+      routes: [
+        {
+          path: '/chains/1/participants',
+          element: <OptionProbe />,
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Посмотреть всю цепочку' }));
+    expect(await screen.findByText('участники: 202')).toBeInTheDocument();
+  });
+
   it('shows the assembled pill once the chain is proposed', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 
@@ -223,7 +281,6 @@ describe('ChainDetailPage', () => {
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
   });
 
-  // на замороженной цепочке пора отправлять товар: вместо «Перейти к сделке» — «Требуется действие»
   it('shows the hard lock plaque and the shipment action on a frozen chain', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
 
@@ -258,8 +315,7 @@ describe('ChainDetailPage', () => {
     expect(screen.getByText('2/2 согласий')).toBeInTheDocument();
   });
 
-  // таймер дедлайна ответа — атрибут PROPOSED-цепочки (TimerRow); на FROZEN то же
-  // поле несёт дедлайн отправки товара, поэтому строка гейтится по статусу
+  // на FROZEN то же поле несёт дедлайн отправки, поэтому строка гейтится по статусу
   it('shows the response deadline on a proposed chain', () => {
     vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
     mockedUseChain.mockReturnValue(
@@ -282,8 +338,7 @@ describe('ChainDetailPage', () => {
     expect(screen.queryByText(/Осталось .* на ответ/)).not.toBeInTheDocument();
   });
 
-  // просрочку снимает сам GET /chains/{id}: без перезапроса в момент дедлайна строка таймера
-  // исчезает, а «Требуются действия» живёт до следующего 30-секундного опроса
+  // без перезапроса в момент дедлайна «Требуются действия» живёт до следующего опроса
   it('refetches the chain right after the response deadline passes', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
@@ -296,7 +351,6 @@ describe('ChainDetailPage', () => {
     renderWithProviders(<ChainDetailPage />, { client });
     expect(invalidate).not.toHaveBeenCalled();
 
-    // минута до дедлайна и запас на расхождение часов клиента и сервера
     act(() => {
       vi.advanceTimersByTime(62_000);
     });
@@ -316,8 +370,7 @@ describe('ChainDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
-  // пул кандидатов может быть больше длины цепочки: счётчик участников берём из length,
-  // а получаемое звено с несколькими кандидатами деградирует в счётчик вариантов
+  // пул кандидатов может быть больше длины цепочки — счётчик участников берём из length
   it('counts participants by chain length, not by the pool size', () => {
     const pool = Array.from({ length: 5 }, (_, index) => ({
       clusterId: 2,
@@ -342,7 +395,7 @@ describe('ChainDetailPage', () => {
     ).toBeInTheDocument();
   });
 
-  // непустой пул замен — единственный признак вакансии: в теле цепочки отказ не виден (TZ §2)
+  // непустой пул замен — единственный признак вакансии: в теле цепочки отказ не виден
   it('offers to pick a replacement when the pool is not empty', async () => {
     const user = userEvent.setup();
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
@@ -371,7 +424,7 @@ describe('ChainDetailPage', () => {
   });
 
   // выключенный react-query-запрос сохраняет прошлые данные: без проверки статуса баннер
-  // «выберите замену» пережил бы подтверждение замены и висел бы на собранной цепочке
+  // пережил бы подтверждение замены
   it('drops the replacement banner once the chain leaves PROPOSED', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
     mockReplacements([
