@@ -1,0 +1,196 @@
+{
+  "info": {
+    "name": "Tricky Exchanger - Phone Direction Regression",
+    "description": "Регрессия ложных цепочек внутри одной категории. Воспроизводит случай Samsung Galaxy S24 → iPhone и двух похожих iPhone → Samsung Galaxy S24. Ожидание: создаётся одна CANDIDATE-цепочка длины 2, где оба iPhone находятся в одном кластере и являются альтернативами одной позиции. Тройка Samsung → iPhone → iPhone → Samsung не допускается. Запускайте папку сверху вниз.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "password", "value": "TestPass123!" },
+    { "key": "run_id", "value": "" },
+    { "key": "samsung_token", "value": "" },
+    { "key": "pro_max_token", "value": "" },
+    { "key": "iphone_token", "value": "" },
+    { "key": "samsung_item_id", "value": "" },
+    { "key": "pro_max_item_id", "value": "" },
+    { "key": "iphone_item_id", "value": "" },
+    { "key": "samsung_offer_id", "value": "" },
+    { "key": "pro_max_offer_id", "value": "" },
+    { "key": "iphone_offer_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - Samsung and two iPhone offers must produce only direct exchanges",
+      "item": [
+        {
+          "name": "Initialize isolated run",
+          "request": { "method": "GET", "url": "{{base_url}}/healthz" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('API is reachable', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('run_id', Date.now().toString());"
+          ]}}]
+        },
+        {
+          "name": "Register Samsung owner",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Samsung owner\",\n  \"email\": \"samsung-owner-{{run_id}}@example.test\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": "{{base_url}}/api/v1/auth/register"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Samsung owner registered', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('samsung_token', pm.response.json().token);"
+          ]}}]
+        },
+        {
+          "name": "Register iPhone 14 Pro Max owner",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"iPhone Pro Max owner\",\n  \"email\": \"iphone-pro-max-owner-{{run_id}}@example.test\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": "{{base_url}}/api/v1/auth/register"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('iPhone 14 Pro Max owner registered', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('pro_max_token', pm.response.json().token);"
+          ]}}]
+        },
+        {
+          "name": "Register iPhone 14 owner",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"iPhone owner\",\n  \"email\": \"iphone-owner-{{run_id}}@example.test\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": "{{base_url}}/api/v1/auth/register"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('iPhone 14 owner registered', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('iphone_token', pm.response.json().token);"
+          ]}}]
+        },
+        {
+          "name": "Create Samsung Galaxy S24 item",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{samsung_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Samsung Galaxy S24\",\n  \"description\": \"Смартфон Samsung Galaxy S24 в отличном состоянии (носился в чехле)\",\n  \"category\": \"Телефоны\"\n}" },
+            "url": "{{base_url}}/api/v1/items"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Samsung item created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('samsung_item_id', pm.response.json().id);"
+          ]}}]
+        },
+        {
+          "name": "Create iPhone 14 Pro Max item",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{pro_max_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"iPhone 14 Pro Max\",\n  \"description\": \"Почти новый Apple iPhone 14 Pro Max, пара царапин на экране\",\n  \"category\": \"Телефоны\"\n}" },
+            "url": "{{base_url}}/api/v1/items"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('iPhone 14 Pro Max item created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('pro_max_item_id', pm.response.json().id);"
+          ]}}]
+        },
+        {
+          "name": "Create iPhone 14 item",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{iphone_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"iPhone 14\",\n  \"description\": \"Смартфон айфон 14 Смартфон айфон 14 Смартфон айфон 14\",\n  \"category\": \"Телефоны\"\n}" },
+            "url": "{{base_url}}/api/v1/items"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('iPhone 14 item created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('iphone_item_id', pm.response.json().id);"
+          ]}}]
+        },
+        {
+          "name": "Samsung wants iPhone 14 Pro Max",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{samsung_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"offeredItemId\": {{samsung_item_id}},\n  \"wantedDescription\": \"Смартфон iPhone 14 Pro Max в хорошем состоянии, цвет не важен\",\n  \"wantedCategory\": \"Телефоны\"\n}" },
+            "url": "{{base_url}}/api/v1/exchange-offers"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Samsung offer created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('samsung_offer_id', pm.response.json().id);"
+          ]}}]
+        },
+        {
+          "name": "iPhone 14 Pro Max wants Samsung Galaxy S24",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{pro_max_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"offeredItemId\": {{pro_max_item_id}},\n  \"wantedDescription\": \"Хочу смартфон Samsung Galaxy S24 вместо своего айфона\",\n  \"wantedCategory\": \"Телефоны\"\n}" },
+            "url": "{{base_url}}/api/v1/exchange-offers"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('iPhone 14 Pro Max offer created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('pro_max_offer_id', pm.response.json().id);"
+          ]}}]
+        },
+        {
+          "name": "iPhone 14 wants Samsung Galaxy S24",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{iphone_token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"offeredItemId\": {{iphone_item_id}},\n  \"wantedDescription\": \"samsung galaxy s24 самсунг галакси с24 смартфон хочу\",\n  \"wantedCategory\": \"Телефоны\"\n}" },
+            "url": "{{base_url}}/api/v1/exchange-offers"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('iPhone 14 offer created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('iphone_offer_id', pm.response.json().id);"
+          ]}}]
+        },
+        {
+          "name": "Assert one direct CANDIDATE with two iPhone alternatives",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{samsung_token}}" }],
+            "url": "{{base_url}}/api/v1/chains"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Chains endpoint is successful', () => pm.response.to.have.status(200));",
+            "const chains = pm.response.json();",
+            "const samsung = Number(pm.collectionVariables.get('samsung_offer_id'));",
+            "const proMax = Number(pm.collectionVariables.get('pro_max_offer_id'));",
+            "const iphone = Number(pm.collectionVariables.get('iphone_offer_id'));",
+            "const allIDs = [samsung, proMax, iphone];",
+            "const related = chains.filter(chain => chain.status === 'CANDIDATE' && chain.participants.some(p => allIDs.includes(Number(p.requestId))));",
+            "pm.test('Exactly one candidate cluster cycle is built', () => pm.expect(related, JSON.stringify(chains)).to.have.length(1));",
+            "const chain = related[0];",
+            "pm.test('Candidate is a direct exchange of length 2', () => pm.expect(chain.length, JSON.stringify(chain)).to.eql(2));",
+            "const samsungParticipant = chain.participants.find(p => Number(p.requestId) === samsung);",
+            "const proMaxParticipant = chain.participants.find(p => Number(p.requestId) === proMax);",
+            "const iphoneParticipant = chain.participants.find(p => Number(p.requestId) === iphone);",
+            "pm.test('All three current-run offers are visible', () => { pm.expect(samsungParticipant).to.exist; pm.expect(proMaxParticipant).to.exist; pm.expect(iphoneParticipant).to.exist; });",
+            "pm.test('Both iPhones are alternatives at one position and Samsung is the opposite position', () => { pm.expect(proMaxParticipant.clusterId).to.eql(iphoneParticipant.clusterId); pm.expect(proMaxParticipant.position).to.eql(iphoneParticipant.position); pm.expect(samsungParticipant.clusterId).to.not.eql(proMaxParticipant.clusterId); pm.expect(samsungParticipant.position).to.not.eql(proMaxParticipant.position); });"
+          ]}}]
+        },
+        {
+          "name": "Assert no invalid iPhone-to-iPhone or three-person chain",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{samsung_token}}" }],
+            "url": "{{base_url}}/api/v1/chains"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Chains endpoint is successful', () => pm.response.to.have.status(200));",
+            "const chains = pm.response.json();",
+            "const samsung = Number(pm.collectionVariables.get('samsung_offer_id'));",
+            "const proMax = Number(pm.collectionVariables.get('pro_max_offer_id'));",
+            "const iphone = Number(pm.collectionVariables.get('iphone_offer_id'));",
+            "const contains = (chain, id) => chain.participants.some(p => Number(p.requestId) === id);",
+            "pm.test('No three-person Samsung/iPhone/iPhone cycle exists', () => pm.expect(chains.some(chain => chain.status === 'CANDIDATE' && chain.length === 3 && contains(chain, samsung) && contains(chain, proMax) && contains(chain, iphone)), JSON.stringify(chains)).to.eql(false));",
+            "pm.test('The iPhone offers never occupy different positions', () => pm.expect(chains.some(chain => { const pro = chain.participants.find(p => Number(p.requestId) === proMax); const phone = chain.participants.find(p => Number(p.requestId) === iphone); return pro && phone && pro.position !== phone.position; }), JSON.stringify(chains)).to.eql(false));"
+          ]}}]
+        }
+      ]
+    }
+  ]
+}

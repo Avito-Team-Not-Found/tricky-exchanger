@@ -146,8 +146,9 @@ const querySimilarOffers = `
 	SELECT request_id, item_id, owner_id,
 	       LEAST(offer_score, want_score) AS score
 	FROM nearest_by_offer
-	WHERE offer_score >= $6
-	  AND want_score >= $6
+	WHERE offer_score >= $6::float8 - $8::float8
+	  AND want_score >= $6::float8 - $8::float8
+	  AND (offer_score + want_score) / 2 >= $6::float8
 	  AND (
 		$4 <> ''
 		OR (offer_score + want_score) / 2 >=
