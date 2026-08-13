@@ -8,7 +8,7 @@ import { ReplacementCandidateCard, useReplacementSelection } from '@features/cha
 import { type Chain, type ReplacementOption } from '@entities/chain';
 
 import { plural } from '@shared/lib/plural';
-import { EmptyState, ErrorState, StatusTag } from '@shared/ui';
+import { EmptyState, ErrorState, FadeInImage, StatusTag } from '@shared/ui';
 
 import { ChainPageHeader } from './ChainPageHeader';
 
@@ -244,7 +244,7 @@ function SucceededView({ chain }: { chain?: Chain }) {
             <span key={participant.requestId} className="replacement-summary__link">
               <span className="replacement-summary__thumb" aria-hidden>
                 {participant.imageUrl ? (
-                  <img
+                  <FadeInImage
                     className="replacement-summary__thumb-img"
                     src={participant.imageUrl}
                     alt=""

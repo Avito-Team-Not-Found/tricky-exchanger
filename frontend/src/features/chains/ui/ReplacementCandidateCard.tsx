@@ -1,5 +1,7 @@
 import type { ReplacementOption } from '@entities/chain';
 
+import { FadeInImage } from '@shared/ui';
+
 import { replacementPillMeta } from '../model/replacementPill';
 
 import './ReplacementCandidateCard.scss';
@@ -33,7 +35,11 @@ export function ReplacementCandidateCard({
     <>
       <div className="replacement-card__photo">
         {option.imageUrl ? (
-          <img className="replacement-card__image" src={option.imageUrl} alt={option.title} />
+          <FadeInImage
+            className="replacement-card__image"
+            src={option.imageUrl}
+            alt={option.title}
+          />
         ) : (
           <span className="replacement-card__photo-placeholder" aria-hidden>
             {option.title[0] ?? ''}

@@ -5,6 +5,8 @@ import { App as AntApp, Button, Input, Select } from 'antd';
 
 import { myParticipant, sourceParticipant, type Chain } from '@entities/chain';
 
+import { FadeInImage } from '@shared/ui';
+
 import { PICKUP_POINTS } from '../model/pickupPoints';
 import { useDealFulfillment } from '../model/useDealFulfillment';
 import { useDealPhoto } from '../model/useDealPhoto';
@@ -140,7 +142,11 @@ export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewP
         </p>
         {photo ? (
           <div className="deal-ship__photo-preview">
-            <img className="deal-ship__photo-img" src={photo} alt="Фото товара перед отправкой" />
+            <FadeInImage
+              className="deal-ship__photo-img"
+              src={photo}
+              alt="Фото товара перед отправкой"
+            />
             <div className="deal-ship__photo-controls">
               <Button size="small" onClick={pickFile}>
                 Заменить фото

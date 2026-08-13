@@ -54,7 +54,9 @@ describe('RequestCard', () => {
       />,
     );
 
-    const img = container.querySelector('.request-card__image') as HTMLImageElement;
+    const img = container.querySelector(
+      '.request-card__image .fade-in-image__fg',
+    ) as HTMLImageElement;
     expect(img).toHaveAttribute('src', 'http://localhost:9000/items/1/photo.png');
   });
 
