@@ -97,7 +97,6 @@ describe('RequestForm', () => {
 
   it('shows the search result with zero candidate chains and keeps the request searchable', async () => {
     const user = userEvent.setup();
-    // матчинг на бэкенде — заглушка, поэтому заявка остаётся в поиске (SCRUM-50 §5)
     mockedCreateRequest.mockResolvedValue({
       id: 2,
       status: 'ACTIVE',

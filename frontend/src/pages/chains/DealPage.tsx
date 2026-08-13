@@ -11,9 +11,9 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Экран сделки (макет 4.9, /chains/:chainId/deal): ветка по dealState. На недоступной цепочке
+// Экран сделки (/chains/:chainId/deal): ветка по dealState. На недоступной цепочке
 // (CANDIDATE/PROPOSED/BROKEN) сделки ещё нет — редирект на детали цепочки; весь второй раунд
-// живёт на 4.6/4.7/4.8, ссылки на /deal оттуда не появляется (DEAL-PLAN.md §6F).
+// живёт на остальных экранах цепочки, ссылки на /deal оттуда не появляется.
 export function DealPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();

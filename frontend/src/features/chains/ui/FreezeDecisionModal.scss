@@ -28,7 +28,7 @@
   color: var(--color-text-primary);
 }
 
-// «Да», «Нет» и «Отмена» — block-кнопки в столбик (макет 4.6, SOFT-LOCK §6.1)
+// «Да», «Нет» и «Отмена» — block-кнопки в столбик
 .freeze-decision__actions {
   display: flex;
   flex-direction: column;

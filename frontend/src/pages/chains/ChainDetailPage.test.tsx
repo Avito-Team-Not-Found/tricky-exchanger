@@ -155,8 +155,8 @@ describe('ChainDetailPage', () => {
     expect(screen.getByText('2/2 согласий')).toBeInTheDocument();
   });
 
-  // таймер дедлайна ответа — атрибут PROPOSED-цепочки (макет 4.7, TimerRow); на FROZEN то же
-  // поле несёт дедлайн отправки товара, поэтому строка гейтится по статусу (DEADLINE-PLAN §1.5)
+  // таймер дедлайна ответа — атрибут PROPOSED-цепочки (TimerRow); на FROZEN то же
+  // поле несёт дедлайн отправки товара, поэтому строка гейтится по статусу
   it('shows the response deadline on a proposed chain', () => {
     vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
     mockedUseChain.mockReturnValue(
@@ -213,7 +213,7 @@ describe('ChainDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
-  // пул кандидатов может быть больше длины цепочки (§3.1): счётчик участников берём из length,
+  // пул кандидатов может быть больше длины цепочки: счётчик участников берём из length,
   // а получаемое звено с несколькими кандидатами деградирует в счётчик вариантов
   it('counts participants by chain length, not by the pool size', () => {
     const pool = Array.from({ length: 5 }, (_, index) => ({

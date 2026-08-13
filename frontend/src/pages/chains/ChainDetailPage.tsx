@@ -11,8 +11,8 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Экран цепочки (макет 4.7): товар, который пользователь получит в обмене, и переход к схеме
-// участников (макет 4.8). Заголовок страницы — название получаемого товара (макет 4.7).
+// Экран цепочки: товар, который пользователь получит в обмене, и переход к схеме
+// участников. Заголовок страницы — название получаемого товара.
 export function ChainDetailPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();

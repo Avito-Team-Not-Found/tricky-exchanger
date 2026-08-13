@@ -19,7 +19,7 @@ export function ExchangeRequestsPage() {
 
   const requests = data ?? [];
 
-  // тап по карточке открывает «Варианты обмена» (PROJECT.md §2.6), редактирование — кнопкой на той странице
+  // тап по карточке открывает «Варианты обмена», редактирование — кнопкой на той странице
   const openRequest = (requestId: number) => navigate(`/exchange-requests/${requestId}`);
 
   return (

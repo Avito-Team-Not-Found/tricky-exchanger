@@ -102,7 +102,7 @@ describe('DealPage', () => {
     const { container } = renderDealPage();
 
     expect(screen.getByText('Все товары доставлены')).toBeInTheDocument();
-    // «Все товары доставлены» — зелёный блок из макета 4.9
+    // «Все товары доставлены» — зелёный блок
     const hero = container.querySelector('.deal-hero--success');
     expect(hero).toBeInTheDocument();
     expect(hero).toHaveTextContent('Все товары доставлены');

@@ -11,8 +11,8 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Схема участников цепочки (макет 4.8): строки по звеньям кольца с пулом кандидатов и
-// откликами на получаемом звене. Открывается с экрана товара цепочки (макет 4.7).
+// Схема участников цепочки: строки по звеньям кольца с пулом кандидатов и
+// откликами на получаемом звене. Открывается с экрана товара цепочки.
 export function ChainParticipantsPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();

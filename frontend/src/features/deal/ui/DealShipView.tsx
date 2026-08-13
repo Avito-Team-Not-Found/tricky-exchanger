@@ -24,7 +24,7 @@ interface DealShipViewProps {
 }
 
 // осталось до дедлайна отправки: freezeDeadlineAt ставится при заморозке в now + 24ч (freeze_service),
-// таймер показывает фактическое значение, а не нарисованные в макете 47:58 (DEAL-PLAN.md §2.2)
+// таймер показывает фактическое значение, а не условные 47:58
 function deadlineLabel(deadlineAt: string | null): string | null {
   if (!deadlineAt) return null;
   const remaining = new Date(deadlineAt).getTime() - Date.now();
@@ -33,10 +33,9 @@ function deadlineLabel(deadlineAt: string | null): string | null {
   return `Осталось ${Math.floor(totalMinutes / 60)} ч ${totalMinutes % 60} мин на отправку`;
 }
 
-// Экран «Отправка товара» (макет 4.9): таймер дедлайна, что отправляется/получается, шаги
+// Экран «Отправка товара»: таймер дедлайна, что отправляется/получается, шаги
 // инструкции, ПВЗ, обязательное фото упаковки и кнопка-заглушка «Я отправил товар» — в проде её
-// дёргала бы интеграция с Авито (DEAL-PLAN.md §4.5). Фото и адрес ПВЗ бэкенд не хранит —
-// клиентские имитации в localStorage (DEAL-PLAN.md §4.1–4.2).
+// дёргала бы интеграция с Авито. Фото и адрес ПВЗ бэкенд не хранит — клиентские имитации в localStorage.
 export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewProps) {
   const { message, modal } = AntApp.useApp();
   const me = myParticipant(chain);
@@ -188,7 +187,7 @@ export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewP
   );
 }
 
-// Выбор ПВЗ: список зашитых адресов + вариант «Другой адрес» с полем ввода (DEAL-PLAN.md §4.1).
+// Выбор ПВЗ: список зашитых адресов + вариант «Другой адрес» с полем ввода.
 // Пустой адрес не сохраняется — «Сохранить» с пустым полем просто закрывает модалку.
 function DealPickupForm({
   current,

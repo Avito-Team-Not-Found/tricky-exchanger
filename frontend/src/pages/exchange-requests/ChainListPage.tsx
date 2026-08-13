@@ -20,10 +20,10 @@ import { EmptyState, ErrorState } from '@shared/ui';
 
 import './ChainListPage.scss';
 
-// Варианты обмена по заявке (PROJECT.md §2.6, макет 4.6): пул кандидатов следующего звена,
+// Варианты обмена по заявке: пул кандидатов следующего звена,
 // на каждого можно откликнуться или отозвать отклик. Когда одна из цепочек замкнулась
 // (PROPOSED) или заморожена — остальные варианты приглушены и недоступны; при заморозке
-// сделки дополнительно баннер, а кнопка правки запроса заблокирована (SOFT-LOCK §5.4/§5.5).
+// сделки дополнительно баннер, а кнопка правки запроса заблокирована.
 export function ChainListPage() {
   const { requestId: requestIdParam } = useParams<{ requestId: string }>();
   const navigate = useNavigate();
@@ -101,7 +101,7 @@ export function ChainListPage() {
   }
 
   // бэкенд отдаёт цепочки по дате создания (repository.go: ORDER BY c.created_at DESC), а экран
-  // показывает их по убыванию вероятности (DESIGN.md §4.6). Сортировка стабильная, поэтому
+  // показывает их по убыванию вероятности. Сортировка стабильная, поэтому
   // варианты одной цепочки сохраняют исходный порядок между собой
   const receiveOptions = options
     .flatMap((entry) => entry.receiveOptions.map((option) => ({ entry, option })))
@@ -113,7 +113,7 @@ export function ChainListPage() {
       <div className="chain-list-page__body">
         {request ? (
           <div className="chain-list-page__summary">
-            {/* миниатюра отдаваемого товара — 40×40, radius-sm (макет 4.6) */}
+            {/* миниатюра отдаваемого товара — 40×40, radius-sm */}
             {offeredItem?.imageUrl ? (
               <img className="chain-list-page__summary-photo" src={offeredItem.imageUrl} alt="" />
             ) : (

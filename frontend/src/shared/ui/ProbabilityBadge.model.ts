@@ -13,7 +13,7 @@ export const PROBABILITY_META: Record<ProbabilityLevel, ProbabilityMeta> = {
   low: { label: 'Низкая', token: 'colorError' },
 };
 
-// Уровень вероятности успеха цепочки (DESIGN.md §1.3): пороги взяты из мока (90/72/55)
+// Уровень вероятности успеха цепочки: score — доля 0..1, пороги 0.8/0.6
 export function probabilityLevel(score: number): ProbabilityLevel {
   if (score >= 0.8) return 'high';
   if (score >= 0.6) return 'medium';

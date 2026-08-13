@@ -68,7 +68,7 @@ export function AppRoutes() {
         <Route path="/chains/:chainId/deal/:mode" element={<DealStatusPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
-      {/* смена пароля — отдельный экран без таб-бара/бокового меню (DESIGN.md §4.8) */}
+      {/* смена пароля — отдельный экран без таб-бара/бокового меню */}
       <Route
         path="/profile/password"
         element={

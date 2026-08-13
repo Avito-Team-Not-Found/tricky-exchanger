@@ -39,7 +39,7 @@ export function RequestCard({ request, offeredItemImageUrl, onClick }: RequestCa
       </div>
       <div className="request-card__col">
         {/* отдаваемый товар и статус — в одной строке, желаемое — во второй со стрелкой вместо
-            подписей: на узких экранах всё вместе в одну строку не умещается (DESIGN.md §4.5) */}
+            подписей: на узких экранах всё вместе в одну строку не умещается */}
         <div className="request-card__head">
           <span className="request-card__offer">{request.offeredItemTitle ?? 'Товар удалён'}</span>
           <StatusTag tone={statusMeta.tone}>{statusMeta.label}</StatusTag>

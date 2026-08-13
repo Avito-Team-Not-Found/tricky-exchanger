@@ -12,7 +12,7 @@
   color: var(--color-text-primary);
 }
 
-// пока отправитель не принёс товар, все точки серые — подпись объясняет причину текстом (§1.8)
+// пока отправитель не принёс товар, все точки серые — подпись объясняет причину текстом
 .deal-tracking__waiting {
   margin: 0;
   font-size: var(--font-size-caption);
@@ -34,7 +34,7 @@
   gap: var(--spacing-sm);
 }
 
-// колонка маркера: точка 12px и соединительная линия 2px между этапами (макет 4.9)
+// колонка маркера: точка 12px и соединительная линия 2px между этапами
 .deal-tracking__marker {
   display: flex;
   flex-direction: column;
@@ -59,7 +59,7 @@
   background: var(--color-border-default);
 }
 
-// пройденный этап — зелёная точка; последний пройденный — жирный с акцентной точкой (§4.3)
+// пройденный этап — зелёная точка; последний пройденный — жирный с акцентной точкой
 .deal-tracking__step--passed .deal-tracking__dot {
   background: var(--color-status-success);
 }

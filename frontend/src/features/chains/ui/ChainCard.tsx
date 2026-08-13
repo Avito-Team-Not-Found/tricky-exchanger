@@ -37,12 +37,8 @@ interface ChainCardProps {
   onDecline: (chainId: number) => void;
 }
 
-// Карточка варианта обмена (макет 4.6): один конкретный получаемый товар из пула кандидатов
-// следующего звена. На кандидатной цепочке действие — «Откликнуться» / «Отозвать отклик» по
-// option.vote; на PROPOSED — «Требуются действия» (подтверждение второго раунда), а после «Я
-// подумаю» — inline-«Да»/«Нет» без модалки; на FROZEN — «Требуется действие» (пора отправлять),
-// на IN_PROGRESS/COMPLETED — «Перейти к сделке», бейдж «N/M согласий» (SOFT-LOCK §5.1–5.5). Мой
-// голос второго раунда на этом экране — vote единственного receiveOption (SOFT-LOCK §3.3).
+// Карточка варианта обмена: один конкретный получаемый товар из пула кандидатов
+// следующего звена; действие и бейджи зависят от статуса цепочки
 export function ChainCard({
   options,
   option,
@@ -64,9 +60,9 @@ export function ChainCard({
   const hardLocked = isHardLocked(options.status);
   // на FROZEN сделка началась, товар ещё не отправлен — вместо «Перейти к сделке» зовём действовать
   const shipRequired = needsShipment(options.status);
-  // на COMPLETED жёсткой блокировки уже нет, но сделку открыть нужно — кнопка по hasDeal (§5.1)
+  // на COMPLETED жёсткой блокировки уже нет, но сделку открыть нужно — кнопка по hasDeal
   const dealReady = hasDeal(options.status) && !shipRequired;
-  // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя (§3.3);
+  // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя;
   // на CANDIDATE то же поле — отклик первого раунда, myVote им не считается
   const myVote: VoteValue | undefined = options.status === 'PROPOSED' ? option.vote : undefined;
   const thinking = myVote === 'thinking';

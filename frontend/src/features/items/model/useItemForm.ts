@@ -39,7 +39,7 @@ export function useItemForm(itemId?: number) {
   const [dirty, setDirty] = useState(false);
 
   const isEdit = Boolean(itemId);
-  // создание товара из формы запроса: после сохранения возвращаемся в неё с выбором нового товара (PROJECT.md §2.4)
+  // создание товара из формы запроса: после сохранения возвращаемся в неё с выбором нового товара
   const returnToRequest = searchParams.get('returnTo') === 'request';
   const isLoading = isEdit && itemQuery.isPending;
   const isLoadError = isEdit && itemQuery.isError;
@@ -159,7 +159,6 @@ export function useItemForm(itemId?: number) {
   }
 
   async function handleSubmit(values: ItemFormValues) {
-    // повторная отправка при активном запросе недопустима — кнопка блокируется на время сабмита
     if (submitting) return;
     setSubmitting(true);
     try {
@@ -177,7 +176,7 @@ export function useItemForm(itemId?: number) {
         // карточки заявок показывают название отдаваемого товара (offeredItemTitle) —
         // без инвалидации список заявок ещё минуту показывает старое название
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
-        // правка после «создать товар из формы запроса» (PROJECT.md §2.4): сохранение
+        // правка после «создать товар из формы запроса»: сохранение
         // фото возвращает в форму запроса с выбором этого товара, а не в список товаров
         navigate(returnToRequest ? `/exchange-requests/new?offeredItemId=${itemId}` : '/products');
       } else {
@@ -211,7 +210,7 @@ export function useItemForm(itemId?: number) {
         // иначе ещё минуту показывают старый текст
         queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
         if (!isEdit) {
-          // возврат в форму запроса сохраняется (PROJECT.md §2.4): после дозагрузки фото
+          // возврат в форму запроса сохраняется: после дозагрузки фото
           // пользователь снова попадёт в форму запроса с выбором созданного товара
           navigate(
             returnToRequest

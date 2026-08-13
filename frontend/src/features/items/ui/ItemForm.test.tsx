@@ -193,7 +193,7 @@ describe('ItemForm', () => {
     expect(screen.getByTitle('Антиквариат')).toBeInTheDocument();
   });
 
-  // создание товара из формы запроса (PROJECT.md §2.4): фото не загрузилось — товар уже создан,
+  // создание товара из формы запроса: фото не загрузилось — товар уже создан,
   // ведём на редактирование, сохраняя returnTo=request, чтобы после дозагрузки вернуться в запрос
   it('redirects to edit with returnTo=request when the photo upload fails in create-from-request', async () => {
     const user = userEvent.setup();
