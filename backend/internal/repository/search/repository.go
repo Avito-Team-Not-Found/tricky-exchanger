@@ -149,11 +149,12 @@ const querySimilarOffers = `
 	WHERE offer_score >= $6::float8 - $8::float8
 	  AND want_score >= $6::float8 - $8::float8
 	  AND (offer_score + want_score) / 2 >= $6::float8
-	  AND (
-		$4 <> ''
-		OR (offer_score + want_score) / 2 >=
-		   (offer_to_want_score + want_to_offer_score) / 2 + $8
-	  )
+	  -- Category equality is necessary, but it does not prove that two offers
+	  -- have the same direction. For example, "AULA -> Red Square" and
+	  -- "Red Square -> AULA" both belong to the keyboards category, yet they
+	  -- are reciprocal requests and must stay in separate graph vertices.
+	  AND (offer_score + want_score) / 2 >=
+	      (offer_to_want_score + want_to_offer_score) / 2 + $8
 	ORDER BY offer_score + want_score DESC, request_id
 `
 

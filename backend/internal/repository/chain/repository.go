@@ -2207,6 +2207,45 @@ func (r *Postgres) ListChainsContainingRequest(ctx context.Context, tx database.
 
 // DeleteChain удаляет цепочку целиком каскадом: голоса, участники, саму цепочку.
 func (r *Postgres) DeleteChain(ctx context.Context, tx database.Tx, chainID int64) error {
+	rows, err := tx.Query(ctx, `
+		SELECT DISTINCT request_id
+		FROM (
+			SELECT request_id
+			FROM chain_participants
+			WHERE chain_id = $1
+			UNION
+			SELECT request_id
+			FROM votes
+			WHERE chain_id = $1
+		) AS affected_requests
+	`, chainID)
+	if err != nil {
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
+	}
+	affectedRequestIDs := make([]int64, 0)
+	for rows.Next() {
+		var requestID int64
+		if err := rows.Scan(&requestID); err != nil {
+			rows.Close()
+			if mappedErr, ok := repository.DBErrToErr(err); ok {
+				return mappedErr
+			}
+			return err
+		}
+		affectedRequestIDs = append(affectedRequestIDs, requestID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
+	}
+	rows.Close()
+
 	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1`, chainID); err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
 			return mappedErr
@@ -2224,6 +2263,15 @@ func (r *Postgres) DeleteChain(ctx context.Context, tx database.Tx, chainID int6
 			return mappedErr
 		}
 		return err
+	}
+	// A request may have responded to more than one candidate chain. Deleting
+	// one candidate removes its votes, but must release the soft lock only when
+	// no pending vote remains in any other chain. Otherwise the UI can show an
+	// IN_PROPOSAL request for which no live exchange option exists.
+	for _, requestID := range affectedRequestIDs {
+		if err := r.RestoreActiveIfNoPendingVotes(ctx, tx, requestID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
