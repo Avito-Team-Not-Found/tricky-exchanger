@@ -21,7 +21,7 @@
   "item": [
     {
       "name": "00 - Регистрация участников",
-      "description": "Запустите папку один раз перед подготовкой цепочек. Каждый запрос создаёт отдельного пользователя и сохраняет его токен и email в переменные коллекции.",
+      "description": "Самодостаточная подготовка базовой цепочки A → B → C → A: регистрация, товары, заявки, первичные отклики и один confirmation A. В конце chain_id сохранён, цепочка находится в PROPOSED с 1/3 подтверждений — готова для папки 01.",
       "item": [
         {
           "name": "Register participant A",
@@ -103,6 +103,74 @@
             "body": { "mode": "raw", "raw": "{\"fullName\":\"Replacement Participant C\",\"email\":\"{{registration_email}}\",\"password\":\"{{test_password}}\"}" },
             "url": "{{base_url}}/api/v1/auth/register"
           }
+        },
+        {
+          "name": "A - Create Nintendo Switch item",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('A item created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+            "pm.collectionVariables.set('item_a', pm.response.json().id);"
+          ] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_a}}" }], "body": { "mode": "raw", "raw": "{\"title\":\"Nintendo Switch OLED\",\"description\":\"Игровая консоль Nintendo Switch OLED в отличном состоянии.\",\"category\":\"Игры и приставки\"}" }, "url": "{{base_url}}/api/v1/items" }
+        },
+        {
+          "name": "B - Create iPad item",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('B item created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+            "pm.collectionVariables.set('item_b', pm.response.json().id);"
+          ] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_b}}" }], "body": { "mode": "raw", "raw": "{\"title\":\"Apple iPad Air 5\",\"description\":\"Планшет Apple iPad Air пятого поколения, бережное использование.\",\"category\":\"Планшеты и электронные книги\"}" }, "url": "{{base_url}}/api/v1/items" }
+        },
+        {
+          "name": "C - Create Kindle item",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('C item created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+            "pm.collectionVariables.set('item_c', pm.response.json().id);"
+          ] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_c}}" }], "body": { "mode": "raw", "raw": "{\"title\":\"Amazon Kindle Paperwhite\",\"description\":\"Электронная книга Kindle Paperwhite с подсветкой.\",\"category\":\"Книги и журналы\"}" }, "url": "{{base_url}}/api/v1/items" }
+        },
+        {
+          "name": "A - Create offer: Switch for iPad",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('A offer created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));", "pm.collectionVariables.set('offer_a', pm.response.json().id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_a}}" }], "body": { "mode": "raw", "raw": "{\"offeredItemId\":{{item_a}},\"wantedDescription\":\"Apple iPad Air 5\",\"wantedCategory\":\"Планшеты и электронные книги\"}" }, "url": "{{base_url}}/api/v1/exchange-offers" }
+        },
+        {
+          "name": "B - Create offer: iPad for Kindle",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('B offer created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));", "pm.collectionVariables.set('offer_b', pm.response.json().id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_b}}" }], "body": { "mode": "raw", "raw": "{\"offeredItemId\":{{item_b}},\"wantedDescription\":\"Amazon Kindle Paperwhite\",\"wantedCategory\":\"Книги и журналы\"}" }, "url": "{{base_url}}/api/v1/exchange-offers" }
+        },
+        {
+          "name": "C - Create offer: Kindle for Switch",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('C offer created', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));", "pm.collectionVariables.set('offer_c', pm.response.json().id);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_c}}" }], "body": { "mode": "raw", "raw": "{\"offeredItemId\":{{item_c}},\"wantedDescription\":\"Nintendo Switch OLED\",\"wantedCategory\":\"Игры и приставки\"}" }, "url": "{{base_url}}/api/v1/exchange-offers" }
+        },
+        {
+          "name": "A - Find prepared candidate chain",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Candidate list loaded', () => pm.response.to.have.status(200));",
+            "const ids = ['offer_a', 'offer_b', 'offer_c'].map(key => Number(pm.collectionVariables.get(key)));",
+            "const chain = pm.response.json().find(c => c.status === 'CANDIDATE' && ids.every(id => c.participants.some(p => Number(p.requestId) === id)));",
+            "pm.test('Exact A-B-C candidate found', () => pm.expect(chain).to.exist);",
+            "if (chain) pm.collectionVariables.set('chain_id', chain.id);"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains" }
+        },
+        {
+          "name": "A - Initial vote for B",
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_a}}" }], "body": { "mode": "raw", "raw": "{\"requestId\":{{offer_a}},\"targetRequestId\":{{offer_b}}}" }, "url": "{{base_url}}/api/v1/chains/{{chain_id}}/votes" }
+        },
+        {
+          "name": "B - Initial vote for C",
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_b}}" }], "body": { "mode": "raw", "raw": "{\"requestId\":{{offer_b}},\"targetRequestId\":{{offer_c}}}" }, "url": "{{base_url}}/api/v1/chains/{{chain_id}}/votes" }
+        },
+        {
+          "name": "C - Initial vote for A and propose chain",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Chain became PROPOSED', () => pm.expect(pm.response.json().chainStatus).to.eql('PROPOSED'));"] } }],
+          "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token_c}}" }], "body": { "mode": "raw", "raw": "{\"requestId\":{{offer_c}},\"targetRequestId\":{{offer_a}}}" }, "url": "{{base_url}}/api/v1/chains/{{chain_id}}/votes" }
+        },
+        {
+          "name": "A - Confirm for following scenarios",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('A confirmation accepted', () => pm.expect(pm.response.code).to.eql(200));", "pm.test('Still PROPOSED with 1/3', () => pm.expect(pm.response.json().status).to.eql('PROPOSED'));"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}/confirm" }
         }
       ]
     },
