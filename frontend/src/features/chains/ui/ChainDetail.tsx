@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { theme, Button } from 'antd';
 
 import {
@@ -30,16 +28,13 @@ import './ChainDetail.scss';
 
 interface ChainDetailProps {
   chain: Chain;
-  isVoting: boolean;
-  onVote: (candidate: ChainParticipant, active: boolean) => void;
   onConfirm: () => void;
   onProceed: () => void;
 }
 
-// Схема цепочки: строки по звеньям кольца. Отклик доступен только на кандидатах
-// позиции receivesFromPosition и только пока цепочка CANDIDATE; у собранной — пилюля «Цепочка
-// собрана», бейдж согласий и действие второго раунда
-export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: ChainDetailProps) {
+// Схема цепочки: строки по звеньям кольца. Отклик на кандидата — на экране товара цепочки
+// и на карточке списка, здесь только статусы откликов и действие второго раунда
+export function ChainDetail({ chain, onConfirm, onProceed }: ChainDetailProps) {
   const { token } = theme.useToken();
   const links = chainLinks(chain);
   const me = myParticipant(chain);
@@ -48,32 +43,6 @@ export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: C
   // голос привязан к цели голосования, а не к голосующему: решение участника позиции p лежит
   // в vote следующей по кольцу позиции; на CANDIDATE сдвига нет — там это отклики
   const showConfirmPills = chain.status !== 'CANDIDATE';
-  const receiveLink = links.find((link) => link.position === chain.receivesFromPosition);
-  const receiveCandidates = receiveLink?.candidates ?? [];
-
-  // выделение по умолчанию — кандидат с откликом, иначе первый без отклика; явный выбор
-  // пользователя (override) переживает refetch после отклика/отзыва и остаётся в силе
-  const [overrideRequestId, setOverrideRequestId] = useState<number | null>(null);
-  const preferredRequestId =
-    receiveCandidates.find((candidate) => candidate.vote === 'pending')?.requestId ??
-    receiveCandidates.find((candidate) => !candidate.vote)?.requestId ??
-    receiveCandidates[0]?.requestId ??
-    null;
-  const selectedRequestId =
-    overrideRequestId !== null &&
-    receiveCandidates.some((candidate) => candidate.requestId === overrideRequestId)
-      ? overrideRequestId
-      : preferredRequestId;
-
-  const selectedCandidate = receiveCandidates.find(
-    (candidate) => candidate.requestId === selectedRequestId,
-  );
-  const active = selectedCandidate ? !selectedCandidate.vote : false;
-  // действие доступно только на кандидатной цепочке и только для отклика либо pending-отклика —
-  // у принятого/отклонённого отклика кнопки нет (DELETE их не снимает)
-  const showActions = Boolean(
-    selectedCandidate && canVote && (active || selectedCandidate.vote === 'pending'),
-  );
 
   return (
     <div className="chain-detail">
@@ -92,26 +61,10 @@ export function ChainDetail({ chain, isVoting, onVote, onConfirm, onProceed }: C
             isReceiveLink={link.position === chain.receivesFromPosition}
             canVote={canVote}
             confirmVote={showConfirmPills ? confirmVoteAt(chain, link.position) : undefined}
-            selectedRequestId={selectedRequestId}
-            onSelectCandidate={setOverrideRequestId}
           />
         ))}
       </ul>
-      {showActions && selectedCandidate ? (
-        <div className="chain-detail__actions">
-          <Button
-            className="chain-detail__action"
-            type="primary"
-            size="large"
-            block
-            danger={!active}
-            loading={isVoting}
-            onClick={() => onVote(selectedCandidate, active)}
-          >
-            {active ? 'Откликнуться' : 'Отозвать отклик'}
-          </Button>
-        </div>
-      ) : needsMyAction(chain) ? (
+      {needsMyAction(chain) ? (
         <Button
           className="chain-detail__action"
           type="primary"
@@ -150,19 +103,9 @@ interface ChainLinkRowProps {
   isReceiveLink: boolean;
   canVote: boolean;
   confirmVote?: VoteValue | null;
-  selectedRequestId: number | null;
-  onSelectCandidate: (requestId: number) => void;
 }
 
-function ChainLinkRow({
-  link,
-  isMine,
-  isReceiveLink,
-  canVote,
-  confirmVote,
-  selectedRequestId,
-  onSelectCandidate,
-}: ChainLinkRowProps) {
+function ChainLinkRow({ link, isMine, isReceiveLink, canVote, confirmVote }: ChainLinkRowProps) {
   const alias = participantAlias(link.position);
   const label = isMine ? 'Вы' : alias.name;
   const { candidates } = link;
@@ -181,23 +124,13 @@ function ChainLinkRow({
       </div>
 
       {candidates.length === 1 ? (
-        <ChainLinkItem
-          participant={candidates[0]}
-          canVote={canVote}
-          selected={isReceiveLink && candidates[0].requestId === selectedRequestId}
-          onSelect={isReceiveLink ? () => onSelectCandidate(candidates[0].requestId) : undefined}
-        />
+        <ChainLinkItem participant={candidates[0]} canVote={canVote} />
       ) : isReceiveLink ? (
-        // на получаемом звене каждый кандидат откликается отдельно — здесь пул показан полностью
+        // на получаемом звене пул показан полностью — у каждой записи свой статус отклика
         <ul className="chain-detail__candidates">
           {candidates.map((candidate) => (
             <li key={candidate.requestId} className="chain-detail__candidate">
-              <ChainLinkItem
-                participant={candidate}
-                canVote={canVote}
-                selected={candidate.requestId === selectedRequestId}
-                onSelect={() => onSelectCandidate(candidate.requestId)}
-              />
+              <ChainLinkItem participant={candidate} canVote={canVote} />
             </li>
           ))}
         </ul>
@@ -224,35 +157,15 @@ function ConfirmVotePill({ vote }: { vote: VoteValue | null }) {
 interface ChainLinkItemProps {
   participant: ChainParticipant;
   canVote: boolean;
-  selected: boolean;
-  onSelect?: () => void;
 }
 
 // Одна запись кандидата в звене: миниатюра, товар и «что хочет взамен», статус отклика.
-// На получаемом звене запись выбираемая (radio-строка) — действие применяется к выбранной
-// из нижнего блока; на остальных звеньях запись только для просмотра. Пилюли первого раунда
-// на собранной цепочке не показываются — там у vote другой смысл.
-function ChainLinkItem({ participant, canVote, selected, onSelect }: ChainLinkItemProps) {
+// Пилюли первого раунда на собранной цепочке не показываются — там у vote другой смысл.
+function ChainLinkItem({ participant, canVote }: ChainLinkItemProps) {
   const voteMeta = canVote && participant.vote ? VOTE_META[participant.vote] : null;
-  const className = `chain-detail__item${selected ? ' chain-detail__item--selected' : ''}${
-    onSelect ? ' chain-detail__item--selectable' : ''
-  }`;
 
   return (
-    <div
-      className={className}
-      role={onSelect ? 'radio' : undefined}
-      aria-checked={onSelect ? selected : undefined}
-      tabIndex={onSelect ? 0 : undefined}
-      onClick={onSelect}
-      onKeyDown={(event) => {
-        if (!onSelect) return;
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-    >
+    <div className="chain-detail__item">
       <span
         className={`chain-detail__thumb${participant.imageUrl ? '' : ' chain-detail__thumb--empty'}`}
         aria-hidden

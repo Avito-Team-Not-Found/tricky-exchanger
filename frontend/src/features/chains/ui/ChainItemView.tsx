@@ -11,6 +11,7 @@ import {
   needsShipment,
   receivesItem,
   type Chain,
+  type ChainParticipant,
 } from '@entities/chain';
 
 import { plural } from '@shared/lib/plural';
@@ -23,15 +24,20 @@ import './ChainItemView.scss';
 
 interface ChainItemViewProps {
   chain: Chain;
+  isVoting: boolean;
+  onVote: (candidate: ChainParticipant, active: boolean) => void;
   onOpenParticipants: () => void;
   onConfirm: () => void;
   onProceed: () => void;
 }
 
-// Экран цепочки: товар, который пользователь получит в обмене, его описание
-// и переход к схеме участников; действие зависит от статуса цепочки
+// Экран цепочки: товар, который пользователь получит в обмене, его описание,
+// отклик на кандидата получаемого звена и переход к схеме участников;
+// действие зависит от статуса цепочки
 export function ChainItemView({
   chain,
+  isVoting,
+  onVote,
   onOpenParticipants,
   onConfirm,
   onProceed,
@@ -42,6 +48,15 @@ export function ChainItemView({
   const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);
   const shipRequired = needsShipment(chain.status);
+  // кандидат, на которого действует отклик: при pending-отклике кнопка становится
+  // «Отозвать отклик», при отсутствии отклика — «Откликнуться» (как на карточке списка);
+  // при approved/rejected отклика кнопки нет (DELETE их не снимает)
+  const voteCandidate =
+    received.find((candidate) => candidate.vote === 'pending') ??
+    received.find((candidate) => !candidate.vote) ??
+    null;
+  const canVote = chain.status === 'CANDIDATE' && voteCandidate !== null;
+  const withdraw = voteCandidate?.vote === 'pending';
 
   return (
     <div className="chain-item">
@@ -92,7 +107,19 @@ export function ChainItemView({
         <Button className="chain-item__details" size="large" block onClick={onOpenParticipants}>
           Посмотреть всю цепочку
         </Button>
-        {needsMyAction(chain) ? (
+        {canVote && voteCandidate ? (
+          <Button
+            className="chain-item__action"
+            type="primary"
+            size="large"
+            block
+            danger={withdraw}
+            loading={isVoting}
+            onClick={() => onVote(voteCandidate, !withdraw)}
+          >
+            {withdraw ? 'Отозвать отклик' : 'Откликнуться'}
+          </Button>
+        ) : needsMyAction(chain) ? (
           <Button
             className="chain-item__action"
             type="primary"

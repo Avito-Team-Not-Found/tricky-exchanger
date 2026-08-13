@@ -1,7 +1,7 @@
 import { Alert, Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainItemView, useChainConfirm, useProposalExpiry } from '@features/chains';
+import { ChainItemView, useChainConfirm, useChainVote, useProposalExpiry } from '@features/chains';
 
 import { receivesItem, useChain, useReplacements } from '@entities/chain';
 
@@ -18,6 +18,7 @@ export function ChainDetailPage() {
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
+  const { confirmVote, isVoting } = useChainVote(refetch);
   const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
 
   // баннер входа в замену — единственный корректный признак вакансии (TZ §2): в теле цепочки
@@ -75,6 +76,17 @@ export function ChainDetailPage() {
             ) : null}
             <ChainItemView
               chain={chain}
+              isVoting={isVoting}
+              onVote={(candidate, active) =>
+                confirmVote(
+                  {
+                    chainId: chain.id,
+                    requestId: chain.currentRequestId,
+                    targetRequestId: candidate.requestId,
+                  },
+                  active,
+                )
+              }
               onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
               onConfirm={() => openConfirm(chain.id)}
               onProceed={() => navigate(`/chains/${chain.id}/deal`)}

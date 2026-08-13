@@ -6,6 +6,8 @@ import {
   confirmChain,
   useChain,
   useReplacements,
+  voteForRequest,
+  withdrawVote,
   type Chain,
   type ReplacementOption,
 } from '@entities/chain';
@@ -20,11 +22,20 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, useChain: vi.fn(), confirmChain: vi.fn(), useReplacements: vi.fn() };
+  return {
+    ...actual,
+    useChain: vi.fn(),
+    confirmChain: vi.fn(),
+    voteForRequest: vi.fn(),
+    withdrawVote: vi.fn(),
+    useReplacements: vi.fn(),
+  };
 });
 
 const mockedUseChain = vi.mocked(useChain);
 const mockedConfirm = vi.mocked(confirmChain);
+const mockedVote = vi.mocked(voteForRequest);
+const mockedWithdraw = vi.mocked(withdrawVote);
 const mockedUseReplacements = vi.mocked(useReplacements);
 
 function mockReplacements(options: ReplacementOption[]) {
@@ -113,6 +124,81 @@ describe('ChainDetailPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Посмотреть всю цепочку' }));
     expect(await screen.findByText('участники')).toBeInTheDocument();
+  });
+
+  it('responds to the received candidate from the chain page', async () => {
+    mockedVote.mockResolvedValue({
+      chainId: 1,
+      requestId: 101,
+      targetRequestId: 202,
+      vote: 'pending',
+      votedAt: '2026-08-08T12:00:00Z',
+      chainStatus: 'CANDIDATE',
+    });
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
+    await waitFor(() =>
+      expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
+    );
+  });
+
+  it('withdraws the pending vote from the chain page through the modal', async () => {
+    mockedWithdraw.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const chain = makeChain();
+    chain.participants[1].vote = 'pending';
+    mockedUseChain.mockReturnValue(queryOk(chain));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Отозвать отклик' }));
+    await user.click(await screen.findByRole('button', { name: 'Да, отозвать' }));
+
+    await waitFor(() =>
+      expect(mockedWithdraw).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
+    );
+  });
+
+  it('hides the vote button once the respond is approved or rejected', () => {
+    const chain = makeChain();
+    chain.participants[1].vote = 'approved';
+    mockedUseChain.mockReturnValue(queryOk(chain));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
+  });
+
+  // у нескольких кандидатов на получаемом звене кнопка отклика действует на кандидата
+  // с pending-откликом, иначе на первого без отклика — тот же выбор, что на карточке
+  it('responds to the first candidate without a vote when the pool has several', async () => {
+    const pool = Array.from({ length: 2 }, (_, index) => ({
+      clusterId: 2,
+      requestId: 202 + index,
+      position: 2,
+      isCurrentUser: false,
+      offeredItemId: 20 + index,
+      offeredItemTitle: `Фотоаппарат ${index + 1}`,
+      offeredItemDescription: '',
+      wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
+    }));
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ participants: [makeChain().participants[0], ...pool] })),
+    );
+
+    renderWithProviders(<ChainDetailPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
+    await waitFor(() =>
+      expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
+    );
   });
 
   it('shows the assembled pill once the chain is proposed', () => {

@@ -28,7 +28,7 @@
   color: var(--color-text-primary);
 }
 
-// «Да», «Нет» и «Отмена» — block-кнопки в столбик
+// «Да», «Отказ» и «Закрыть» — block-кнопки в столбик
 .freeze-decision__actions {
   display: flex;
   flex-direction: column;

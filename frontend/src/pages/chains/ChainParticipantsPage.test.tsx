@@ -5,8 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   confirmChain,
   useChain,
-  voteForRequest,
-  withdrawVote,
   type Chain,
   type ChainParticipant,
 } from '@entities/chain';
@@ -24,15 +22,11 @@ vi.mock('@entities/chain', async (importOriginal) => {
   return {
     ...actual,
     useChain: vi.fn(),
-    voteForRequest: vi.fn(),
-    withdrawVote: vi.fn(),
     confirmChain: vi.fn(),
   };
 });
 
 const mockedUseChain = vi.mocked(useChain);
-const mockedVote = vi.mocked(voteForRequest);
-const mockedWithdraw = vi.mocked(withdrawVote);
 const mockedConfirm = vi.mocked(confirmChain);
 
 const MY_CANDIDATE: ChainParticipant = {
@@ -114,12 +108,10 @@ describe('ChainParticipantsPage', () => {
     renderWithProviders(<ChainParticipantsPage />);
 
     expect(screen.getByText('3 варианта')).toBeInTheDocument();
-    // пул не получаемого звена сворачивается, а единственный кандидат получаемого звена
-    // по-прежнему откликаем — кнопка внизу остаётся одна
-    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
+    expect(screen.getByText('Зеркальный фотоаппарат Canon')).toBeInTheDocument();
   });
 
-  it('offers a vote on every candidate of the receiving position', () => {
+  it('shows all candidates of the receiving position', () => {
     const pool = [
       {
         clusterId: 2,
@@ -149,35 +141,11 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // каждая строка получаемого пула выбираемая, кнопка внизу одна — действует на выбранного
-    expect(screen.getAllByRole('radio')).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(1);
+    expect(screen.getByText('Зеркальный фотоаппарат Canon')).toBeInTheDocument();
+    expect(screen.getByText('Планшет')).toBeInTheDocument();
   });
 
-  it('casts a vote for the concrete candidate', async () => {
-    mockedVote.mockResolvedValue({
-      chainId: 1,
-      requestId: 101,
-      targetRequestId: 202,
-      vote: 'pending',
-      votedAt: '2026-08-08T12:00:00Z',
-      chainStatus: 'CANDIDATE',
-    });
-    const user = userEvent.setup();
-    mockedUseChain.mockReturnValue(queryOk(makeChain()));
-
-    renderWithProviders(<ChainParticipantsPage />);
-
-    await user.click(screen.getAllByRole('radio')[0]);
-    await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
-    await waitFor(() =>
-      expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
-    );
-  });
-
-  it('shows the vote status and withdraws it through the confirmation modal', async () => {
-    mockedWithdraw.mockResolvedValue(undefined);
-    const user = userEvent.setup();
+  it('shows the vote status of a responded candidate', () => {
     const voted = makeChain();
     voted.participants[1].vote = 'pending';
     mockedUseChain.mockReturnValue(queryOk(voted));
@@ -186,14 +154,6 @@ describe('ChainParticipantsPage', () => {
 
     // статус отклика — пилюля с подписью текстом, чтобы он читался не только по цвету
     expect(screen.getByText('Ожидаем')).toBeInTheDocument();
-
-    await user.click(screen.getAllByRole('radio')[0]);
-    await user.click(screen.getByRole('button', { name: 'Отозвать отклик' }));
-    await user.click(await screen.findByRole('button', { name: 'Да, отозвать' }));
-
-    await waitFor(() =>
-      expect(mockedWithdraw).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
-    );
   });
 
   // на собранной цепочке пилюли первого раунда заменяются голосами второго раунда, а отклики

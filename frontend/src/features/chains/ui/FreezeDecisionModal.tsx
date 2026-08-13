@@ -10,7 +10,7 @@ export interface FreezeDecisionModalProps {
   onDecline: () => void;
 }
 
-// Модалка «Готовность к сделке»: заголовок, вопрос и кнопки «Да»/«Отказ»/«Отмена»
+// Модалка «Готовность к сделке»: заголовок, вопрос и кнопки «Да»/«Отказ»/«Закрыть»
 // блоками в колонку. `title` confirm-модалки не используется — он рендерится дважды (в заголовке
 // модалки и в confirm-title), поэтому заголовок живёт здесь же в контенте.
 export function FreezeDecisionModal({ onClose, onConfirm, onDecline }: FreezeDecisionModalProps) {
@@ -29,7 +29,9 @@ export function FreezeDecisionModal({ onClose, onConfirm, onDecline }: FreezeDec
   return (
     <div className="freeze-decision">
       <p className="freeze-decision__title">Все участники найдены</p>
-      <p className="freeze-decision__subtitle">Это действие заблокирует другие цепочки</p>
+      <p className="freeze-decision__subtitle">
+        Подтверждение окончательное: отменить его будет нельзя
+      </p>
       <p className="freeze-decision__question">Приступаем к сделке?</p>
       <div className="freeze-decision__actions">
         <Button type="primary" block loading={pending} onClick={confirm}>
@@ -39,7 +41,7 @@ export function FreezeDecisionModal({ onClose, onConfirm, onDecline }: FreezeDec
           Отказ
         </Button>
         <Button block disabled={pending} onClick={onClose}>
-          Отмена
+          Закрыть
         </Button>
       </div>
     </div>
