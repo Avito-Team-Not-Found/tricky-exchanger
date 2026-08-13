@@ -24,8 +24,8 @@ export interface CreateRequestPayload {
   wantedCategory?: string;
 }
 
-// Обёртка, которую раньше отдавал мок; реальный бэкенд возвращает только объект
-// заявки, а матчинг пока заглушка — createdCandidateChains всегда 0 (SCRUM-50 §5).
+// Результат создания заявки: объект заявки плюс число найденных кандидатных цепочек. Бэкенд
+// это число в ответе создания не отдаёт — фронт подтягивает его через exchange-options
 export interface CreateRequestResult {
   request: ExchangeRequest;
   matching: { createdCandidateChains: number };
