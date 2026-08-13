@@ -1,7 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 
-import { voteForRequest, withdrawVote, type ChainVoteResult } from '@entities/chain';
+import {
+  invalidateChainQueries,
+  voteForRequest,
+  withdrawVote,
+  type ChainVoteResult,
+} from '@entities/chain';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
@@ -11,7 +16,7 @@ export interface VoteTarget {
   targetRequestId: number;
 }
 
-// Отклик на конкретную заявку следующего звена — одна мутация-тумблер (PROJECT.md §4.5):
+// Отклик на конкретную заявку следующего звена — одна мутация-тумблер:
 // PUT ставит отклик, DELETE снимает. Когда кольцо откликов замыкается, цепочку переводит
 // в PROPOSED сам бэкенд — статус читаем из ответа и инвалидируем кэш, иначе экран покажет
 // устаревшие действия и словит 409.
@@ -37,14 +42,11 @@ export function useChainVote(onConflict?: () => void) {
       } else {
         message.success('Отклик отправлен');
       }
-      // и список вариантов, и открытая карточка цепочки показывают свежие статусы откликов
-      queryClient.invalidateQueries({ queryKey: ['chains'] });
-      queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
+      // статус цепочки мог устареть (кольцо мог замкнуть кто-то другой) — перезагружаем данные
+      invalidateChainQueries(queryClient);
     },
     onError: (error) => {
-      // статус цепочки мог устареть (например, кольцо замкнул кто-то другой) — перезагружаем данные
-      queryClient.invalidateQueries({ queryKey: ['chains'] });
-      queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
+      invalidateChainQueries(queryClient);
       message.error(
         getErrorMessage(
           error,
@@ -61,7 +63,7 @@ export function useChainVote(onConflict?: () => void) {
     },
   });
 
-  // отклик обратим, поэтому подтверждение нужно только на его отзыве (DESIGN.md §2.8)
+  // отклик обратим, поэтому подтверждение нужно только на его отзыве
   function confirmVote(target: VoteTarget, active: boolean) {
     if (active) {
       mutation.mutate({ ...target, active: true });
