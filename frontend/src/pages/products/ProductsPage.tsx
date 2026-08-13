@@ -32,7 +32,7 @@ export function ProductsPage() {
       </div>
 
       {isLoading ? (
-        <div className="products-page__grid motion-cascade">
+        <div className="products-page__grid">
           {Array.from({ length: 6 }, (_, index) => (
             <Skeleton
               key={index}

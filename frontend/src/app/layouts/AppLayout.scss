@@ -85,7 +85,6 @@
   font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
   text-decoration: none;
-  transition: color var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .app-nav-item--active {
@@ -148,9 +147,6 @@
     min-height: 44px;
     border-radius: var(--radius-md);
     font-size: var(--font-size-body);
-    transition:
-      color var(--motion-duration-base) var(--motion-ease-standard),
-      background-color var(--motion-duration-base) var(--motion-ease-standard);
   }
 
   .app-side-menu .app-nav-item--active {

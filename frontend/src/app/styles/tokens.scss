@@ -35,7 +35,6 @@
 
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-ease-out: cubic-bezier(0, 0, 0, 1);
-  --motion-ease-in: cubic-bezier(0.3, 0, 1, 1);
 
   --motion-slide-distance: 16px;
 }
@@ -63,7 +62,7 @@
   --color-status-warning: #faad14;
   --color-status-error: #ff4d4f;
   --color-border-default: #3a3a3a;
-  /* в тёмной теме элевация карточек передаётся отличием bg-card от bg-page, тень не рисуется (DESIGN.md §1.6) */
+  /* в тёмной теме элевация карточек передаётся отличием bg-card от bg-page, тень не рисуется */
   --shadow-card: none;
 }
 

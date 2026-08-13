@@ -55,11 +55,10 @@ a {
 :focus-visible {
   outline: 2px solid var(--color-accent-primary);
   outline-offset: 2px;
-  transition: outline-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 // antd рендерит иконку показать/скрыть пароль без своего хит-бокса (~14×14px реального клика) —
-// расширяем зону через padding, гасим её же negative margin, чтобы верстка не сдвинулась (DESIGN.md §1.8)
+// расширяем зону через padding, гасим её же negative margin, чтобы верстка не сдвинулась
 .ant-input-password-icon {
   display: inline-flex;
   align-items: center;

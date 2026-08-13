@@ -1,4 +1,4 @@
-// Переиспользуемые keyframes и утилитарные классы движения (DESIGN.md §1.10).
+// Переиспользуемые keyframes и утилитарные классы движения.
 
 @keyframes motion-fade-in {
   from {
@@ -56,7 +56,7 @@
   }
 }
 
-// только вход: без data-router старый экран размонтируется мгновенно и анимировать его нечем
+// только вход: обёртка <Outlet /> перемонтируется по key={pathname}, старый экран снимается мгновенно
 .motion-screen {
   animation: motion-slide-in-right var(--motion-duration-slow) var(--motion-ease-out);
 }

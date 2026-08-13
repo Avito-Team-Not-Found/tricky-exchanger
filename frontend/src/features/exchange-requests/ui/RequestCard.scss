@@ -6,9 +6,7 @@
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition:
-    box-shadow var(--motion-duration-base) var(--motion-ease-standard),
-    transform var(--motion-duration-fast) var(--motion-ease-standard);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 .request-card:active {
