@@ -33,6 +33,7 @@ func (r *Postgres) FreezeChain(ctx context.Context, tx database.Tx, chainID int6
 		UPDATE chains
 		SET status = 'FROZEN',
 		    freeze_deadline_at = $2,
+		    invalid_reason = NULL,
 		    version = version + 1,
 		    updated_at = NOW()
 		WHERE id = $1 AND status = 'PROPOSED'

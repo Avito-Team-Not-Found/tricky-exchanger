@@ -84,6 +84,7 @@ func (r *Postgres) ExpireProposalIfDue(ctx context.Context, tx database.Tx, chai
 		UPDATE chains
 		SET status = 'CANDIDATE',
 		    freeze_deadline_at = NULL,
+		    invalid_reason = 'deadline_expired',
 		    version = version + 1,
 		    updated_at = NOW()
 		WHERE id = $1
@@ -108,6 +109,18 @@ func (r *Postgres) ExpireProposalIfDue(ctx context.Context, tx database.Tx, chai
 		  AND eo.status IN ('IN_PROPOSAL', 'LOCKED')
 	`, chainID); err != nil {
 		return false, fmt.Errorf("release expired proposal requests: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE items AS item
+		SET status = 'ACTIVE', updated_at = NOW()
+		WHERE item.id IN (
+			SELECT offer.offered_item_id
+			FROM chain_participants participant
+			JOIN exchange_offers offer ON offer.id = participant.request_id
+			WHERE participant.chain_id = $1
+		) AND item.status = 'UNAVAILABLE'
+	`, chainID); err != nil {
+		return false, fmt.Errorf("release expired proposal items: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE votes
@@ -185,6 +198,16 @@ func (r *Postgres) ExpireFrozenIfDue(
 	requestIDs, err := r.LoadChainRequestIDs(ctx, tx, chainID)
 	if err != nil {
 		return nil, false, err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO chain_deadline_events (chain_id, user_id, reason)
+		SELECT DISTINCT cp.chain_id, offer.user_id, 'deadline_expired'
+		FROM chain_participants cp
+		JOIN exchange_offers offer ON offer.id = cp.request_id
+		WHERE cp.chain_id = $1
+		ON CONFLICT DO NOTHING
+	`, chainID); err != nil {
+		return nil, false, fmt.Errorf("record expired chain notification: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE exchange_offers
