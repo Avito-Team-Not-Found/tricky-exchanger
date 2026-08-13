@@ -1,10 +1,15 @@
 import { useSyncExternalStore } from 'react';
 
-import { formatRemaining, type ChainStatus } from '@entities/chain';
+import { formatRemaining } from '@entities/chain';
 
 // тик раз в 30 с — минутного разрешения достаточно («47 ч 58 мин»), а серверный рефетч
 // обновляет сам дедлайн; без локального тика строка застыла бы
 const TICK_MS = 30_000;
+
+// Что именно считаем: дедлайн ответа второго раунда (PROPOSED) или дедлайн отправки товара
+// (FROZEN). Оба поля — freezeDeadlineAt, смысл зависит от статуса, поэтому выбор остаётся за
+// вызывающим компонентом; null — таймер не показываем (подписка-заглушка не заводит интервал)
+export type DeadlinePurpose = 'response' | 'ship';
 
 // Общие часы всех таймеров экрана. Внешний стор, а не useState с интервалом, по двум причинам:
 // читать Date.now() прямо в рендере нельзя (правила чистоты React), а снимок обновляется ещё и
@@ -33,7 +38,7 @@ function subscribeToClock(listener: () => void): () => void {
   };
 }
 
-// вне PROPOSED считать нечего — подписка-заглушка не заводит интервал
+// показывать нечего — подписка-заглушка не заводит интервал
 function subscribeToNothing(): () => void {
   return () => {};
 }
@@ -42,14 +47,13 @@ function readClock(): number {
   return snapshot;
 }
 
-// Метка дедлайна ответа по собранной цепочке: «Осталось 47 ч 58 мин на ответ».
-// Гейт по PROPOSED обязателен: freezeDeadlineAt переиспользуется стадией FROZEN под дедлайн
-// отправки товара (FreezeTTL) — вне PROPOSED показывать таймер нельзя
+// Остаток до дедлайна: «47 ч 58 мин» (формат — formatRemaining). Субтитл «на ответ»/«на отправку»
+// добавляет компонент (DeadlineRow), хук возвращает только само время.
 export function useDeadlineLabel(
-  status: ChainStatus,
+  purpose: DeadlinePurpose | null,
   deadlineAt: string | null | undefined,
 ): string | null {
-  const visible = status === 'PROPOSED' && Boolean(deadlineAt);
+  const visible = purpose !== null && Boolean(deadlineAt);
   const now = useSyncExternalStore(visible ? subscribeToClock : subscribeToNothing, readClock);
 
   return visible ? formatRemaining(deadlineAt, now) : null;

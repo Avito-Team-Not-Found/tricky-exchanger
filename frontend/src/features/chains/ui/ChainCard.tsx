@@ -25,8 +25,8 @@ interface ChainCardProps {
   // число согласий второго раунда: на FROZEN всегда = length, на PROPOSED — из деталей цепочки
   // (exchange-options его не отдаёт); undefined — бейдж не рисуем, пока счётчик неизвестен
   approvedCount?: number;
-  // дедлайн ответа по собранной цепочке — тоже из детали (GET /chains/{id}), exchange-options
-  // его не отдаёт; без даты таймер не рисуем
+  // дедлайн цепочки — из детали (GET /chains/{id}), exchange-options его не отдаёт: на PROPOSED
+  // это дедлайн ответа, на FROZEN — дедлайн отправки; без даты таймер не рисуем
   deadlineAt?: string | null;
   onOpen: () => void;
   onProceed: () => void;
@@ -119,7 +119,7 @@ export function ChainCard({
         )}
       </div>
 
-      <DeadlineRow status={options.status} deadlineAt={deadlineAt} />
+      <DeadlineRow status={options.status} deadlineAt={deadlineAt} showShipDeadline />
 
       {canAct ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>

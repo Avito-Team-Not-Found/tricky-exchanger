@@ -425,6 +425,50 @@ describe('ChainListPage', () => {
     expect(screen.getByText('Осталось 47 ч 58 мин на ответ')).toBeInTheDocument();
   });
 
+  // на FROZEN freezeDeadlineAt несёт дедлайн отправки товара — тот же TimerRow, но «на отправку»;
+  // дедлайн, как и у PROPOSED, берётся из детали цепочки
+  it('shows the shipping deadline on a frozen card from the chain details', () => {
+    vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(
+      queryOk([
+        makeOptions({
+          status: 'FROZEN',
+          length: 2,
+          receiveOptions: [
+            {
+              clusterId: 2,
+              requestId: 202,
+              itemId: 2,
+              title: 'Фотоаппарат',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+      ]),
+    );
+    mockedUseChains.mockReturnValue([
+      {
+        data: {
+          id: 1,
+          status: 'FROZEN',
+          length: 2,
+          currentPosition: 1,
+          receivesFromPosition: 2,
+          freezeDeadlineAt: '2026-08-12T09:58:00Z',
+          participants: [],
+        },
+        isPending: false,
+        isError: false,
+      },
+    ] as never);
+
+    renderWithProviders(<ChainListPage />);
+
+    expect(screen.getByText('Осталось 47 ч 58 мин на отправку')).toBeInTheDocument();
+  });
+
   // exchange-options не откатывает просроченный PROPOSED — это делает только GET /chains/{id}.
   // Пока список не перезапрошен, карточка держит живые кнопки второго раунда и confirm ловит 410
   it('refetches the offer list once the chain detail has expired the proposal', async () => {
