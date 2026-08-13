@@ -21,7 +21,6 @@ interface ChainCardProps {
   options: ExchangeOptions;
   option: ExchangeOption;
   isVoting: boolean;
-  isConfirming: boolean;
   locked?: boolean;
   // число согласий второго раунда: на FROZEN всегда = length, на PROPOSED — из деталей цепочки
   // (exchange-options его не отдаёт); undefined — бейдж не рисуем, пока счётчик неизвестен
@@ -33,8 +32,6 @@ interface ChainCardProps {
   onProceed: () => void;
   onVote: (active: boolean) => void;
   onConfirm: (chainId: number) => void;
-  onConfirmNow: (chainId: number) => void;
-  onDecline: (chainId: number) => void;
 }
 
 // Карточка варианта обмена: один конкретный получаемый товар из пула кандидатов
@@ -43,7 +40,6 @@ export function ChainCard({
   options,
   option,
   isVoting,
-  isConfirming,
   locked,
   approvedCount,
   deadlineAt,
@@ -51,8 +47,6 @@ export function ChainCard({
   onProceed,
   onVote,
   onConfirm,
-  onConfirmNow,
-  onDecline,
 }: ChainCardProps) {
   const { token } = theme.useToken();
   const canVote = options.status === 'CANDIDATE';
@@ -65,13 +59,12 @@ export function ChainCard({
   // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя;
   // на CANDIDATE то же поле — отклик первого раунда, myVote им не считается
   const myVote: VoteValue | undefined = options.status === 'PROPOSED' ? option.vote : undefined;
-  const thinking = myVote === 'thinking';
   const confirmed = myVote === 'approved';
-  const needsAction = options.status === 'PROPOSED' && !thinking && !confirmed;
+  const needsAction = options.status === 'PROPOSED' && !confirmed;
 
   const className = [
     'chain-card',
-    needsAction || thinking || hardLocked ? 'chain-card--highlight' : '',
+    needsAction || hardLocked ? 'chain-card--highlight' : '',
     locked ? 'chain-card--dimmed' : '',
   ]
     .filter(Boolean)
@@ -154,32 +147,6 @@ export function ChainCard({
               Откликнуться
             </Button>
           )}
-        </div>
-      ) : thinking ? (
-        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
-          <p className="chain-card__hurry" role="status">
-            ⚠ Примите решение как можно скорее!
-          </p>
-          <div className="chain-card__inline">
-            <Button
-              type="primary"
-              block
-              size="large"
-              loading={isConfirming}
-              disabled={locked}
-              onClick={() => onConfirmNow(options.chainId)}
-            >
-              Да
-            </Button>
-            <Button
-              block
-              size="large"
-              disabled={isConfirming || locked}
-              onClick={() => onDecline(options.chainId)}
-            >
-              Нет
-            </Button>
-          </div>
         </div>
       ) : confirmed ? (
         <p className="chain-card__confirmed" role="status">

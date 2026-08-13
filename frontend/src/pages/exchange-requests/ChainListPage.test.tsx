@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   confirmChain,
-  thinkChain,
   useChains,
   useExchangeOptions,
   voteForRequest,
@@ -31,7 +30,6 @@ vi.mock('@entities/chain', async (importOriginal) => {
     voteForRequest: vi.fn(),
     withdrawVote: vi.fn(),
     confirmChain: vi.fn(),
-    thinkChain: vi.fn(),
   };
 });
 
@@ -52,7 +50,6 @@ const mockedUseItems = vi.mocked(useItems);
 const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
 const mockedConfirm = vi.mocked(confirmChain);
-const mockedThink = vi.mocked(thinkChain);
 
 // отдаваемый товар заявки (offeredItemId: 1) — деталь заявки его не отдаёт,
 // ChainListPage берёт его из кеша товаров
@@ -469,8 +466,9 @@ describe('ChainListPage', () => {
     expect(screen.queryByText(/Осталось .* на ответ/)).not.toBeInTheDocument();
   });
 
-  // после «Я подумаю» карточка показывает предупреждение и inline-«Да»/«Нет» без модалки
-  it('turns the proposed card into inline confirm/decline buttons while thinking', () => {
+  // голос thinking клиент больше не выставляет, но по старым данным он приходить может:
+  // решение не принято, значит карточка требует действий на общих основаниях
+  it('keeps the action button on a card with a legacy thinking vote', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     const options = makeOptions({ status: 'PROPOSED' });
     options.receiveOptions[0].vote = 'thinking';
@@ -479,26 +477,8 @@ describe('ChainListPage', () => {
 
     renderWithProviders(<ChainListPage />);
 
-    expect(screen.getAllByText('⚠ Примите решение как можно скорее!')).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Да' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Нет' })).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
-  });
-
-  it('confirms directly from the inline «Да» without the decision modal', async () => {
-    mockedConfirm.mockResolvedValue({ chainId: 1, status: 'PROPOSED' });
-    const user = userEvent.setup();
-    mockedUseRequest.mockReturnValue(queryOk(request));
-    const options = makeOptions({ status: 'PROPOSED' });
-    options.receiveOptions[0].vote = 'thinking';
-    options.receiveOptions[1].vote = 'thinking';
-    mockedUseOptions.mockReturnValue(queryOk([options]));
-
-    renderWithProviders(<ChainListPage />);
-
-    await user.click(screen.getAllByRole('button', { name: 'Да' })[0]);
-    await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
-    expect(screen.queryByText('Все участники найдены')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Требуются действия' })).toHaveLength(2);
+    expect(screen.queryByText('⚠ Примите решение как можно скорее!')).not.toBeInTheDocument();
   });
 
   // подтвердил — кнопки на карточке сменяются статусной строкой
@@ -513,24 +493,6 @@ describe('ChainListPage', () => {
 
     expect(screen.getAllByText('Вы подтвердили · ждём остальных')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
-  });
-
-  // «Я подумаю» в модалке «Готовность к сделке» ведёт на «Вы уверены?», «Да» — на POST /think
-  it('defers the decision via the think modal', async () => {
-    mockedThink.mockResolvedValue({ chainId: 1, vote: 'thinking' });
-    const user = userEvent.setup();
-    mockedUseRequest.mockReturnValue(queryOk(request));
-    mockedUseOptions.mockReturnValue(queryOk([makeOptions({ status: 'PROPOSED' })]));
-
-    renderWithProviders(<ChainListPage />);
-
-    await user.click(screen.getAllByRole('button', { name: 'Требуются действия' })[0]);
-    await user.click(await screen.findByRole('button', { name: 'Я подумаю' }));
-    expect(await screen.findByText('Вы уверены?')).toBeInTheDocument();
-    // предыдущая модалка ещё в DOM на zoom-leave — берём «Да» из последней (новой) модалки
-    await user.click((await screen.findAllByRole('button', { name: 'Да' })).at(-1)!);
-
-    await waitFor(() => expect(mockedThink).toHaveBeenCalledWith(1));
   });
 
   // когда одна из цепочек замкнулась (PROPOSED, требует подтверждения), остальные варианты

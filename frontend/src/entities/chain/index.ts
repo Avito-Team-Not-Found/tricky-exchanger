@@ -42,9 +42,7 @@ export {
   declineChain,
   fetchChain,
   fetchExchangeOptions,
-  thinkChain,
   voteForRequest,
   withdrawVote,
 } from './api';
-export type { ThinkResult } from './api';
 export { chainQueryOptions, useChain, useChains, useExchangeOptions } from './hooks';

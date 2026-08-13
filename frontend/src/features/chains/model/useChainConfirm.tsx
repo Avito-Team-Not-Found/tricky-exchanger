@@ -8,17 +8,14 @@ import {
   confirmChain,
   declineChain,
   invalidateChainQueries,
-  thinkChain,
   type ChainStatus,
   type ConfirmResult,
   type DeclineResult,
-  type ThinkResult,
 } from '@entities/chain';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
 import { FreezeDecisionModal } from '../ui/FreezeDecisionModal';
-import { ThinkDecisionModal } from '../ui/ThinkDecisionModal';
 
 // Отказ не всегда ломает цепочку: сервер откатывает её в CANDIDATE, оставляет PROPOSED
 // с вакансией под замену или распускает совсем — исход виден только из ответа
@@ -30,7 +27,7 @@ const DECLINE_MESSAGE: Partial<Record<ChainStatus, string>> = {
 
 // Подтверждение участия во втором раунде — единая точка для всех экранов цепочки: модалка
 // «Готовность к сделке» + POST /chains/{id}/confirm. Статус из ответа решает тост: PROPOSED —
-// ждём остальных, FROZEN — сделка подтверждена. Отказ («Нет») идёт через отдельное подтверждение
+// ждём остальных, FROZEN — сделка подтверждена. Отказ идёт через отдельное подтверждение
 // и POST /chains/{id}/decline. Любая ошибка инвалидирует кэш и перезагружает данные.
 export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
   const { message, modal } = AntApp.useApp();
@@ -46,15 +43,6 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
       invalidate();
     },
     onError: (error) => handleError(error, 'Не удалось подтвердить участие'),
-  });
-
-  const thinkMutation = useMutation<ThinkResult, Error, number>({
-    mutationFn: (chainId) => thinkChain(chainId),
-    // тоста нет: результат виден на карточке, предвосхищать серверный голос нельзя
-    onSuccess: () => {
-      invalidate();
-    },
-    onError: (error) => handleError(error, 'Не удалось отложить решение'),
   });
 
   const declineMutation = useMutation<DeclineResult, Error, number>({
@@ -139,7 +127,6 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
             await mutation.mutateAsync(chainId);
           }}
           onDecline={() => openDecline(chainId)}
-          onThink={() => openThink(chainId)}
           onClose={closeDecision}
         />
       ),
@@ -147,32 +134,5 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     });
   }
 
-  // «Пока вы думаете»: отдельная модалка поверх первой; «Вернуться» возвращает
-  // к «Готовность к сделке», а не просто закрывает её — решение по цепочке ещё не принято
-  function openThink(chainId: number) {
-    closeDecision();
-    decision.current = modal.confirm({
-      icon: null,
-      centered: true,
-      width: 280,
-      content: (
-        <ThinkDecisionModal
-          onConfirm={async () => {
-            await thinkMutation.mutateAsync(chainId);
-          }}
-          onBack={() => openConfirm(chainId)}
-          onClose={closeDecision}
-        />
-      ),
-      footer: null,
-    });
-  }
-
-  return {
-    openConfirm,
-    // «Да» на карточке в режиме «подумаю» подтверждает без повторной модалки
-    confirmNow: (chainId: number) => mutation.mutate(chainId),
-    openDecline,
-    isConfirming: mutation.isPending,
-  };
+  return { openConfirm };
 }

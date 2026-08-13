@@ -8,18 +8,12 @@ export interface FreezeDecisionModalProps {
   onClose: () => void;
   onConfirm: () => Promise<void>;
   onDecline: () => void;
-  onThink: () => void;
 }
 
-// Модалка «Готовность к сделке»: заголовок, вопрос и кнопки «Да»/«Я подумаю»/«Отказ»/«Отмена»
+// Модалка «Готовность к сделке»: заголовок, вопрос и кнопки «Да»/«Отказ»/«Отмена»
 // блоками в колонку. `title` confirm-модалки не используется — он рендерится дважды (в заголовке
 // модалки и в confirm-title), поэтому заголовок живёт здесь же в контенте.
-export function FreezeDecisionModal({
-  onClose,
-  onConfirm,
-  onDecline,
-  onThink,
-}: FreezeDecisionModalProps) {
+export function FreezeDecisionModal({ onClose, onConfirm, onDecline }: FreezeDecisionModalProps) {
   const [pending, setPending] = useState(false);
 
   const confirm = async () => {
@@ -40,9 +34,6 @@ export function FreezeDecisionModal({
       <div className="freeze-decision__actions">
         <Button type="primary" block loading={pending} onClick={confirm}>
           Да
-        </Button>
-        <Button block disabled={pending} onClick={onThink}>
-          Я подумаю
         </Button>
         <Button type="text" danger block disabled={pending} onClick={onDecline}>
           Отказ

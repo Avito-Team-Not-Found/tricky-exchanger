@@ -5,7 +5,8 @@ import type { StatusTone } from '@shared/ui';
 export type ChainStatus =
   'CANDIDATE' | 'PROPOSED' | 'FROZEN' | 'IN_PROGRESS' | 'COMPLETED' | 'BROKEN';
 
-// 'thinking' — явное «я подумаю» второго раунда: четвёртое значение VoteValue
+// 'thinking' — отложенное решение второго раунда: клиент его не выставляет, но сервер такой
+// голос всё ещё возвращает по старым данным — читаем только на отображение
 export type VoteValue = 'pending' | 'approved' | 'rejected' | 'thinking';
 
 // Доменные инварианты модели:

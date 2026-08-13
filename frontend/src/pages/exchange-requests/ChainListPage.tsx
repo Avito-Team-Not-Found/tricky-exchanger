@@ -32,7 +32,7 @@ export function ChainListPage() {
   const optionsQuery = useExchangeOptions(requestId);
   const itemsQuery = useItems();
   const { confirmVote, isVoting } = useChainVote();
-  const { openConfirm, confirmNow, openDecline, isConfirming } = useChainConfirm();
+  const { openConfirm } = useChainConfirm();
 
   const request = requestQuery.data;
   const options = optionsQuery.data ?? [];
@@ -158,15 +158,12 @@ export function ChainListPage() {
                 options={entry}
                 option={option}
                 isVoting={isVoting}
-                isConfirming={isConfirming}
                 locked={hasAssembled && !isAssembled(entry.status)}
                 approvedCount={approvedCountFor(entry)}
                 deadlineAt={deadlineAtFor(entry)}
                 onOpen={() => navigate(`/chains/${entry.chainId}`)}
                 onProceed={() => navigate(`/chains/${entry.chainId}/deal`)}
                 onConfirm={(chainId) => openConfirm(chainId)}
-                onConfirmNow={(chainId) => confirmNow(chainId)}
-                onDecline={(chainId) => openDecline(chainId)}
                 onVote={(active) =>
                   confirmVote(
                     {
