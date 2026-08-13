@@ -7,9 +7,11 @@ import {
   confirmChain,
   useChains,
   useExchangeOptions,
+  useReplacementsForChains,
   voteForRequest,
   withdrawVote,
   type ExchangeOptions,
+  type ReplacementOption,
 } from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems, type Item } from '@entities/item';
@@ -28,6 +30,7 @@ vi.mock('@entities/chain', async (importOriginal) => {
     ...actual,
     useExchangeOptions: vi.fn(),
     useChains: vi.fn(),
+    useReplacementsForChains: vi.fn(),
     voteForRequest: vi.fn(),
     withdrawVote: vi.fn(),
     confirmChain: vi.fn(),
@@ -46,11 +49,25 @@ vi.mock('@entities/item', async (importOriginal) => {
 
 const mockedUseOptions = vi.mocked(useExchangeOptions);
 const mockedUseChains = vi.mocked(useChains);
+const mockedUseReplacements = vi.mocked(useReplacementsForChains);
 const mockedUseRequest = vi.mocked(useRequest);
 const mockedUseItems = vi.mocked(useItems);
 const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
 const mockedConfirm = vi.mocked(confirmChain);
+
+function makeReplacement(overrides: Partial<ReplacementOption> = {}): ReplacementOption {
+  return {
+    requestId: 42,
+    offeredItemId: 17,
+    title: 'Кофемашина капсульная',
+    description: '',
+    wantedDescription: 'Ищу фотоаппарат',
+    reliability: 0.82,
+    respondedAt: '2026-08-09T12:00:00Z',
+    ...overrides,
+  };
+}
 
 // деталь заявки не отдаёт снимок товара — страница берёт его из кеша товаров
 const offeredItem = {
@@ -128,6 +145,8 @@ describe('ChainListPage', () => {
     mockedUseItems.mockReturnValue(queryOk({ items: [offeredItem], total: 1 }));
     // детали PROPOSED-цепочек подтягиваются для бейджа согласий — по умолчанию без данных
     mockedUseChains.mockReturnValue([]);
+    // пулы замен по умолчанию пусты: кнопка замены появляется только у непустого пула
+    mockedUseReplacements.mockReturnValue([]);
   });
 
   afterEach(() => {
@@ -264,6 +283,53 @@ describe('ChainListPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Да' }));
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
+  });
+
+  // непустой пул замен — вакансия: карточка зовёт выбрать замену, а не подтверждать участие
+  it('leads to the replacement screen from a card with a non-empty pool', async () => {
+    const user = userEvent.setup();
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(
+      queryOk([
+        makeOptions({
+          chainId: 1,
+          status: 'PROPOSED',
+          receiveOptions: [
+            {
+              clusterId: 2,
+              requestId: 202,
+              itemId: 2,
+              title: 'Фотоаппарат',
+              description: '',
+              wantedDescription: 'Хочу велосипед',
+            },
+          ],
+        }),
+      ]),
+    );
+    mockedUseReplacements.mockReturnValue([
+      { data: [makeReplacement()], isPending: false, isError: false, refetch: vi.fn() } as never,
+    ]);
+
+    renderWithProviders(<ChainListPage />, {
+      routes: [{ path: '/chains/1/replacement', element: <div>экран замены</div> }],
+    });
+
+    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Требуется действие' }));
+    expect(await screen.findByText('экран замены')).toBeInTheDocument();
+  });
+
+  // пустому пулу не место на карточке актора — обычное подтверждение участия остаётся
+  it('keeps the confirm action on a card with an empty replacement pool', () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(queryOk([makeOptions({ status: 'PROPOSED' })]));
+
+    renderWithProviders(<ChainListPage />);
+
+    expect(screen.getAllByRole('button', { name: 'Требуются действия' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Требуется действие' })).not.toBeInTheDocument();
   });
 
   // на замороженной цепочке остальные варианты приглушены, а правка запроса заблокирована

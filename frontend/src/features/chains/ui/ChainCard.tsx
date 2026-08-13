@@ -26,10 +26,13 @@ interface ChainCardProps {
   approvedCount?: number;
   // exchange-options дедлайн не отдаёт — без даты таймер не рисуем
   deadlineAt?: string | null;
+  // непустой пул замен — вакансия в цепочке: кнопка ведёт на выбор замены вместо подтверждения
+  needsReplacement?: boolean;
   onOpen: () => void;
   onProceed: () => void;
   onVote: (active: boolean) => void;
   onConfirm: (chainId: number) => void;
+  onReplace: () => void;
 }
 
 export function ChainCard({
@@ -39,10 +42,12 @@ export function ChainCard({
   locked,
   approvedCount,
   deadlineAt,
+  needsReplacement,
   onOpen,
   onProceed,
   onVote,
   onConfirm,
+  onReplace,
 }: ChainCardProps) {
   const { token } = theme.useToken();
   const canVote = options.status === 'CANDIDATE';
@@ -59,7 +64,7 @@ export function ChainCard({
 
   const className = [
     'chain-card',
-    needsAction || hardLocked ? 'chain-card--highlight' : '',
+    needsReplacement || needsAction || hardLocked ? 'chain-card--highlight' : '',
     locked ? 'chain-card--dimmed' : '',
   ]
     .filter(Boolean)
@@ -143,6 +148,12 @@ export function ChainCard({
               Откликнуться
             </Button>
           )}
+        </div>
+      ) : needsReplacement ? (
+        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
+          <Button type="primary" block size="large" disabled={locked} onClick={onReplace}>
+            Требуется действие
+          </Button>
         </div>
       ) : confirmed ? (
         <p className="chain-card__confirmed" role="status">

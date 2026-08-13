@@ -94,6 +94,20 @@
   color: var(--color-text-secondary);
 }
 
+// текст не единственный носитель значения — тон warning добавляет акцента баннеру замены
+.chain-item__replacement {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-status-warning) 12%, transparent);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-body);
+  color: var(--color-status-warning);
+}
+
 // margin-top: auto прижимает блок к низу, когда контент не заполняет высоту
 .chain-item__actions {
   display: flex;
