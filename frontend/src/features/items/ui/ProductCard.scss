@@ -14,6 +14,11 @@
   transform: scale(0.98);
 }
 
+.product-card--exchanged {
+  cursor: default;
+  opacity: 0.65;
+}
+
 .product-card:focus-visible {
   outline: 2px solid var(--color-accent-primary);
   outline-offset: 2px;
@@ -35,8 +40,8 @@
   background: var(--color-bg-page);
 }
 
-// position: absolute уводит картинку из потока — иначе высокая фотография (например, портретная)
-// растягивает контейнер и ломает aspect-ratio, из-за чего карточки в сетке получают разную высоту
+// position: absolute уводит картинку из потока: иначе портретная фотография растягивает
+// контейнер, ломает aspect-ratio и карточки в сетке получают разную высоту
 .product-card__image {
   position: absolute;
   inset: 0;
@@ -59,8 +64,7 @@
   max-width: calc(100% - var(--spacing-md) * 2);
 }
 
-// название и категория — один текстовый блок под фото: общий отступ на нём,
-// иначе между строками набегает padding обеих
+// общий отступ на блоке: иначе между строками набегает padding обеих
 .product-card__body {
   display: flex;
   flex-direction: column;

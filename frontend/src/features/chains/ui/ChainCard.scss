@@ -16,18 +16,15 @@
   transform: scale(0.98);
 }
 
-// карточка, требующая действия (PROPOSED) или уже замороженная, выделена рамкой (SOFT-LOCK §5.1/§5.4)
 .chain-card--highlight {
   border: 2px solid var(--color-status-success);
 }
 
-// остальные варианты запроса со сделкой по одной из цепочек: приглушены и недоступны (SOFT-LOCK §5.4)
 .chain-card--dimmed {
   opacity: 0.5;
   pointer-events: none;
 }
 
-// фото получаемого товара — крупный блок в верхней части карточки (макет 4.6)
 .chain-card__photo {
   position: relative;
   width: 100%;
@@ -37,8 +34,6 @@
   background: var(--color-bg-page);
 }
 
-// position: absolute уводит картинку из потока — иначе портретная фотография растягивает
-// контейнер и ломает aspect-ratio 311:171 (та же проблема, что и в ProductCard)
 .chain-card__photo-img {
   position: absolute;
   inset: 0;
@@ -69,7 +64,6 @@
   white-space: nowrap;
 }
 
-// что кандидат хочет взамен — вторая строка заголовка, чтобы понятно было, на что откликаемся
 .chain-card__wanted {
   margin-top: calc(-1 * var(--spacing-sm));
   font-size: var(--font-size-caption);
@@ -93,7 +87,7 @@
   white-space: nowrap;
 }
 
-// «Цепочка собрана» занимает слот ProbabilityBadge — та же пилюля в тоне success
+// «Цепочка собрана» занимает слот ProbabilityBadge
 .chain-card__ready {
   display: inline-flex;
   align-items: center;
@@ -108,44 +102,19 @@
   white-space: nowrap;
 }
 
-// в карточке ровно одно действие, поэтому кнопка всегда во всю ширину (макет 4.6);
-// ширину даёт block-проп кнопки, flex-basis в колонке обнулил бы её высоту
+// ширину даёт block-проп кнопки: flex-basis в колонке обнулил бы её высоту
 .chain-card__actions {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
 }
 
-// бейдж согласий на замороженной карточке — пилюля в правом верхнем углу фото (SOFT-LOCK §5.4);
-// top/right = spacing-lg даёт отступ 8px от краёв картинки (padding карточки — spacing-md);
-// z-index поднимает её над фото: оба элемента positioned, и без него фото, идущее в DOM позже,
-// перекрыло бы бейдж
+// оба элемента positioned, и без z-index фото, идущее в DOM позже, перекрыло бы бейдж
 .chain-card__consent {
   position: absolute;
   top: var(--spacing-lg);
   right: var(--spacing-lg);
   z-index: 1;
-}
-
-// предупреждение «Примите решение…» перед inline-кнопками «Да»/«Нет» (SOFT-LOCK §5.2)
-.chain-card__hurry {
-  animation: motion-rise-in var(--motion-duration-base) var(--motion-ease-out) backwards;
-  margin: 0;
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-heading);
-  color: var(--color-status-warning);
-}
-
-// «Да»/«Нет» в ряд 50/50 на карточке в режиме «подумаю» (макет 4.6 — Я подумаю)
-.chain-card__inline {
-  display: flex;
-  gap: var(--spacing-sm);
-  animation: motion-rise-in var(--motion-duration-base) var(--motion-ease-out) 40ms backwards;
-}
-
-.chain-card__inline .ant-btn {
-  flex: 1;
 }
 
 // подтвердил, ждём остальных: статусная строка вместо кнопки (SOFT-LOCK §5.3)

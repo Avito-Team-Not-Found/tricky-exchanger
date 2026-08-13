@@ -7,15 +7,10 @@ import type {
   DeclineResult,
   ExchangeOptions,
   FulfillmentResult,
+  ReplacementOption,
+  SelectReplacementResult,
   VotePayload,
-  VoteValue,
 } from './model';
-
-// ответ POST /chains/{id}/think: явное «я подумаю» — голос thinking на сервере (SOFT-LOCK §3.2)
-export interface ThinkResult {
-  chainId: number;
-  vote: VoteValue;
-}
 
 export async function fetchChain(chainId: number): Promise<Chain> {
   const { data } = await apiClient.get<Chain>(`/chains/${chainId}`);
@@ -42,26 +37,38 @@ export async function withdrawVote(chainId: number, payload: VotePayload): Promi
   await apiClient.delete(`/chains/${chainId}/votes`, { params: payload });
 }
 
-// повторное подтверждение участия в собранной цепочке (второй раунд, SOFT-LOCK §3.1.3)
+// пул кандидатов на замену выбывшего участника; ответ — плоский массив, не {data: [...]}
+export async function fetchReplacements(chainId: number): Promise<ReplacementOption[]> {
+  const { data } = await apiClient.get<ReplacementOption[]>(`/chains/${chainId}/replacements`);
+  return data;
+}
+
+// приглашение кандидата на освободившуюся позицию; не идемпотентно — повторный PUT тем же
+// requestId сервер отклонит (422)
+export async function selectReplacement(
+  chainId: number,
+  requestId: number,
+): Promise<SelectReplacementResult> {
+  const { data } = await apiClient.put<SelectReplacementResult>(`/chains/${chainId}/replacement`, {
+    requestId,
+  });
+  return data;
+}
+
+// повторное подтверждение участия в собранной цепочке (второй раунд)
 export async function confirmChain(chainId: number): Promise<ConfirmResult> {
   const { data } = await apiClient.post<ConfirmResult>(`/chains/${chainId}/confirm`);
   return data;
 }
 
-// отказ от участия в собранной цепочке (второй раунд, SOFT-LOCK §3.2)
+// отказ от участия в собранной цепочке (второй раунд)
 export async function declineChain(chainId: number): Promise<DeclineResult> {
   const { data } = await apiClient.post<DeclineResult>(`/chains/${chainId}/decline`);
   return data;
 }
 
-// явное «я подумаю»: решение откладывается, но голос уже не pending (второй раунд, SOFT-LOCK §3.2)
-export async function thinkChain(chainId: number): Promise<ThinkResult> {
-  const { data } = await apiClient.post<ThinkResult>(`/chains/${chainId}/think`);
-  return data;
-}
-
-// «Я отправил товар» — имитация подтверждения пунктом выдачи (DEAL-PLAN.md §4.5): requestId — моя
-// заявка (chain.currentRequestId), она LOCKED → IN_PROGRESS, цепочка FROZEN → IN_PROGRESS (§2.2)
+// «Я отправил товар» — имитация подтверждения пунктом выдачи: requestId — моя
+// заявка (chain.currentRequestId), она LOCKED → IN_PROGRESS, цепочка FROZEN → IN_PROGRESS
 export async function confirmHandoff(
   chainId: number,
   requestId: number,
@@ -74,7 +81,7 @@ export async function confirmHandoff(
 }
 
 // «Я забрал товар» — подтверждение получения: requestId — заявка звена-источника
-// (receivesFromPosition), она IN_PROGRESS → DONE; когда все заявки DONE — цепочка COMPLETED (§2.2)
+// (receivesFromPosition), она IN_PROGRESS → DONE; когда все заявки DONE — цепочка COMPLETED
 export async function confirmReceipt(
   chainId: number,
   requestId: number,

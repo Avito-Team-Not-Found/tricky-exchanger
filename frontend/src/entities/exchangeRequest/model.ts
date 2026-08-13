@@ -24,8 +24,7 @@ export interface CreateRequestPayload {
   wantedCategory?: string;
 }
 
-// Обёртка, которую раньше отдавал мок; реальный бэкенд возвращает только объект
-// заявки, а матчинг пока заглушка — createdCandidateChains всегда 0 (SCRUM-50 §5).
+// число найденных цепочек бэкенд в ответе создания не отдаёт — фронт берёт его из exchange-options
 export interface CreateRequestResult {
   request: ExchangeRequest;
   matching: { createdCandidateChains: number };
@@ -46,8 +45,7 @@ export const REQUEST_STATUS_META: Record<RequestStatus, { label: string; tone: S
   IN_PROGRESS: { label: 'Выполняется', tone: 'neutral' },
 };
 
-// живые состояния заявки — в поиске или с предложенными цепочками; остальные не редактируются.
-// REMOVED на бэкенде отфильтровывается из списка/детали, поэтому в UI его нет.
+// REMOVED бэкенд отфильтровывает из списка и детали, поэтому в UI такого статуса нет
 export function isRequestEditable(status: RequestStatus): boolean {
   return status === 'ACTIVE' || status === 'IN_PROPOSAL';
 }

@@ -14,8 +14,7 @@ export interface ChangePasswordValues {
   confirm: string;
 }
 
-// Состояние флоу описывается одной переменной: «форма» и «успех» взаимоисключающие,
-// а submitting валиден только в ветке формы (см. AGENTS.md «Состояние»).
+// «форма» и «успех» взаимоисключающие, а submitting валиден только в ветке формы
 export type ChangePasswordState = { status: 'form'; submitting: boolean } | { status: 'success' };
 
 export function useChangePassword() {

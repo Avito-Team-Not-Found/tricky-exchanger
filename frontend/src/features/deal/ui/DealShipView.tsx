@@ -10,6 +10,7 @@ import { useDealFulfillment } from '../model/useDealFulfillment';
 import { useDealPhoto } from '../model/useDealPhoto';
 import { usePickupPoint } from '../model/usePickupPoint';
 
+import { DealBarcode } from './DealBarcode';
 import { DealItemSwap } from './DealItemSwap';
 import { DealPickupCard } from './DealPickupCard';
 import { DealSafetyBanner } from './DealSafetyBanner';
@@ -23,8 +24,7 @@ interface DealShipViewProps {
   onOpenDetails: () => void;
 }
 
-// осталось до дедлайна отправки: freezeDeadlineAt ставится при заморозке в now + 24ч (freeze_service),
-// таймер показывает фактическое значение, а не нарисованные в макете 47:58 (DEAL-PLAN.md §2.2)
+// таймер показывает фактическое значение freezeDeadlineAt, а не условные 47:58
 function deadlineLabel(deadlineAt: string | null): string | null {
   if (!deadlineAt) return null;
   const remaining = new Date(deadlineAt).getTime() - Date.now();
@@ -33,10 +33,8 @@ function deadlineLabel(deadlineAt: string | null): string | null {
   return `Осталось ${Math.floor(totalMinutes / 60)} ч ${totalMinutes % 60} мин на отправку`;
 }
 
-// Экран «Отправка товара» (макет 4.9): таймер дедлайна, что отправляется/получается, шаги
-// инструкции, ПВЗ, обязательное фото упаковки и кнопка-заглушка «Я отправил товар» — в проде её
-// дёргала бы интеграция с Авито (DEAL-PLAN.md §4.5). Фото и адрес ПВЗ бэкенд не хранит —
-// клиентские имитации в localStorage (DEAL-PLAN.md §4.1–4.2).
+// «Я отправил товар» — заглушка: в проде отправку подтверждала бы интеграция с доставкой,
+// а фото упаковки и адрес ПВЗ бэкенд не хранит вовсе
 export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewProps) {
   const { message, modal } = AntApp.useApp();
   const me = myParticipant(chain);
@@ -95,6 +93,8 @@ export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewP
         tabIndex={-1}
       />
 
+      <DealBarcode chainId={chain.id} kind="handoff" />
+
       {deadlineAt ? (
         <p
           className={`deal-ship__timer${timer ? '' : ' deal-ship__timer--expired'}`}
@@ -130,11 +130,8 @@ export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewP
       </section>
 
       <div className="deal-ship__pickup">
+        <h2 className="deal-ship__section-title">Где будем получать?</h2>
         <DealPickupCard address={point} onChange={openPickupModal} />
-        <p className="deal-ship__pickup-note">
-          Это пункт назначения — куда должен прийти ваш товар для получателя. Отправить его вы
-          можете через любой удобный ближайший пункт приёма.
-        </p>
       </div>
 
       <section className="deal-ship__photo">
@@ -188,8 +185,7 @@ export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewP
   );
 }
 
-// Выбор ПВЗ: список зашитых адресов + вариант «Другой адрес» с полем ввода (DEAL-PLAN.md §4.1).
-// Пустой адрес не сохраняется — «Сохранить» с пустым полем просто закрывает модалку.
+// пустой адрес не сохраняется — «Сохранить» с пустым полем просто закрывает модалку
 function DealPickupForm({
   current,
   onSave,

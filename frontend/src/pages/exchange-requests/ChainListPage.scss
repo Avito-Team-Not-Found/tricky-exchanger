@@ -73,7 +73,6 @@
   flex-shrink: 0;
 }
 
-// баннер о замороженной сделке — Body Small text-secondary под сводкой запроса (SOFT-LOCK §5.4)
 .chain-list-page__banner {
   animation: motion-rise-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   margin: 0;

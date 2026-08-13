@@ -6,8 +6,8 @@ interface ChainPageHeaderProps {
   onBack: () => void;
 }
 
-// Шапка экранов цепочки (макеты 4.7/4.8): подложка во всю ширину, содержимое — в той же
-// колонке, что и тело экрана, чтобы на десктопе заголовок не отрывался от контента
+// подложка во всю ширину, а содержимое — в колонке тела экрана: иначе на десктопе
+// заголовок отрывается от контента
 export function ChainPageHeader({ title, onBack }: ChainPageHeaderProps) {
   return (
     <header className="chain-detail-page__header">

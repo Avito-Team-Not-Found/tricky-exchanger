@@ -7,36 +7,22 @@ import { isAxiosError } from 'axios';
 import {
   confirmChain,
   declineChain,
-  thinkChain,
-  type ChainStatus,
+  invalidateChainQueries,
   type ConfirmResult,
   type DeclineResult,
-  type ThinkResult,
 } from '@entities/chain';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
 import { FreezeDecisionModal } from '../ui/FreezeDecisionModal';
-import { ThinkDecisionModal } from '../ui/ThinkDecisionModal';
 
-// Отказ не всегда ломает цепочку: сервер откатывает её в CANDIDATE, оставляет PROPOSED
-// с вакансией под замену или распускает совсем (SOFT-LOCK §3.2) — исход виден только из ответа
-const DECLINE_MESSAGE: Partial<Record<ChainStatus, string>> = {
-  BROKEN: 'Вы вышли из сделки. Цепочка распалась',
-  CANDIDATE: 'Вы вышли из сделки. Цепочка вернулась к сбору откликов',
-  PROPOSED: 'Вы вышли из сделки. Участники подбирают замену',
-};
+import { declineMessage } from './declineMessage';
 
-// Подтверждение участия во втором раунде (SOFT-LOCK §6, §10) — единая точка для 4.6/4.7/4.8:
-// модалка «Готовность к сделке» + POST /chains/{id}/confirm. Статус из ответа решает тост:
-// PROPOSED — ждём остальных, FROZEN — сделка подтверждена. Отказ («Нет») идёт через отдельное
-// подтверждение (§6.3) и POST /chains/{id}/decline. Любая ошибка инвалидирует кэш,
-// чтобы карточки не остались с устаревшими действиями, и перезагружает данные.
 export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
   const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
-  // модалка живёт в портале вне дерева роутов: сама она уход с экрана не переживает, её надо
-  // закрывать руками, иначе останется висеть поверх нового экрана с живой кнопкой «Да»
+  // модалка живёт в портале вне дерева роутов — иначе останется висеть поверх нового экрана
+  // с живой кнопкой «Да»
   const decision = useRef<{ destroy: () => void } | null>(null);
 
   const mutation = useMutation<ConfirmResult, Error, number>({
@@ -48,21 +34,11 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     onError: (error) => handleError(error, 'Не удалось подтвердить участие'),
   });
 
-  const thinkMutation = useMutation<ThinkResult, Error, number>({
-    mutationFn: (chainId) => thinkChain(chainId),
-    // тоста нет: результат виден на карточке (§5.2), предвосхищать серверный голос нельзя
-    onSuccess: () => {
-      invalidate();
-    },
-    onError: (error) => handleError(error, 'Не удалось отложить решение'),
-  });
-
   const declineMutation = useMutation<DeclineResult, Error, number>({
     mutationFn: (chainId) => declineChain(chainId),
     onSuccess: (data) => {
-      message.success(DECLINE_MESSAGE[data.status] ?? 'Вы вышли из сделки');
+      message.success(declineMessage(data.status));
       invalidate();
-      // цепочки больше нет — на 4.7/4.8 остаться на её экране нельзя
       if (data.status === 'BROKEN') {
         closeDecision();
         onNotFound?.();
@@ -72,8 +48,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
   });
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ['chains'] });
-    queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
+    invalidateChainQueries(queryClient);
   }
 
   function closeDecision() {
@@ -83,8 +58,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
 
   function handleError(error: Error, fallback: string) {
     invalidate();
-    // дедлайн истёк: цепочку откатил сервер, подтверждать нечего — предупреждение и перезагрузка,
-    // карточка перерисуется в статус, который вернул бэкенд (SOFT-LOCK §10.1)
+    // дедлайн истёк, цепочку уже откатил сервер — подтверждать нечего
     if (isAxiosError(error) && error.response?.status === 410) {
       closeDecision();
       message.warning('Время на ответ истекло, цепочка распалась');
@@ -102,7 +76,6 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
         fallback,
       ),
     );
-    // цепочки нет — решать по ней больше нечего: закрываем модалку и уходим к списку,
     // перезагружать данные удалённой цепочки уже некому
     if (isAxiosError(error) && error.response?.status === 404) {
       closeDecision();
@@ -112,7 +85,6 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     refetch?.();
   }
 
-  // отказ необратим и меняет судьбу всей цепочки, поэтому подтверждается отдельно (SOFT-LOCK §6.3);
   // какой из трёх исходов случится, клиент заранее не знает — формулировка обтекаемая
   function openDecline(chainId: number) {
     modal.confirm({
@@ -124,7 +96,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
       cancelText: 'Отмена',
       centered: true,
       // reject гасится здесь: antd пробрасывает его наружу необработанным, а про ошибку уже
-      // рассказал тост мутации — модалка закрывается, решение остаётся за модалкой §6.1
+      // рассказал тост мутации
       onOk: () => declineMutation.mutateAsync(chainId).then(closeDecision, () => {}),
     });
   }
@@ -140,7 +112,6 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
             await mutation.mutateAsync(chainId);
           }}
           onDecline={() => openDecline(chainId)}
-          onThink={() => openThink(chainId)}
           onClose={closeDecision}
         />
       ),
@@ -148,32 +119,5 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     });
   }
 
-  // «Пока вы думаете» (SOFT-LOCK §6.2): отдельная модалка поверх первой; «Вернуться» возвращает
-  // к «Готовность к сделке», а не просто закрывает её — решение по цепочке ещё не принято
-  function openThink(chainId: number) {
-    closeDecision();
-    decision.current = modal.confirm({
-      icon: null,
-      centered: true,
-      width: 280,
-      content: (
-        <ThinkDecisionModal
-          onConfirm={async () => {
-            await thinkMutation.mutateAsync(chainId);
-          }}
-          onBack={() => openConfirm(chainId)}
-          onClose={closeDecision}
-        />
-      ),
-      footer: null,
-    });
-  }
-
-  return {
-    openConfirm,
-    // «Да» на карточке в режиме «подумаю» подтверждает без повторной модалки (SOFT-LOCK §5.2)
-    confirmNow: (chainId: number) => mutation.mutate(chainId),
-    openDecline,
-    isConfirming: mutation.isPending,
-  };
+  return { openConfirm };
 }

@@ -112,7 +112,6 @@ describe('RegisterForm', () => {
     expect(store.getState().user.token).toBeNull();
   });
 
-  // короткий пароль отбивается на месте правилом поля (минимальная длина)
   it('shows a password length error after a short password is typed', async () => {
     const user = userEvent.setup();
     setup();
@@ -124,7 +123,6 @@ describe('RegisterForm', () => {
     expect(await screen.findByText('Пароль должен быть не короче 8 символов')).toBeInTheDocument();
   });
 
-  // ошибка о коротком пароле остаётся видимой и после ухода из поля
   it('keeps the password length error visible after the field loses focus', async () => {
     const user = userEvent.setup();
     setup();
@@ -140,7 +138,6 @@ describe('RegisterForm', () => {
     );
   });
 
-  // ошибка о несовпадении остаётся видимой и после ухода из поля
   it('keeps the confirm mismatch error visible after the field loses focus', async () => {
     const user = userEvent.setup();
     setup();

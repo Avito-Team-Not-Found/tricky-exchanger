@@ -5,9 +5,12 @@ import type { StatusTone } from '@shared/ui';
 export type ChainStatus =
   'CANDIDATE' | 'PROPOSED' | 'FROZEN' | 'IN_PROGRESS' | 'COMPLETED' | 'BROKEN';
 
-// 'thinking' — явное «я подумаю» второго раунда (SOFT-LOCK §3.2), четвёртое значение VoteValue
+// 'thinking' клиент не выставляет — сервер возвращает такой голос по старым данным
 export type VoteValue = 'pending' | 'approved' | 'rejected' | 'thinking';
 
+// participants — пул кандидатов, а не участники: на CANDIDATE каждая позиция кольца развёрнута
+// во все заявки своего кластера. vote привязан к цели: решение позиции p лежит в vote следующей.
+// freezeDeadlineAt на PROPOSED — дедлайн ответа, на FROZEN — дедлайн отправки
 export interface ChainParticipant {
   clusterId: number;
   requestId: number;
@@ -17,12 +20,10 @@ export interface ChainParticipant {
   offeredItemTitle: string;
   offeredItemDescription: string;
   wantedDescription: string;
-  // фото может отсутствовать вовсе (omitempty), а не только быть null — поле опционально (PROJECT.md §4.4)
+  // фото может отсутствовать вовсе (omitempty), а не только быть null
   imageUrl?: string | null;
-  // статус заявки участника — единственный источник состояния экрана сделки (DEAL-PLAN.md §2.2):
-  // LOCKED — товар не отправлен, IN_PROGRESS — отправлен (в ПВЗ), DONE — получатель подтвердил получение
+  // LOCKED — не отправлен, IN_PROGRESS — отправлен, DONE — получатель подтвердил
   requestStatus: RequestStatus;
-  // отклик приходит только у кандидатов позиции receivesFromPosition
   vote?: VoteValue;
 }
 
@@ -54,7 +55,6 @@ export interface ExchangeOption {
   vote?: VoteValue;
 }
 
-// варианты обмена по заявке: один кандидатный пул на цепочку, получаемое разворачивается в receiveOptions
 export interface ExchangeOptions {
   chainId: number;
   status: ChainStatus;
@@ -82,14 +82,30 @@ export interface ChainVoteResult {
   chainStatus: ChainStatus;
 }
 
-// ответ POST /chains/{id}/confirm: статус цепочки после подтверждения участника (SOFT-LOCK §3.1.3)
+// пул уже отфильтрован и отсортирован сервером — на клиенте список ниоткуда не дособирается
+export interface ReplacementOption {
+  requestId: number;
+  offeredItemId: number;
+  title: string;
+  description: string;
+  wantedDescription: string;
+  // фото может отсутствовать вовсе (omitempty), а не только быть null
+  imageUrl?: string | null;
+  reliability: number;
+  respondedAt: string;
+}
+
+export interface SelectReplacementResult {
+  chainId: number;
+  requestId: number;
+  status: ChainStatus;
+}
+
 export interface ConfirmResult {
   chainId: number;
   status: ChainStatus;
 }
 
-// ответ POST /chains/{id}/decline: цепочка либо распалась (BROKEN), либо откатилась к сбору
-// откликов (CANDIDATE), либо живёт с вакансией под замену (PROPOSED) — SOFT-LOCK §3.2.
 // replacementAvailable относится к предыдущему по кольцу участнику, а не к отказавшемуся
 export interface DeclineResult {
   chainId: number;
@@ -102,24 +118,19 @@ export interface ChainLink {
   candidates: ChainParticipant[];
 }
 
-// ответ POST /integrations/avito/handoffs и POST /chains/{id}/receipt: статус цепочки после
-// подтверждения отправки/получения (DEAL-PLAN.md §2.2)
 export interface FulfillmentResult {
   chainId: number;
   requestId: number;
   status: ChainStatus;
 }
 
-// статус отклика не передаётся одним лишь цветом — подпись текстом обязательна. Только первый
-// раунд: thinking — значение второго раунда, в словаре ему места нет (Partial не требует ветки)
+// thinking — значение второго раунда, в словаре первого ему места нет
 export const VOTE_META: Partial<Record<VoteValue, ConfirmVoteMeta>> = {
   pending: { label: 'Ожидаем', tone: 'warning' },
   approved: { label: 'Отклик принят', tone: 'success' },
   rejected: { label: 'Отклик отклонён', tone: 'error' },
 };
 
-// Голос второго раунда (SOFT-LOCK §8): решение участника по собранной цепочке. В отличие от
-// VOTE_META применяется по статусу цепочки, а не по наличию поля — одно поле vote несёт два смысла
 export interface ConfirmVoteMeta {
   label: string;
   tone: StatusTone;
@@ -132,46 +143,37 @@ export const CONFIRM_VOTE_META: Record<VoteValue, ConfirmVoteMeta> = {
   rejected: { label: 'Отказался', tone: 'error' },
 };
 
-// пустой голос у участника позиции (p + 1) % length означает вакансию на позиции p (SOFT-LOCK §3.3)
+// пустой голос у участника позиции (p + 1) % length означает вакансию на позиции p
 export const VACANCY_META: ConfirmVoteMeta = {
   label: 'Место освободилось',
   tone: 'neutral',
 };
 
-// единая формулировка плашки жёсткой блокировки на карточке 4.6 и экране 4.7 (SOFT-LOCK §5.5/§7)
 export const HARD_LOCK_MESSAGE = 'Товар жёстко заблокирован: изменить или удалить заявку нельзя';
 
-// цепочка заморожена или уже в сделке: товары и заявки жёстко заблокированы (SOFT-LOCK §5.5)
 export function isHardLocked(status: ChainStatus): boolean {
   return status === 'FROZEN' || status === 'IN_PROGRESS';
 }
 
-// кнопка «Перейти к сделке» и экран /deal доступны и на завершённой цепочке: isHardLocked
-// намеренно не включает COMPLETED (жёсткой блокировки там уже нет), но сделку открыть всё равно нужно
+// на COMPLETED жёсткой блокировки уже нет, но сделку открыть всё равно нужно
 export function hasDeal(status: ChainStatus): boolean {
   return isHardLocked(status) || status === 'COMPLETED';
 }
 
-// Нужно ли отправить свой товар: до первого handoff цепочка не покидает FROZEN (service.Handoff
-// переводит её в IN_PROGRESS), поэтому FROZEN строго означает «сделка началась, я ещё не отправил».
-// На 4.6/4.7 вместо «Перейти к сделке» показываем «Требуется действие».
+// до первого handoff цепочка не покидает FROZEN
 export function needsShipment(status: ChainStatus): boolean {
   return status === 'FROZEN';
 }
 
-// собранная цепочка, которая занимает заявку: кольцо откликов замкнулось (PROPOSED) или сделка
-// уже идёт (FROZEN/IN_PROGRESS) — остальные варианты этого запроса приглушены и недоступны
+// уже с PROPOSED цепочка занимает заявку — остальные варианты запроса приглушаются
 export function isAssembled(status: ChainStatus): boolean {
   return status === 'PROPOSED' || isHardLocked(status);
 }
 
-// Участник текущего пользователя: только он может откликаться за себя
 export function myParticipant(chain: Chain): ChainParticipant | null {
   return chain.participants.find((p) => p.isCurrentUser) ?? null;
 }
 
-// participants — это пул кандидатов, а не участники: одна позиция кольца развёрнута во все
-// заявки своего кластера. Единица UI — звено (position + кандидаты), а не запись participants.
 export function chainLinks(chain: Chain): ChainLink[] {
   const byPosition = new Map<number, ChainParticipant[]>();
   for (const participant of chain.participants) {
@@ -184,57 +186,51 @@ export function chainLinks(chain: Chain): ChainLink[] {
     .map(([position, candidates]) => ({ position, candidates }));
 }
 
-// Что пользователь получит взамен: пул заявок следующего звена по кольцу (PROJECT.md §4.4).
-// Пока цепочка CANDIDATE, кандидатов несколько — UI сам решает, как их показать.
-export function receivesItem(chain: Chain): ChainParticipant[] {
-  return chain.participants.filter((p) => p.position === chain.receivesFromPosition);
+// заявки кластера принадлежат разным пользователям: без сужения по requestId экран показал бы
+// их чужие товары под одним участником, а неизвестный requestId возвращает весь пул, не пустоту
+export function receivesItem(chain: Chain, requestId?: number): ChainParticipant[] {
+  const sources = chain.participants.filter((p) => p.position === chain.receivesFromPosition);
+  if (requestId === undefined) return sources;
+  const selected = sources.find((p) => p.requestId === requestId);
+  return selected ? [selected] : sources;
 }
 
-// Единственное звено, от которого текущий пользователь получает товар: на собранной цепочке
-// (FROZEN и дальше) на позицию приходится ровно один участник — источник для «Я забрал товар»
+// на собранной цепочке на позицию приходится ровно один участник
 export function sourceParticipant(chain: Chain): ChainParticipant | null {
   const sources = receivesItem(chain);
   return sources.length === 1 ? sources[0] : null;
 }
 
-// Решение второго раунда участника позиции p лежит в vote участника следующей по кольцу позиции:
-// строка votes — ребро «я → тот, у кого получаю», которое раскладывается по цели голосования,
-// а не по голосующему (SOFT-LOCK §3.3). Следующая позиция ищется по фактическому набору позиций
-// кольца, а не по формуле с базой отсчёта: бэкенд отдаёт позиции с нуля, а псевдонимы фронта
-// ожидают с единицы — модуль по реальному набору верен для обеих раскладок. Пустой vote на
-// следующей позиции — участник p отказался, его голос удалён: это вакансия, а не pending.
-export function confirmVoteAt(chain: Chain, position: number): VoteValue | null {
+// на CANDIDATE позиций может быть меньше length — считать по формуле (p + 1) % length нельзя
+export function nextInRing(chain: Chain, position: number): number | null {
   const positions = [...new Set(chain.participants.map((p) => p.position))].sort((a, b) => a - b);
   const index = positions.indexOf(position);
   if (positions.length === 0 || index === -1) return null;
-  const nextPosition = positions[(index + 1) % positions.length];
-  return chain.participants.find((p) => p.position === nextPosition)?.vote ?? null;
+  return positions[(index + 1) % positions.length];
 }
 
-// Мой голос второго раунда = решение участника на позиции, от которой я получаю (SOFT-LOCK §3.3).
-// На 4.6 то же значение приезжает как receiveOptions[0].vote — здесь экраны 4.7/4.8.
+// пустой vote на следующей позиции — вакансия, а не pending
+export function confirmVoteAt(chain: Chain, position: number): VoteValue | null {
+  const next = nextInRing(chain, position);
+  if (next === null) return null;
+  return chain.participants.find((p) => p.position === next)?.vote ?? null;
+}
+
+// на карточке вариантов то же значение приезжает как receiveOptions[0].vote
 export function myConfirmVote(chain: Chain): VoteValue | null {
   return confirmVoteAt(chain, chain.currentPosition);
 }
 
-// Счётчик согласий: соответствие «голосующий ↔ цель» биективно, поэтому сдвиг на счёт не влияет,
-// а вне PROPOSED/FROZEN голос имеет другой смысл и не считается (SOFT-LOCK §3.3)
+// соответствие «голосующий ↔ цель» биективно, поэтому сдвиг голосов на счёт не влияет
 export function approvedVotes(chain: Chain): number {
   if (!isAssembled(chain.status)) return 0;
   return chain.participants.reduce((count, p) => count + (p.vote === 'approved' ? 1 : 0), 0);
 }
 
-// Собранной цепочке ещё нужно моё решение второго раунда (SOFT-LOCK §4): пока голос не approved —
-// ни pending, ни thinking — кнопка «Требуются действия» (или inline-«Да»/«Нет») остаётся.
-// После подтверждения действий нет — остаётся статусная строка «Вы подтвердили · ждём остальных»
 export function needsMyAction(chain: Chain): boolean {
   return chain.status === 'PROPOSED' && myConfirmVote(chain) !== 'approved';
 }
 
-// Состояние экрана сделки (макет 4.9): чистый дискриминант из статуса цепочки и статусов заявок.
-// «Отправил» = заявка участника уже не LOCKED; «я забрал» = у звена-источника заявка DONE
-// (receipt переводит заявку источника в DONE, DEAL-PLAN.md §2.2). CANDIDATE/PROPOSED/BROKEN —
-// сделки ещё нет: весь второй раунд живёт на 4.6/4.7/4.8, ссылки на /deal оттуда не появляется.
 export type DealState =
   | { status: 'ship'; deadlineAt: string | null }
   | { status: 'shipped-waiting'; shipped: number; total: number }
@@ -252,7 +248,7 @@ export function dealState(chain: Chain): DealState {
   if (!me) return { status: 'unavailable' };
   const total = chain.length;
   const shipped = chain.participants.filter((p) => p.requestStatus !== 'LOCKED').length;
-  // я ещё не отправил — экран отправки виден и на IN_PROGRESS: первым мог отправиться сосед
+  // экран отправки виден и на IN_PROGRESS: первым мог отправиться сосед
   if (me.requestStatus === 'LOCKED') {
     return { status: 'ship', deadlineAt: chain.freezeDeadlineAt ?? null };
   }

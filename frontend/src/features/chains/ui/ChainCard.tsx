@@ -9,6 +9,7 @@ import {
   type VoteValue,
 } from '@entities/chain';
 
+import { plural } from '@shared/lib/plural';
 import { FadeInImage, ProbabilityBadge } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
@@ -20,33 +21,21 @@ interface ChainCardProps {
   options: ExchangeOptions;
   option: ExchangeOption;
   isVoting: boolean;
-  isConfirming: boolean;
   locked?: boolean;
-  // число согласий второго раунда: на FROZEN всегда = length, на PROPOSED — из деталей цепочки
-  // (exchange-options его не отдаёт); undefined — бейдж не рисуем, пока счётчик неизвестен
+  // exchange-options счётчик не отдаёт: undefined — бейдж не рисуем, пока он неизвестен
   approvedCount?: number;
-  // дедлайн ответа по собранной цепочке — тоже из детали (GET /chains/{id}), exchange-options
-  // его не отдаёт; без даты таймер не рисуем
+  // exchange-options дедлайн не отдаёт — без даты таймер не рисуем
   deadlineAt?: string | null;
   onOpen: () => void;
   onProceed: () => void;
   onVote: (active: boolean) => void;
   onConfirm: (chainId: number) => void;
-  onConfirmNow: (chainId: number) => void;
-  onDecline: (chainId: number) => void;
 }
 
-// Карточка варианта обмена (макет 4.6): один конкретный получаемый товар из пула кандидатов
-// следующего звена. На кандидатной цепочке действие — «Откликнуться» / «Отозвать отклик» по
-// option.vote; на PROPOSED — «Требуются действия» (подтверждение второго раунда), а после «Я
-// подумаю» — inline-«Да»/«Нет» без модалки; на FROZEN — «Требуется действие» (пора отправлять),
-// на IN_PROGRESS/COMPLETED — «Перейти к сделке», бейдж «N/M согласий» (SOFT-LOCK §5.1–5.5). Мой
-// голос второго раунда на этом экране — vote единственного receiveOption (SOFT-LOCK §3.3).
 export function ChainCard({
   options,
   option,
   isVoting,
-  isConfirming,
   locked,
   approvedCount,
   deadlineAt,
@@ -54,34 +43,45 @@ export function ChainCard({
   onProceed,
   onVote,
   onConfirm,
-  onConfirmNow,
-  onDecline,
 }: ChainCardProps) {
   const { token } = theme.useToken();
   const canVote = options.status === 'CANDIDATE';
   const canAct = canVote && (!option.vote || option.vote === 'pending');
   const hardLocked = isHardLocked(options.status);
-  // на FROZEN сделка началась, товар ещё не отправлен — вместо «Перейти к сделке» зовём действовать
+  // на FROZEN сделка началась, но товар не отправлен — зовём действовать, а не «к сделке»
   const shipRequired = needsShipment(options.status);
-  // на COMPLETED жёсткой блокировки уже нет, но сделку открыть нужно — кнопка по hasDeal (§5.1)
   const dealReady = hasDeal(options.status) && !shipRequired;
-  // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя (§3.3);
+  // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя;
   // на CANDIDATE то же поле — отклик первого раунда, myVote им не считается
   const myVote: VoteValue | undefined = options.status === 'PROPOSED' ? option.vote : undefined;
-  const thinking = myVote === 'thinking';
   const confirmed = myVote === 'approved';
-  const needsAction = options.status === 'PROPOSED' && !thinking && !confirmed;
+  const needsAction = options.status === 'PROPOSED' && !confirmed;
 
   const className = [
     'chain-card',
-    needsAction || thinking || hardLocked ? 'chain-card--highlight' : '',
+    needsAction || hardLocked ? 'chain-card--highlight' : '',
     locked ? 'chain-card--dimmed' : '',
   ]
     .filter(Boolean)
     .join(' ');
 
   return (
-    <article className={className} onClick={onOpen} aria-disabled={locked || undefined}>
+    <article
+      className={className}
+      role="button"
+      tabIndex={locked ? -1 : 0}
+      aria-label={`${option.title}: ${option.wantedDescription}`}
+      aria-disabled={locked || undefined}
+      onClick={locked ? undefined : onOpen}
+      onKeyDown={(event) => {
+        if (locked) return;
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       {approvedCount !== undefined ? (
         <ConsentBadge
           key={approvedCount}
@@ -106,7 +106,7 @@ export function ChainCard({
 
       <div className="chain-card__meta">
         <span className="chain-card__count">
-          {options.length} {pluralize(options.length)}
+          {options.length} {plural(options.length, ['участник', 'участника', 'участников'])}
         </span>
         {canVote ? (
           <ProbabilityBadge score={options.score} />
@@ -115,7 +115,7 @@ export function ChainCard({
         )}
       </div>
 
-      <DeadlineRow status={options.status} deadlineAt={deadlineAt} />
+      <DeadlineRow status={options.status} deadlineAt={deadlineAt} showShipDeadline />
 
       {canAct ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
@@ -143,32 +143,6 @@ export function ChainCard({
               Откликнуться
             </Button>
           )}
-        </div>
-      ) : thinking ? (
-        <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
-          <p className="chain-card__hurry" role="status">
-            ⚠ Примите решение как можно скорее!
-          </p>
-          <div className="chain-card__inline">
-            <Button
-              type="primary"
-              block
-              size="large"
-              loading={isConfirming}
-              disabled={locked}
-              onClick={() => onConfirmNow(options.chainId)}
-            >
-              Да
-            </Button>
-            <Button
-              block
-              size="large"
-              disabled={isConfirming || locked}
-              onClick={() => onDecline(options.chainId)}
-            >
-              Нет
-            </Button>
-          </div>
         </div>
       ) : confirmed ? (
         <p className="chain-card__confirmed" role="status">
@@ -210,12 +184,4 @@ export function ChainCard({
       ) : null}
     </article>
   );
-}
-
-function pluralize(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'участник';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'участника';
-  return 'участников';
 }
