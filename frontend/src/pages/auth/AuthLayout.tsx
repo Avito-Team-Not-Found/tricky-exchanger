@@ -15,12 +15,15 @@ export function AuthLayout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const screenMotionClass = useScreenMotionClass();
 
+  // /login и /register — один экран: смена режима не навигация, карточку не перемонтируем
+  const screenKey = pathname === '/login' || pathname === '/register' ? 'auth' : pathname;
+
   return (
     <div className="auth-page">
       <div className="auth-page__theme-toggle">
         <ThemeToggle checked={isDark} onChange={() => dispatch(toggleTheme())} />
       </div>
-      <div key={pathname} className={`auth-page__card ${screenMotionClass}`}>
+      <div key={screenKey} className={`auth-page__card ${screenMotionClass}`}>
         <BrandLogo />
         {children}
       </div>
