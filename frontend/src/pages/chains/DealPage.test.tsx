@@ -107,7 +107,7 @@ describe('DealPage', () => {
     const hero = container.querySelector('.deal-hero--success');
     expect(hero).toBeInTheDocument();
     expect(hero).toHaveTextContent('Все товары доставлены');
-    const button = screen.getByRole('button', { name: 'Я забрал товар' });
+    const button = screen.getByRole('button', { name: 'Товар устраивает' });
     expect(button).toBeEnabled();
   });
 
@@ -168,9 +168,9 @@ describe('DealPage', () => {
 
     renderDealPage();
 
-    expect(screen.getByText('Обмен завершён')).toBeInTheDocument();
+    expect(screen.getByText('Заберите свой товар')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'К моим запросам' })).toBeInTheDocument();
-    expect(screen.getByText('У вас есть 24 часа на возврат товара.')).toBeInTheDocument();
+    expect(screen.getByText('Предъявите этот штрих-код при получении')).toBeInTheDocument();
   });
 
   it('redirects to the chain screen when the deal is not reachable', async () => {
@@ -188,17 +188,14 @@ describe('DealPage', () => {
 
     renderDealPage();
 
-    expect(screen.getByText('Вы забрали товар')).toBeInTheDocument();
+    expect(screen.getByText('Вы подтвердили товар')).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Спасибо! Мы отметили, что вы забрали товар\. Обмен завершится, как только все участники/,
+        /Спасибо! Мы отметили, что товар вам подходит\. Обмен завершится, как только все участники/,
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Не используйте товар, пока не подтвердят получение.'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('После получения всеми участниками товара у вас будет 24 часа на возврат.'),
+      screen.getByText('Забрать товар можно будет после подтверждения всеми участниками.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -211,7 +208,7 @@ describe('DealPage', () => {
 
     renderDealPage();
 
-    await user.click(screen.getByRole('button', { name: 'Я забрал товар' }));
+    await user.click(screen.getByRole('button', { name: 'Товар устраивает' }));
 
     await waitFor(() => expect(mockedReceipt).toHaveBeenCalledWith(1, 202));
     expect(screen.queryByText('Забрать товар?')).not.toBeInTheDocument();
@@ -228,7 +225,7 @@ describe('DealPage', () => {
       { path: '/chains/:chainId/deal/receipts', element: <div>статусы получения</div> },
     ]);
 
-    expect(screen.getByText('Вы забрали товар')).toBeInTheDocument();
+    expect(screen.getByText('Вы подтвердили товар')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Статусы получения' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Посмотреть детали цепочки' }));

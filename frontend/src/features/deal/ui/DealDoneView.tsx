@@ -1,40 +1,44 @@
 import { Button } from 'antd';
 
+import { DealBarcode } from './DealBarcode';
+
 import './deal.scss';
 import './DealDoneView.scss';
 
 interface DealDoneViewProps {
   state: { status: 'received-waiting' } | { status: 'completed' };
+  chainId: number;
   onOpenDetails: () => void;
   onGoToRequests: () => void;
 }
 
-export function DealDoneView({ state, onOpenDetails, onGoToRequests }: DealDoneViewProps) {
+export function DealDoneView({ state, chainId, onOpenDetails, onGoToRequests }: DealDoneViewProps) {
   const completed = state.status === 'completed';
 
   return (
     <div className="deal-done">
       <div className="deal-hero">
         <p className="deal-hero__icon" aria-hidden>
-          {completed ? '✅' : '🎉'}
+          {completed ? '📦' : '🎉'}
         </p>
-        <p className="deal-hero__title">{completed ? 'Обмен завершён' : 'Вы забрали товар'}</p>
+        <p className="deal-hero__title">
+          {completed ? 'Заберите свой товар' : 'Вы подтвердили товар'}
+        </p>
         <p className="deal-hero__text">
           {completed
-            ? 'Все участники подтвердили получение. Ваш товар передан, а вы получили новый.'
-            : 'Спасибо! Мы отметили, что вы забрали товар. Обмен завершится, как только все участники подтвердят получение.'}
+            ? 'Обмен прошёл успешно! Ваш товар передан, а вы получили новый.'
+            : 'Спасибо! Мы отметили, что товар вам подходит. Обмен завершится, как только все участники подтвердят получение.'}
         </p>
         {completed ? (
-          <p className="deal-hero__text">У вас есть 24 часа на возврат товара.</p>
+          <p className="deal-hero__text">Получите свой товар в пункте выдачи.</p>
         ) : (
-          <>
-            <p className="deal-hero__text">Не используйте товар, пока не подтвердят получение.</p>
-            <p className="deal-hero__text">
-              После получения всеми участниками товара у вас будет 24 часа на возврат.
-            </p>
-          </>
+          <p className="deal-hero__text">
+            Забрать товар можно будет после подтверждения всеми участниками.
+          </p>
         )}
       </div>
+
+      {completed ? <DealBarcode chainId={chainId} kind="receipt" /> : null}
 
       <div className="deal-actions">
         {completed ? (

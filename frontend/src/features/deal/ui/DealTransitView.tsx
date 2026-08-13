@@ -233,7 +233,7 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
           disabled={!canReceive}
           onClick={confirmReceipt}
         >
-          Я забрал товар
+          Товар устраивает
         </Button>
         {canReceive ? (
           <p className="deal-actions__hint">

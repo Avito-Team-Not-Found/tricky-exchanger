@@ -133,7 +133,7 @@ describe('useDealFulfillment', () => {
       await result.current.confirmReceipt();
     });
 
-    // после инвалидации экран сам перейдёт в «Вы забрали товар»
+    // после инвалидации экран сам перейдёт в «Вы подтвердили товар»
     expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
   });
 

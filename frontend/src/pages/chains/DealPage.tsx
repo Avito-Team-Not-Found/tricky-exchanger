@@ -61,6 +61,7 @@ export function DealPage() {
         ) : (
           <DealDoneView
             state={state}
+            chainId={chain.id}
             onOpenDetails={goToReceipts}
             onGoToRequests={() => navigate('/exchange-requests')}
           />
