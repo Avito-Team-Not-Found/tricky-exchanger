@@ -21,7 +21,7 @@ import {
   type VoteValue,
 } from '@entities/chain';
 
-import { Avatar } from '@shared/ui';
+import { Avatar, FadeInImage } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
 
@@ -266,7 +266,7 @@ function ChainLinkItem({ participant, canVote, selected, onSelect }: ChainLinkIt
         aria-hidden
       >
         {participant.imageUrl ? (
-          <img className="chain-detail__thumb-img" src={participant.imageUrl} alt="" />
+          <FadeInImage className="chain-detail__thumb-img" src={participant.imageUrl} alt="" />
         ) : null}
       </span>
       <div className="chain-detail__item-info">

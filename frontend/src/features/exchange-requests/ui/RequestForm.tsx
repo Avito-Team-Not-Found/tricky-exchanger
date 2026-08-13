@@ -6,7 +6,7 @@ import { App as AntApp, Button, Form, Input, Radio, Select, Skeleton } from 'ant
 import { ITEM_STATUS_META } from '@entities/item';
 
 import { categoryOptions, DESCRIPTION_MIN_LENGTH } from '@shared/config/categories';
-import { ErrorState } from '@shared/ui';
+import { ErrorState, FadeInImage } from '@shared/ui';
 
 import { useRemoveRequest } from '../model/useRemoveRequest';
 import { useRequestForm } from '../model/useRequestForm';
@@ -146,7 +146,7 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
                     >
                       <span className="request-form__item-thumb">
                         {item.imageUrl ? (
-                          <img
+                          <FadeInImage
                             className="request-form__item-image"
                             src={item.imageUrl}
                             alt={item.title}

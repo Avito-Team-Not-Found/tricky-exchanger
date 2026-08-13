@@ -13,7 +13,7 @@ import {
   type Chain,
 } from '@entities/chain';
 
-import { ProbabilityBadge } from '@shared/ui';
+import { FadeInImage, ProbabilityBadge } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
 import { DeadlineRow } from './DeadlineRow';
@@ -51,7 +51,7 @@ export function ChainItemView({
     <div className="chain-item">
       <div className="chain-item__photo">
         {single?.imageUrl ? (
-          <img
+          <FadeInImage
             className="chain-item__photo-img"
             src={single.imageUrl}
             alt={single.offeredItemTitle}

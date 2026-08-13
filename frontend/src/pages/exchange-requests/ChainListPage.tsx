@@ -16,7 +16,7 @@ import {
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems } from '@entities/item';
 
-import { EmptyState, ErrorState } from '@shared/ui';
+import { EmptyState, ErrorState, FadeInImage } from '@shared/ui';
 
 import './ChainListPage.scss';
 
@@ -115,7 +115,11 @@ export function ChainListPage() {
           <div className="chain-list-page__summary">
             {/* миниатюра отдаваемого товара — 40×40, radius-sm (макет 4.6) */}
             {offeredItem?.imageUrl ? (
-              <img className="chain-list-page__summary-photo" src={offeredItem.imageUrl} alt="" />
+              <FadeInImage
+                className="chain-list-page__summary-photo"
+                src={offeredItem.imageUrl}
+                alt=""
+              />
             ) : (
               <div className="chain-list-page__summary-photo" aria-hidden />
             )}

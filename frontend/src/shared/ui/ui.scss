@@ -30,6 +30,15 @@
   white-space: nowrap;
 }
 
+.fade-in-image {
+  opacity: 0;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-out);
+}
+
+.fade-in-image--loaded {
+  opacity: 1;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;

@@ -9,7 +9,7 @@ import {
   type VoteValue,
 } from '@entities/chain';
 
-import { ProbabilityBadge } from '@shared/ui';
+import { FadeInImage, ProbabilityBadge } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
 import { DeadlineRow } from './DeadlineRow';
@@ -92,7 +92,7 @@ export function ChainCard({
 
       <div className="chain-card__photo">
         {option.imageUrl ? (
-          <img className="chain-card__photo-img" src={option.imageUrl} alt={option.title} />
+          <FadeInImage className="chain-card__photo-img" src={option.imageUrl} alt={option.title} />
         ) : (
           <div className="chain-card__photo-placeholder" aria-hidden>
             {option.title[0] ?? ''}

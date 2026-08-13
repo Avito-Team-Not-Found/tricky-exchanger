@@ -1,3 +1,5 @@
+import { FadeInImage } from '@shared/ui';
+
 import './DealItemSwap.scss';
 
 interface DealItemSwapProps {
@@ -37,7 +39,11 @@ export function DealItemSwap({
 function ItemThumb({ title, imageUrl }: { title: string; imageUrl?: string | null }) {
   return (
     <span className={`deal-swap__thumb${imageUrl ? '' : ' deal-swap__thumb--empty'}`} aria-hidden>
-      {imageUrl ? <img className="deal-swap__thumb-img" src={imageUrl} alt="" /> : (title[0] ?? '')}
+      {imageUrl ? (
+        <FadeInImage className="deal-swap__thumb-img" src={imageUrl} alt="" />
+      ) : (
+        (title[0] ?? '')
+      )}
     </span>
   );
 }
