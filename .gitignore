@@ -29,3 +29,8 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Load test run artifacts
+loadtest/k6/results.txt
+loadtest/k6/results-summary.json
+loadtest/k6/results*.json
