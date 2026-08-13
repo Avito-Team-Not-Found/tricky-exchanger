@@ -197,7 +197,7 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
                 if (!value || value.trim().length >= DESCRIPTION_MIN_LENGTH) {
                   return Promise.resolve();
                 }
-                return Promise.reject(new Error('Пожалуйста, опишите желаемое подробнее'));
+                return Promise.reject(new Error('Пожалуйста, опишите подробнее'));
               },
             },
           ]}

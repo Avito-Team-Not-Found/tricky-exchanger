@@ -198,7 +198,7 @@ function WaitingView({
       <p className="replacement-status__text">
         Кандидату отправлено приглашение.
         <br />
-        Он ответит в течение 24 часов.
+        Он ответит в течение 24 часов. Письмо придёт на почту.
       </p>
       {invitedOption ? <ReplacementCandidateCard option={invitedOption} /> : null}
       <Button

@@ -31,6 +31,14 @@ describe('DeadlineRow', () => {
     expect(screen.getByText('Осталось 1 мин на отправку')).toBeInTheDocument();
   });
 
+  it('renders the fast-replacement deadline on a proposed chain when requested', () => {
+    render(
+      <DeadlineRow status="PROPOSED" deadlineAt="2026-08-10T10:01:00Z" purpose="replacement" />,
+    );
+
+    expect(screen.getByText('Осталось 1 мин на замену')).toBeInTheDocument();
+  });
+
   it('renders nothing on a frozen chain when the shipping deadline is missing', () => {
     const { container } = render(<DeadlineRow status="FROZEN" showShipDeadline />);
 

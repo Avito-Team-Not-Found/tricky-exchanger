@@ -170,7 +170,7 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
           { max: 500, message: 'Описание не длиннее 500 символов' },
           {
             // кастомный validator вместо min: antd считает символы до обрезки, а на бэкенд
-            // уходит values.description.trim() — 50 пробелов прошли бы через min
+            // уходит values.description.trim() — 25 пробелов прошли бы через min
             validator(_, value: string | undefined) {
               if (!value || value.trim().length >= DESCRIPTION_MIN_LENGTH) {
                 return Promise.resolve();

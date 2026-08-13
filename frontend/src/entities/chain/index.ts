@@ -8,6 +8,7 @@ export {
   hasDeal,
   isAssembled,
   isHardLocked,
+  isFrozenReplacement,
   myConfirmVote,
   myParticipant,
   needsMyAction,

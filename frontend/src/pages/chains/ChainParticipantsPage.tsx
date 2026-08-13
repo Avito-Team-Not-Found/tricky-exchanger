@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router';
 
 import {
   ChainDetail,
+  ExpiredChainState,
+  isChainExpired,
   receiveOptionQuery,
   useChainConfirm,
   useReceiveOption,
@@ -21,8 +23,12 @@ export function ChainParticipantsPage() {
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const receiveRequestId = useReceiveOption();
-  const { data: chain, isLoading, isError, refetch } = useChain(chainId);
-  const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
+  const { data: chain, isLoading, isError, error, refetch } = useChain(chainId);
+  const { openConfirm } = useChainConfirm(
+    refetch,
+    () => navigate('/exchange-requests'),
+    { suppressExpiryToast: true },
+  );
 
   return (
     <div className="chain-detail-page">
@@ -34,6 +40,8 @@ export function ChainParticipantsPage() {
       <div className="chain-detail-page__body">
         {isLoading ? (
           <Skeleton active paragraph={{ rows: 6 }} />
+        ) : isChainExpired(error) ? (
+          <ExpiredChainState />
         ) : isError || !chain ? (
           <ErrorState onRetry={refetch} />
         ) : (

@@ -195,9 +195,9 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
         <p className="deal-hero__icon" aria-hidden>
           ✅
         </p>
-        <p className="deal-hero__title">Все товары доставлены</p>
+        <p className="deal-hero__title">Ваш товар доставлен</p>
         <p className="deal-hero__text">
-          Ваш товар уже в пункте выдачи. Заберите его в удобное время.
+          Ваш товар уже в пункте выдачи. Проверьте его в удобное время.
         </p>
       </div>
 
@@ -233,7 +233,7 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
           disabled={!canReceive}
           onClick={confirmReceipt}
         >
-          Я забрал товар
+          Товар устраивает
         </Button>
         {canReceive ? (
           <p className="deal-actions__hint">

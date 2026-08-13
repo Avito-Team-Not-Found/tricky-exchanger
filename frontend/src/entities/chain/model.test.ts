@@ -6,6 +6,7 @@ import {
   CONFIRM_VOTE_META,
   confirmVoteAt,
   isAssembled,
+  isFrozenReplacement,
   isHardLocked,
   myConfirmVote,
   myParticipant,
@@ -157,6 +158,32 @@ describe('needsShipment', () => {
     expect(needsShipment('COMPLETED')).toBe(false);
     expect(needsShipment('CANDIDATE')).toBe(false);
     expect(needsShipment('PROPOSED')).toBe(false);
+  });
+});
+
+describe('isFrozenReplacement', () => {
+  it('recognizes a proposed chain awaiting a fast replacement', () => {
+    const chain = buildChain([], {
+      status: 'PROPOSED',
+      invalidReason: 'frozen_replacement',
+    });
+
+    expect(isFrozenReplacement(chain)).toBe(true);
+  });
+
+  it('is false for a plain proposed chain', () => {
+    const chain = buildChain([], { status: 'PROPOSED' });
+
+    expect(isFrozenReplacement(chain)).toBe(false);
+  });
+
+  it('is false outside PROPOSED even with the invalid reason set', () => {
+    const chain = buildChain([], {
+      status: 'FROZEN',
+      invalidReason: 'frozen_replacement',
+    });
+
+    expect(isFrozenReplacement(chain)).toBe(false);
   });
 });
 

@@ -117,13 +117,13 @@ describe('ItemForm', () => {
     expect(screen.queryByText('Фото выбрано')).not.toBeInTheDocument();
   });
 
-  it('blocks saving a description shorter than 50 characters', async () => {
+  it('blocks saving a description shorter than 25 characters', async () => {
     const user = userEvent.setup();
     const { container } = renderWithProviders(<ItemForm />);
 
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
-    await user.type(screen.getByLabelText('Описание'), 'x'.repeat(49));
+    await user.type(screen.getByLabelText('Описание'), 'x'.repeat(24));
     await pickCategory(user);
 
     expect(await screen.findByText('Пожалуйста, опишите товар подробнее')).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe('ItemForm', () => {
   });
 
   // иначе кнопка неактивна, а ошибки на экране нет — пользователю нечем объяснить отказ
-  it('explains the blocked save for an item created before the 50-character rule', async () => {
+  it('explains the blocked save for an item created before the 25-character rule', async () => {
     mockedUseItem.mockReturnValue(queryOk({ ...existingItem, description: 'Мощный' }));
     renderWithProviders(<ItemForm itemId={1} />);
 

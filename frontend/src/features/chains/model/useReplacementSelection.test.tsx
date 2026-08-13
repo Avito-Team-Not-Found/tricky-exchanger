@@ -162,6 +162,19 @@ describe('useReplacementSelection', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/chains/1'));
   });
 
+  // дедлайн быстрой замены истёк — приглашать некого, цепочка ушла в откат
+  it('warns and leaves for the requests when the replacement deadline expires on invite', async () => {
+    mockedSelect.mockRejectedValue(axiosError(410));
+    const { result } = await renderSelecting();
+
+    await act(async () => {
+      result.current.invite();
+    });
+
+    expect(await screen.findByText('Время истекло, цепочка распалась')).toBeInTheDocument();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/exchange-requests'));
+  });
+
   // сервер не идемпотентен: повторный PUT тем же requestId вернул бы 422
   it('sends a single request when invite is called twice in a row', async () => {
     mockedSelect.mockImplementation(() => new Promise(() => {}));
@@ -385,6 +398,20 @@ describe('useReplacementSelection', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Цепочка расформирована')).not.toBeInTheDocument();
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/exchange-requests/101'));
+  });
+
+  it('warns and leaves for the requests when the replacement deadline expires on abandon', async () => {
+    mockedDecline.mockRejectedValue(axiosError(410));
+    const { result } = await renderSelecting();
+
+    act(() => result.current.abandon());
+    const confirm = await screen.findByRole('button', { name: 'Да, отказаться' });
+    await act(async () => {
+      confirm.click();
+    });
+
+    expect(await screen.findByText('Время истекло, цепочка распалась')).toBeInTheDocument();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/exchange-requests'));
   });
 
   // маршрут тот же, параметр другой — роутер элемент не размонтирует, и без пересинхронизации

@@ -218,6 +218,21 @@ describe('ChainReplacementPage', () => {
     expect(screen.getByText('Кандидат 1')).toBeInTheDocument();
   });
 
+  it('tells the user that the invitation will arrive by email', async () => {
+    mockedSelect.mockResolvedValue({ chainId: 1, requestId: 1001, status: 'PROPOSED' });
+    const user = userEvent.setup();
+    mockOptions([makeOption(1)]);
+
+    renderWithProviders(<ChainReplacementPage />);
+
+    await user.click(screen.getAllByRole('radio')[0]);
+    await user.click(screen.getByRole('button', { name: 'Пригласить замену' }));
+
+    expect(
+      await screen.findByText(/Он ответит в течение 24 часов\. Письмо придёт на почту\./),
+    ).toBeInTheDocument();
+  });
+
   it('shows the assembled chain once the candidate confirmed', () => {
     mockedUseChain.mockReturnValue({
       data: makeChain({ status: 'FROZEN' }),

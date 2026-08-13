@@ -17,6 +17,8 @@ import {
 import { plural } from '@shared/lib/plural';
 import { FadeInImage, ProbabilityBadge } from '@shared/ui';
 
+import { chainDeadlinePurpose } from '../model/useDeadlineLabel';
+
 import { ConsentBadge } from './ConsentBadge';
 import { DeadlineRow } from './DeadlineRow';
 
@@ -34,6 +36,7 @@ interface ChainItemViewProps {
   onConfirm: () => void;
   onProceed: () => void;
   onReplace: () => void;
+  onDecline: () => void;
 }
 
 export function ChainItemView({
@@ -46,6 +49,7 @@ export function ChainItemView({
   onConfirm,
   onProceed,
   onReplace,
+  onDecline,
 }: ChainItemViewProps) {
   const { token } = theme.useToken();
   const received = receivesItem(chain, receiveRequestId);
@@ -107,7 +111,11 @@ export function ChainItemView({
         <p className="chain-item__lock">{HARD_LOCK_MESSAGE}</p>
       ) : null}
 
-      <DeadlineRow status={chain.status} deadlineAt={chain.freezeDeadlineAt} />
+      <DeadlineRow
+        status={chain.status}
+        deadlineAt={chain.freezeDeadlineAt}
+        purpose={chainDeadlinePurpose(chain)}
+      />
 
       {single?.offeredItemDescription ? (
         <section className="chain-item__section">
@@ -153,19 +161,43 @@ export function ChainItemView({
             Требуются действия
           </Button>
         ) : chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
-          <p className="chain-item__confirmed" role="status">
-            Вы подтвердили · ждём остальных
-          </p>
+          <>
+            <p className="chain-item__confirmed" role="status">
+              Вы подтвердили · ждём остальных
+            </p>
+            <Button
+              className="chain-item__decline"
+              type="text"
+              danger
+              size="large"
+              block
+              onClick={onDecline}
+            >
+              Отказаться от сделки
+            </Button>
+          </>
         ) : shipRequired ? (
-          <Button
-            className="chain-item__action"
-            type="primary"
-            size="large"
-            block
-            onClick={onProceed}
-          >
-            Требуется действие
-          </Button>
+          <>
+            <Button
+              className="chain-item__action"
+              type="primary"
+              size="large"
+              block
+              onClick={onProceed}
+            >
+              Требуется действие
+            </Button>
+            <Button
+              className="chain-item__decline"
+              type="text"
+              danger
+              size="large"
+              block
+              onClick={onDecline}
+            >
+              Отказаться от сделки
+            </Button>
+          </>
         ) : hasDeal(chain.status) ? (
           <Button
             className="chain-item__action"
