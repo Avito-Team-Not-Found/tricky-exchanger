@@ -106,7 +106,6 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 	return resultStatus, nil
 }
 
-
 // Unconfirm withdraws a round-two approval while the chain is still waiting
 // for confirmations. The participant stays in the proposal and may confirm
 // again. During a fast-replacement round any additional withdrawal cancels

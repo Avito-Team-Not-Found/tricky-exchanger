@@ -155,7 +155,6 @@ func (h *Handler) Think(c *gin.Context) {
 	api.SendOk(c, http.StatusOK, gin.H{"chainId": chainID, "vote": entity.VoteThinking})
 }
 
-
 // Unconfirm returns the caller's round-two decision to pending. It does not
 // remove the candidate response, so the participant can confirm again later.
 func (h *Handler) Unconfirm(c *gin.Context) {

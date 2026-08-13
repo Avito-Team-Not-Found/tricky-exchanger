@@ -469,7 +469,6 @@ func (r *Postgres) MarkParticipantThinking(ctx context.Context, tx database.Tx, 
 	return nil
 }
 
-
 // UnconfirmParticipant returns an approved vote to pending without removing
 // the participant from the proposal. Repeated calls are idempotent.
 func (r *Postgres) UnconfirmParticipant(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error {
