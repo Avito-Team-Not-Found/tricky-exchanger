@@ -7,10 +7,8 @@ import { tokenStorage } from '@shared/lib/storage';
 
 import { fetchMeRequest } from '../api/authApi';
 
-// Восстановление сессии при перезагрузке страницы: токен из localStorage сам по себе
-// не содержит свежих данных профиля, поэтому тянем их с сервера (GET /auth/me).
-// Протухший токен (401) уже обработан интерцептором apiClient — он чистит хранилище
-// и редиректит на /login, здесь отдельная обработка не нужна.
+// токен из localStorage не содержит свежих данных профиля, поэтому тянем их с сервера;
+// протухший токен уже обработан интерцептором apiClient — здесь 401 не разбираем
 export function useRestoreSession() {
   const dispatch = useAppDispatch();
 

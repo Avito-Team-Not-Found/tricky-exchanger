@@ -130,8 +130,6 @@ describe('useItemForm', () => {
     expect(result.current.submitting).toBe(false);
   });
 
-  // карточки заявок показывают название отдаваемого товара (offeredItemTitle), поэтому
-  // правка товара обязана инвалидировать и список заявок — иначе там ещё минуту висит старое
   it('invalidates both items and exchange requests after an update', async () => {
     mockedUseItem.mockReturnValue(queryOk(existingItem));
     mockedUpdateItem.mockResolvedValue(existingItem);
@@ -177,7 +175,6 @@ describe('useItemForm', () => {
   describe('photo preview', () => {
     const file = new File(['bytes'], 'photo.png', { type: 'image/png' });
 
-    // выбранный файл всегда важнее фото с сервера: показывать старое фото под видом нового нельзя
     it('shows the picked file instead of the stored image', async () => {
       mockedUseItem.mockReturnValue(queryOk(existingItem));
       const { result } = renderHook(() => useItemForm(1), { wrapper });

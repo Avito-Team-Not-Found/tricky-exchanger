@@ -23,6 +23,7 @@ import (
 	exchangeOfferHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/exchange_offer"
 	itemHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/item"
 	userHandler "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/handler/user"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/chainnotification"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/mailer"
 	chainRepo "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository/chain"
@@ -106,6 +107,7 @@ func main() {
 	}
 	chainSvc := chainservice.NewService(chainRepository, transactionManager)
 	chainSvc = chainSvc.WithScorer(scoreRanker)
+	chainSvc = chainSvc.WithNotifier(chainnotification.New(pool, mailerSvc))
 
 	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).
 		WithRanker(scoreRanker).

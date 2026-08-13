@@ -104,6 +104,9 @@ type fakeRepository struct {
 	proposed                []int64
 	proposalDeadline        time.Time
 	proposalExpired         bool
+	expiredChainIDs         []int64
+	expiredFrozenRequests   []int64
+	expiredFrozen           bool
 	upsertCalls             int
 	deleteCalls             int
 	markInProposal          int
@@ -200,6 +203,14 @@ func (r *fakeRepository) ExpireProposalIfDue(_ context.Context, _ database.Tx, _
 	return r.proposalExpired, nil
 }
 
+func (r *fakeRepository) ListExpiredChainIDs(_ context.Context, _ database.Tx) ([]int64, error) {
+	return append([]int64(nil), r.expiredChainIDs...), nil
+}
+
+func (r *fakeRepository) ExpireFrozenIfDue(_ context.Context, _ database.Tx, _ int64) ([]int64, bool, error) {
+	return append([]int64(nil), r.expiredFrozenRequests...), r.expiredFrozen, nil
+}
+
 func (r *fakeRepository) MarkRequestInProposal(_ context.Context, _ database.Tx, _ int64) error {
 	r.markInProposal++
 	return nil
@@ -294,6 +305,10 @@ func (r *fakeRepository) MarkItemsUnavailable(_ context.Context, _ database.Tx, 
 
 func (r *fakeRepository) LoadChainRequestIDs(_ context.Context, _ database.Tx, _ int64) ([]int64, error) {
 	return r.requestIDs, nil
+}
+
+func (r *fakeRepository) LoadActiveChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	return r.LoadChainRequestIDs(ctx, tx, chainID)
 }
 
 func (r *fakeRepository) LockRequestsForFreeze(_ context.Context, _ database.Tx, _ []int64) error {
@@ -448,7 +463,8 @@ func TestDeclineRollsBackWhenReplacementMissing(t *testing.T) {
 
 func TestSelectReplacementPinsRequestedCandidate(t *testing.T) {
 	repository := &fakeRepository{status: entity.ChainStatusProposed, length: 3}
-	service := chainservice.NewService(repository, fakeTransactionManager{})
+	notifier := &fakeNotifier{}
+	service := chainservice.NewService(repository, fakeTransactionManager{}).WithNotifier(notifier)
 
 	if err := service.SelectReplacement(context.Background(), "user-1", 7, 99); err != nil {
 		t.Fatalf("SelectReplacement() error = %v", err)
@@ -456,6 +472,26 @@ func TestSelectReplacementPinsRequestedCandidate(t *testing.T) {
 	if repository.selectedRequestID != 99 {
 		t.Fatalf("selected request = %d, want 99", repository.selectedRequestID)
 	}
+	if notifier.invitedChainID != 7 || notifier.invitedRequestID != 99 {
+		t.Fatalf("replacement notification = chain %d request %d, want chain 7 request 99", notifier.invitedChainID, notifier.invitedRequestID)
+	}
+}
+
+type fakeNotifier struct {
+	frozenChainID    int64
+	invitedChainID   int64
+	invitedRequestID int64
+}
+
+func (n *fakeNotifier) NotifyChainFrozen(_ context.Context, chainID int64) error {
+	n.frozenChainID = chainID
+	return nil
+}
+
+func (n *fakeNotifier) NotifyReplacementInvited(_ context.Context, chainID, requestID int64) error {
+	n.invitedChainID = chainID
+	n.invitedRequestID = requestID
+	return nil
 }
 
 type fakeRebuilder struct {
@@ -471,6 +507,45 @@ func (r *fakeRebuilder) RepairAffectedChains(_ context.Context, _ database.Tx, a
 func (r *fakeRebuilder) RebuildRequests(_ context.Context, _ database.Tx, requestIDs []int64) error {
 	r.rebuilt = append([]int64(nil), requestIDs...)
 	return nil
+}
+
+func TestExpireDueRebuildsRequestsReleasedFromFrozenChain(t *testing.T) {
+	repository := &fakeRepository{
+		expiredChainIDs:       []int64{7},
+		expiredFrozen:         true,
+		expiredFrozenRequests: []int64{10, 20, 30},
+	}
+	rebuilder := &fakeRebuilder{}
+	freezer := chainservice.NewFreezeService(repository, rebuilder)
+
+	if err := freezer.ExpireDue(context.Background(), nil); err != nil {
+		t.Fatalf("ExpireDue() error = %v", err)
+	}
+	want := []int64{10, 20, 30}
+	if len(rebuilder.rebuilt) != len(want) {
+		t.Fatalf("rebuilt = %v, want %v", rebuilder.rebuilt, want)
+	}
+	for i := range want {
+		if rebuilder.rebuilt[i] != want[i] {
+			t.Fatalf("rebuilt = %v, want %v", rebuilder.rebuilt, want)
+		}
+	}
+}
+
+func TestExpireDueDoesNotRebuildRolledBackProposal(t *testing.T) {
+	repository := &fakeRepository{
+		expiredChainIDs: []int64{7},
+		proposalExpired: true,
+	}
+	rebuilder := &fakeRebuilder{}
+	freezer := chainservice.NewFreezeService(repository, rebuilder)
+
+	if err := freezer.ExpireDue(context.Background(), nil); err != nil {
+		t.Fatalf("ExpireDue() error = %v", err)
+	}
+	if len(rebuilder.rebuilt) != 0 {
+		t.Fatalf("rebuilt = %v, want none", rebuilder.rebuilt)
+	}
 }
 
 func TestConfirmKeepsProposedUntilEveryParticipantApproves(t *testing.T) {
@@ -577,7 +652,8 @@ func TestConfirmFreezesWhenEveryParticipantApproved(t *testing.T) {
 	repository.affectedChains = []int64{8, 9}
 	repository.releasedRequests = []int64{30, 40}
 	freezer := chainservice.NewFreezeService(repository, rebuilder)
-	service := chainservice.NewService(repository, fakeTransactionManager{}).WithFreezer(freezer)
+	notifier := &fakeNotifier{}
+	service := chainservice.NewService(repository, fakeTransactionManager{}).WithFreezer(freezer).WithNotifier(notifier)
 
 	status, err := service.Confirm(context.Background(), "user-1", 7)
 	if err != nil {
@@ -597,6 +673,9 @@ func TestConfirmFreezesWhenEveryParticipantApproved(t *testing.T) {
 	}
 	if len(rebuilder.rebuilt) != 2 || rebuilder.rebuilt[0] != 30 || rebuilder.rebuilt[1] != 40 {
 		t.Fatalf("rebuilt released requests = %v, want [30 40]", rebuilder.rebuilt)
+	}
+	if notifier.frozenChainID != 7 {
+		t.Fatalf("frozen notification chain = %d, want 7", notifier.frozenChainID)
 	}
 }
 
@@ -650,7 +729,8 @@ func TestConfirmFrozenRetryIsIdempotentForParticipant(t *testing.T) {
 		edgeRequestID: 10,
 		edgeTargetID:  20,
 	}
-	service := chainservice.NewService(repository, fakeTransactionManager{})
+	notifier := &fakeNotifier{}
+	service := chainservice.NewService(repository, fakeTransactionManager{}).WithNotifier(notifier)
 
 	status, err := service.Confirm(context.Background(), "user-1", 7)
 	if err != nil {
@@ -661,6 +741,9 @@ func TestConfirmFrozenRetryIsIdempotentForParticipant(t *testing.T) {
 	}
 	if repository.lockRequestCalls != 0 || repository.freezeCalled {
 		t.Fatal("idempotent retry must not repeat locking or freezing")
+	}
+	if notifier.frozenChainID != 0 {
+		t.Fatal("idempotent retry must not repeat the frozen notification")
 	}
 }
 

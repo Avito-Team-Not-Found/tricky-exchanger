@@ -3,8 +3,7 @@ export interface ParticipantAlias {
   emoji: string;
 }
 
-// На этапе MVP участники цепочки анонимны: настоящие имена не показываются, вместо них —
-// животное-псевдоним с эмодзи (макет 4.8). Первые три — те же, что нарисованы в макете.
+// участники цепочки анонимны: вместо имён — животное-псевдоним с эмодзи
 const ALIASES: ParticipantAlias[] = [
   { name: 'Мишка', emoji: '🐻' },
   { name: 'Лиса', emoji: '🦊' },
@@ -20,9 +19,9 @@ const ALIASES: ParticipantAlias[] = [
   { name: 'Олень', emoji: '🦌' },
 ];
 
-// Псевдоним берётся по позиции в цепочке, а не по id пользователя: позиции внутри цепочки
-// уникальны, поэтому два участника одной цепочки никогда не получат одно и то же животное.
+// по позиции, а не по id пользователя: позиции внутри цепочки уникальны, поэтому двух
+// одинаковых животных в ней не будет. Позиции 0-based, первая позиция кольца — «Мишка»
 export function participantAlias(position: number): ParticipantAlias {
-  const index = (Math.trunc(position) - 1) % ALIASES.length;
+  const index = Math.trunc(position) % ALIASES.length;
   return ALIASES[index < 0 ? index + ALIASES.length : index];
 }

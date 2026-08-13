@@ -11,9 +11,7 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Экран сделки (макет 4.9, /chains/:chainId/deal): ветка по dealState. На недоступной цепочке
-// (CANDIDATE/PROPOSED/BROKEN) сделки ещё нет — редирект на детали цепочки; весь второй раунд
-// живёт на 4.6/4.7/4.8, ссылки на /deal оттуда не появляется (DEAL-PLAN.md §6F).
+// до заморозки сделки ещё нет — открытый по прямой ссылке экран уводит на детали цепочки
 export function DealPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
@@ -22,8 +20,7 @@ export function DealPage() {
   const state = chain ? dealState(chain) : null;
 
   const goBack = () => navigate(`/chains/${chainId}`);
-  // «Посмотреть детали цепочки» ведёт сразу в статусы (отправки на экранах отправки, получения —
-  // на экранах получения) — отдельной ссылки на них больше нет, а детали цепочки открываются «Назад»
+  // отдельной ссылки на статусы больше нет — «Посмотреть детали цепочки» ведёт сразу в них
   const goToShipments = () => navigate(`/chains/${chainId}/deal/shipments`);
   const goToReceipts = () => navigate(`/chains/${chainId}/deal/receipts`);
 

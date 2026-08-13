@@ -1,5 +1,6 @@
 import {
   myParticipant,
+  nextInRing,
   participantAlias,
   type Chain,
   type ChainParticipant,
@@ -16,9 +17,7 @@ interface ParticipantStatusListProps {
   mode: DealStatusMode;
 }
 
-// Списки «Статусы отправки» и «Статусы получения» (макет 4.9): строки участников с псевдонимами
-// вместо имён (DESIGN.md §2.9) и пилюлей статуса. Позиция p отдаёт свой товар и получает товар
-// следующей по кольцу позиции — строка «отдаёт → получает» и статус получения строятся по ней.
+// позиция p получает товар следующей по кольцу позиции — по ней и строится статус получения
 export function ParticipantStatusList({ chain, mode }: ParticipantStatusListProps) {
   const me = myParticipant(chain);
   const participants = [...chain.participants].sort((a, b) => a.position - b.position);
@@ -39,10 +38,8 @@ export function ParticipantStatusList({ chain, mode }: ParticipantStatusListProp
 }
 
 function sourceFor(chain: Chain, position: number): ChainParticipant | null {
-  const positions = [...new Set(chain.participants.map((p) => p.position))].sort((a, b) => a - b);
-  const index = positions.indexOf(position);
-  if (positions.length === 0 || index === -1) return null;
-  const next = positions[(index + 1) % positions.length];
+  const next = nextInRing(chain, position);
+  if (next === null) return null;
   return chain.participants.find((p) => p.position === next) ?? null;
 }
 
@@ -59,7 +56,7 @@ function ParticipantStatusRow({
 }) {
   const alias = participantAlias(participant.position);
   const source = sourceFor(chain, participant.position);
-  // подпись текстом обязательна — статус не передаётся одним лишь цветом (DESIGN.md §1.8)
+  // подпись текстом обязательна — статус не передаётся одним лишь цветом
   const pill =
     mode === 'shipments'
       ? participant.requestStatus === 'LOCKED'

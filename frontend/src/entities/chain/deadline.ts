@@ -1,6 +1,5 @@
-// Остаток до дедлайна ответа второго раунда (макет 4.6/4.7: «Осталось 47 ч 58 мин на ответ»).
-// null — дедлайна нет, он невалиден или уже прошёл: строку не показываем, откат цепочки
-// бэкенд делает лениво сам (SOFT-LOCK §3.1)
+// null — дедлайна нет, он невалиден или уже прошёл: строку не показываем, а откат цепочки
+// бэкенд делает лениво сам
 export function formatRemaining(deadlineAt: string | null | undefined, now: number): string | null {
   const deadline = Date.parse(deadlineAt ?? '');
   if (Number.isNaN(deadline) || deadline <= now) return null;

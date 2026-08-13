@@ -67,8 +67,7 @@ describe('ItemFormPage', () => {
     expect(mockedUpdateItem).toHaveBeenCalled();
   });
 
-  // «Сохранить изменения» уходило в сабмит без валидации: на неполной форме payload
-  // не собирался, сабмит падал молча и оставлял форму заблокированной навсегда
+  // сабмит без валидации падал молча и оставлял форму заблокированной навсегда
   it('offers only leaving when a dirty create form is incomplete', async () => {
     const user = userEvent.setup();
     mockedUseItem.mockReturnValue(queryOk(undefined));

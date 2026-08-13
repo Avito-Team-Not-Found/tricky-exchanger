@@ -39,7 +39,6 @@ const mockedRemoveRequest = vi.mocked(removeRequest);
 const mockedUseRequest = vi.mocked(useRequest);
 const mockedUseItems = vi.mocked(useItems);
 
-// описание желаемого обязано быть не короче 50 символов — валидное значение для заполненных форм
 const LONG_WANTED = 'Ноутбук в рабочем состоянии, любой диагонали, можно без зарядки';
 
 const items = [
@@ -59,6 +58,14 @@ const items = [
     imageUrl: 'bike.png',
     status: 'UNAVAILABLE',
   },
+  {
+    id: 3,
+    title: 'Гитара',
+    description: 'Акустическая',
+    category: '',
+    imageUrl: null,
+    status: 'ARCHIVED',
+  },
 ] as unknown as Item[];
 
 const lockedRequest = {
@@ -74,15 +81,12 @@ const lockedRequest = {
 
 const liveRequest = { ...lockedRequest, status: 'ACTIVE' } as ExchangeRequest;
 
-// выпадашка из 37 опций виртуализирована — до нижних строк DOM не доходит, поэтому сначала
-// фильтруем поиском (showSearch включён), как это делает и живой пользователь
 async function pickCategory(user: ReturnType<typeof userEvent.setup>, name = 'Ноутбуки') {
   await user.click(screen.getByLabelText('Категория'));
   await user.type(screen.getByLabelText('Категория'), name);
   await user.click(await screen.findByTitle(name));
 }
 
-// оба поля блока «что хочу получить» обязательны — заполняем их вместе
 async function fillWanted(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Что вы хотите получить'), LONG_WANTED);
   await pickCategory(user);
@@ -97,7 +101,6 @@ describe('RequestForm', () => {
 
   it('shows the search result with zero candidate chains and keeps the request searchable', async () => {
     const user = userEvent.setup();
-    // матчинг на бэкенде — заглушка, поэтому заявка остаётся в поиске (SCRUM-50 §5)
     mockedCreateRequest.mockResolvedValue({
       id: 2,
       status: 'ACTIVE',
@@ -156,7 +159,6 @@ describe('RequestForm', () => {
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
 
     await user.type(screen.getByLabelText('Что вы хотите получить'), LONG_WANTED);
-    // категория обязательна — одного описания мало
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
 
     await pickCategory(user);
@@ -175,8 +177,7 @@ describe('RequestForm', () => {
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeDisabled();
   });
 
-  // заявки старше требования 50 символов иначе молча блокировали сохранение: кнопка
-  // неактивна, а ошибки на экране нет — пользователю нечем объяснить отказ
+  // иначе кнопка неактивна, а ошибки на экране нет — пользователю нечем объяснить отказ
   it('explains the blocked save for a request created before the 50-character rule', async () => {
     mockedUseRequest.mockReturnValue(queryOk({ ...liveRequest, wantedDescription: 'Ноутбук' }));
     renderWithProviders(<RequestForm requestId={1} />);
@@ -189,6 +190,13 @@ describe('RequestForm', () => {
     renderWithProviders(<RequestForm />);
 
     expect(screen.getByRole('img', { name: 'Велосипед' })).toHaveAttribute('src', 'bike.png');
+  });
+
+  it('keeps an exchanged item out of the offer picker', () => {
+    renderWithProviders(<RequestForm />);
+
+    expect(screen.getByText('Кухонный комбайн')).toBeInTheDocument();
+    expect(screen.queryByText('Гитара')).not.toBeInTheDocument();
   });
 
   it('leads to item creation when the user has no items', async () => {

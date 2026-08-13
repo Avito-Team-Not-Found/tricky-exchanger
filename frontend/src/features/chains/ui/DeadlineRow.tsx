@@ -1,27 +1,29 @@
 import type { ChainStatus } from '@entities/chain';
 
-import { useDeadlineLabel } from '../model/useDeadlineLabel';
+import { useDeadlineLabel, type DeadlinePurpose } from '../model/useDeadlineLabel';
 
 import './DeadlineRow.scss';
 
 interface DeadlineRowProps {
   status: ChainStatus;
   deadlineAt?: string | null;
+  // дедлайн отправки показывает только карточка списка вариантов
+  showShipDeadline?: boolean;
 }
 
-// Таймер дедлайна ответа по собранной цепочке (макет 4.6/4.7, TimerRow): «Осталось … на ответ».
-// Рендерит null, когда метки нет (статус не PROPOSED или дедлайн не задан/прошёл) — вызывающим
-// экранам не нужно дублировать условие. role="status" не ставим: живой регион, обновляемый раз
-// в 30 с, постоянно перебивал бы скринридер (DEADLINE-PLAN Р5)
-export function DeadlineRow({ status, deadlineAt }: DeadlineRowProps) {
-  const label = useDeadlineLabel(status, deadlineAt);
+// без метки рендерит null, чтобы вызывающие экраны не дублировали условие; role="status" не
+// ставим — живой регион, обновляемый раз в 30 с, постоянно перебивал бы скринридер
+export function DeadlineRow({ status, deadlineAt, showShipDeadline }: DeadlineRowProps) {
+  const purpose: DeadlinePurpose | null =
+    status === 'PROPOSED' ? 'response' : showShipDeadline && status === 'FROZEN' ? 'ship' : null;
+  const label = useDeadlineLabel(purpose, deadlineAt);
   if (!label) return null;
   return (
     <p className="deadline-row">
       <span className="deadline-row__icon" aria-hidden>
         ⏱
       </span>
-      Осталось {label} на ответ
+      Осталось {label} {purpose === 'ship' ? 'на отправку' : 'на ответ'}
     </p>
   );
 }

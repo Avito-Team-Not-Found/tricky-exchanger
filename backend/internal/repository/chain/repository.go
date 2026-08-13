@@ -564,6 +564,9 @@ func (r *Postgres) Propose(
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotCandidate
 	}
+	if _, err := tx.Exec(ctx, `DELETE FROM chain_replacement_attempts WHERE chain_id = $1`, chainID); err != nil {
+		return fmt.Errorf("clear replacement attempts before proposal: %w", err)
+	}
 
 	if _, err := tx.Exec(ctx, `
 		UPDATE exchange_offers
@@ -632,7 +635,102 @@ func (r *Postgres) ExpireProposalIfDue(ctx context.Context, tx database.Tx, chai
 	`, chainID); err != nil {
 		return false, fmt.Errorf("reset expired proposal confirmations: %w", err)
 	}
+	if _, err := tx.Exec(ctx, `DELETE FROM chain_replacement_attempts WHERE chain_id = $1`, chainID); err != nil {
+		return false, fmt.Errorf("clear expired replacement attempts: %w", err)
+	}
 	return true, nil
+}
+
+// ListExpiredChainIDs returns live chains whose current-stage deadline has
+// elapsed. Callers still lock and re-check every chain while applying the
+// transition, so concurrent API requests remain idempotent.
+func (r *Postgres) ListExpiredChainIDs(ctx context.Context, tx database.Tx) ([]int64, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT id
+		FROM chains
+		WHERE status IN ('PROPOSED', 'FROZEN')
+		  AND freeze_deadline_at IS NOT NULL
+		  AND freeze_deadline_at <= NOW()
+		ORDER BY id
+		FOR UPDATE SKIP LOCKED
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list expired chains: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan expired chain: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate expired chains: %w", err)
+	}
+	return ids, nil
+}
+
+// ExpireFrozenIfDue breaks an expired hard reservation, releases its requests
+// and items, and returns requests that must be fed back into matching. Broken
+// history keeps the aggregate row and invalid reason. Its technical participant
+// rows are removed so clustering can safely rebuild or remove old clusters.
+func (r *Postgres) ExpireFrozenIfDue(
+	ctx context.Context,
+	tx database.Tx,
+	chainID int64,
+) ([]int64, bool, error) {
+	result, err := tx.Exec(ctx, `
+		UPDATE chains
+		SET status = 'BROKEN',
+		    freeze_deadline_at = NULL,
+		    invalid_reason = 'deadline_expired',
+		    version = version + 1,
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND status = 'FROZEN'
+		  AND freeze_deadline_at <= NOW()
+	`, chainID)
+	if err != nil {
+		return nil, false, fmt.Errorf("expire frozen chain: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return nil, false, nil
+	}
+
+	requestIDs, err := r.LoadChainRequestIDs(ctx, tx, chainID)
+	if err != nil {
+		return nil, false, err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers
+		SET status = 'ACTIVE', updated_at = NOW()
+		WHERE id = ANY($1::bigint[])
+		  AND status = 'LOCKED'
+	`, requestIDs); err != nil {
+		return nil, false, fmt.Errorf("release expired frozen requests: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE items AS item
+		SET status = 'ACTIVE', updated_at = NOW()
+		WHERE item.status = 'UNAVAILABLE'
+		  AND item.id IN (
+			SELECT offer.offered_item_id
+			FROM exchange_offers AS offer
+			WHERE offer.id = ANY($1::bigint[])
+		  )
+	`, requestIDs); err != nil {
+		return nil, false, fmt.Errorf("release expired frozen items: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1`, chainID); err != nil {
+		return nil, false, fmt.Errorf("delete expired frozen votes: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM chain_participants WHERE chain_id = $1`, chainID); err != nil {
+		return nil, false, fmt.Errorf("delete expired frozen participants: %w", err)
+	}
+	return requestIDs, true, nil
 }
 
 func (r *Postgres) loadVisibleChains(ctx context.Context, userID string, chainID, offerID int64) ([]entity.Chain, error) {
@@ -1084,6 +1182,13 @@ func (r *Postgres) ConfirmParticipant(ctx context.Context, tx database.Tx, chain
 		}
 		return err
 	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE chain_replacement_attempts
+		SET status = 'ACCEPTED', updated_at = NOW()
+		WHERE chain_id = $1 AND request_id = $2 AND status = 'INVITED'
+	`, chainID, requestID); err != nil {
+		return fmt.Errorf("accept replacement invitation: %w", err)
+	}
 	return nil
 }
 
@@ -1108,37 +1213,9 @@ func (r *Postgres) MarkParticipantThinking(ctx context.Context, tx database.Tx, 
 // DeclineParticipant removes the participant's confirmation and releases its
 // request. A replacement is allowed only when every other participant has
 // confirmed and the declining participant has an own vote in the chain. An
-// invited replacement has no own vote yet; its refusal rolls the proposal back
-// to CANDIDATE instead of opening an unsupported second replacement round.
+// invited replacement has no own vote yet. Its refusal keeps the proposal open
+// while an untried compatible request remains in the same cluster.
 func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chainID, requestID int64, fastReplacementEligible bool) (bool, entity.ChainStatus, error) {
-	var openReplacements int
-	if err := tx.QueryRow(ctx, `
-		SELECT COUNT(*) FROM chain_participants cp
-		JOIN exchange_offers eo ON eo.id = cp.request_id
-		WHERE cp.chain_id = $1 AND cp.request_id <> $2 AND eo.status = 'ACTIVE'
-		  AND NOT EXISTS (SELECT 1 FROM votes v WHERE v.chain_id = cp.chain_id AND v.request_id = cp.request_id)
-	`, chainID, requestID).Scan(&openReplacements); err != nil {
-		if mappedErr, ok := repository.DBErrToErr(err); ok {
-			return false, "", mappedErr
-		}
-		return false, "", err
-	}
-	if openReplacements > 0 {
-		if _, err := tx.Exec(ctx, `
-			UPDATE exchange_offers SET status = 'ACTIVE', updated_at = NOW()
-			WHERE id IN (SELECT request_id FROM chain_participants WHERE chain_id = $1)
-		`, chainID); err != nil {
-			if mappedErr, ok := repository.DBErrToErr(err); ok {
-				return false, "", mappedErr
-			}
-			return false, "", err
-		}
-		if err := r.DeleteChain(ctx, tx, chainID); err != nil {
-			return false, "", err
-		}
-		return false, entity.ChainStatusBroken, nil
-	}
-
 	var clusterID int64
 	if err := tx.QueryRow(ctx, `
 		SELECT cluster_id FROM chain_participants
@@ -1161,8 +1238,28 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 	`, chainID, requestID).Scan(&hasOwnVote); err != nil {
 		return false, "", fmt.Errorf("check declined participant vote: %w", err)
 	}
+	var isInvitedReplacement bool
+	if err := tx.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM chain_replacement_attempts
+			WHERE chain_id = $1 AND request_id = $2 AND status = 'INVITED'
+		)
+	`, chainID, requestID).Scan(&isInvitedReplacement); err != nil {
+		return false, "", fmt.Errorf("check replacement invitation: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO chain_replacement_attempts (chain_id, request_id, status)
+		VALUES ($1, $2, 'DECLINED')
+		ON CONFLICT (chain_id, request_id) DO UPDATE
+		SET status = 'DECLINED', updated_at = NOW()
+	`, chainID, requestID); err != nil {
+		return false, "", fmt.Errorf("record declined replacement participant: %w", err)
+	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1 AND request_id = $2`, chainID, requestID); err != nil {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM votes
+		WHERE chain_id = $1 AND (request_id = $2 OR target_request_id = $2)
+	`, chainID, requestID); err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
 			return false, "", mappedErr
 		}
@@ -1176,7 +1273,7 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 	}
 
 	var replacementAvailable bool
-	if fastReplacementEligible && hasOwnVote {
+	if fastReplacementEligible && (hasOwnVote || isInvitedReplacement) {
 		if err := tx.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1
@@ -1193,7 +1290,18 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 			JOIN exchange_offers next_offer ON next_offer.id = next_cp.request_id
 			JOIN items next_item ON next_item.id = next_offer.offered_item_id
 			WHERE candidate_member.cluster_id = $1 AND candidate.id <> $2
-			  AND candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+			  AND candidate.status = 'ACTIVE'
+			  AND NOT EXISTS (
+				SELECT 1
+				FROM exchange_offers live_offer
+				WHERE live_offer.offered_item_id = candidate.offered_item_id
+				  AND live_offer.id <> candidate.id
+				  AND live_offer.status IN ('IN_PROPOSAL', 'LOCKED')
+			  )
+			  AND NOT EXISTS (
+				SELECT 1 FROM chain_replacement_attempts attempt
+				WHERE attempt.chain_id = $3 AND attempt.request_id = candidate.id
+			  )
 			  AND candidate.user_id <> ALL (
 				SELECT occupied.user_id FROM chain_participants occupied_cp
 				JOIN exchange_offers occupied ON occupied.id = occupied_cp.request_id
@@ -1206,7 +1314,7 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 			  AND 1 - (candidate_item.embedding <=> previous_offer.want_embedding) >= $4
 			  AND 1 - (next_item.embedding <=> candidate.want_embedding) >= $4
 		)
-		`, clusterID, requestID, chainID).Scan(&replacementAvailable); err != nil {
+		`, clusterID, requestID, chainID, r.matchingThreshold).Scan(&replacementAvailable); err != nil {
 			if mappedErr, ok := repository.DBErrToErr(err); ok {
 				return false, "", mappedErr
 			}
@@ -1245,6 +1353,9 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 			return false, "", mappedErr
 		}
 		return false, "", err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM chain_replacement_attempts WHERE chain_id = $1`, chainID); err != nil {
+		return false, "", fmt.Errorf("clear replacement attempts after rollback: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE chains SET status = 'CANDIDATE', version = version + 1, updated_at = NOW()
@@ -1296,7 +1407,18 @@ func (r *Postgres) ListReplacementOptions(ctx context.Context, userID string, ch
 		 AND next_cp.position = (v.position + 1) % v.length
 		JOIN exchange_offers next_offer ON next_offer.id = next_cp.request_id
 		JOIN items next_item ON next_item.id = next_offer.offered_item_id
-		WHERE candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+		WHERE candidate.status = 'ACTIVE'
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM exchange_offers live_offer
+			WHERE live_offer.offered_item_id = candidate.offered_item_id
+			  AND live_offer.id <> candidate.id
+			  AND live_offer.status IN ('IN_PROPOSAL', 'LOCKED')
+		  )
+		  AND NOT EXISTS (
+			SELECT 1 FROM chain_replacement_attempts attempt
+			WHERE attempt.chain_id = $1 AND attempt.request_id = candidate.id
+		  )
 		  AND candidate.user_id <> ALL (
 			SELECT occupied.user_id FROM chain_participants occupied_cp
 			JOIN exchange_offers occupied ON occupied.id = occupied_cp.request_id
@@ -1342,9 +1464,9 @@ func (r *Postgres) ListReplacementOptions(ctx context.Context, userID string, ch
 	return options, nil
 }
 
-// SelectReplacement atomically pins an alternative request and transfers the
-// previous participant's approved edge to it. The replacement does not receive
-// a vote automatically: its owner must explicitly confirm or think.
+// SelectReplacement atomically pins an alternative request and starts a new
+// confirmation round for the changed edge. The participant who selected the
+// alternative and the invited replacement both explicitly confirm it.
 func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID string, chainID, replacementRequestID int64) error {
 	var position, length int
 	var oldRequestID, actorRequestID, nextRequestID int64
@@ -1384,7 +1506,18 @@ func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID
 			JOIN exchange_offers next_offer ON next_offer.id = $5
 			JOIN items next_item ON next_item.id = next_offer.offered_item_id
 			WHERE old_member.request_id = $2 AND candidate.id = $3
-			  AND candidate.status IN ('ACTIVE', 'IN_PROPOSAL')
+			  AND candidate.status = 'ACTIVE'
+			  AND NOT EXISTS (
+				SELECT 1
+				FROM exchange_offers live_offer
+				WHERE live_offer.offered_item_id = candidate.offered_item_id
+				  AND live_offer.id <> candidate.id
+				  AND live_offer.status IN ('IN_PROPOSAL', 'LOCKED')
+			  )
+			  AND NOT EXISTS (
+				SELECT 1 FROM chain_replacement_attempts attempt
+				WHERE attempt.chain_id = $1 AND attempt.request_id = candidate.id
+			  )
 			  AND candidate.user_id <> ALL (
 				SELECT occupied.user_id FROM chain_participants occupied_cp
 				JOIN exchange_offers occupied ON occupied.id = occupied_cp.request_id
@@ -1401,7 +1534,15 @@ func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID
 				  WHERE current.chain_id = $1 AND current.request_id = candidate.id
 			  )
 		)
-	`, chainID, oldRequestID, replacementRequestID).Scan(&valid); err != nil {
+	`,
+		chainID,
+		oldRequestID,
+		replacementRequestID,
+		actorRequestID,
+		nextRequestID,
+		position,
+		r.matchingThreshold,
+	).Scan(&valid); err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
 			return mappedErr
 		}
@@ -1409,6 +1550,15 @@ func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID
 	}
 	if !valid {
 		return entity.ErrInvalidVoteTarget
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO chain_replacement_attempts (chain_id, request_id, status)
+		VALUES ($1, $2, 'INVITED')
+	`, chainID, replacementRequestID); err != nil {
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return fmt.Errorf("record replacement invitation: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `DELETE FROM votes WHERE chain_id = $1 AND request_id = $2`, chainID, actorRequestID); err != nil {
@@ -1419,8 +1569,18 @@ func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO votes (chain_id, request_id, target_request_id, vote, voted_at)
-		VALUES ($1, $2, $3, 'approved', NOW())
+		VALUES ($1, $2, $3, 'pending', NOW())
 	`, chainID, actorRequestID, replacementRequestID); err != nil {
+		if mappedErr, ok := repository.DBErrToErr(err); ok {
+			return mappedErr
+		}
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers
+		SET status = 'IN_PROPOSAL', updated_at = NOW()
+		WHERE id = $1 AND status = 'LOCKED'
+	`, actorRequestID); err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
 			return mappedErr
 		}
@@ -1592,6 +1752,33 @@ func (r *Postgres) LoadChainRequestIDs(ctx context.Context, tx database.Tx, chai
 		return nil, err
 	}
 	return ids, nil
+}
+
+// LoadActiveChainRequestIDs returns only requests that can seed candidate
+// rebuilding. A request locked by the chain being frozen must not be sent back
+// through cluster synchronization.
+func (r *Postgres) LoadActiveChainRequestIDs(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT cp.request_id
+		FROM chain_participants AS cp
+		JOIN exchange_offers AS eo ON eo.id = cp.request_id
+		WHERE cp.chain_id = $1 AND eo.status = 'ACTIVE'
+		ORDER BY cp.position
+	`, chainID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // LockRequestsForFreeze сериализует подтверждения пересекающихся цепочек.
@@ -1849,6 +2036,19 @@ func (r *Postgres) CompleteChain(ctx context.Context, tx database.Tx, chainID in
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotReadyForHandoff
 	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE items AS item
+		SET status = 'ARCHIVED', updated_at = NOW()
+		WHERE item.status = 'UNAVAILABLE'
+		  AND item.id IN (
+			SELECT offer.offered_item_id
+			FROM chain_participants AS participant
+			JOIN exchange_offers AS offer ON offer.id = participant.request_id
+			WHERE participant.chain_id = $1
+		  )
+	`, chainID); err != nil {
+		return fmt.Errorf("archive exchanged items: %w", err)
+	}
 	return nil
 }
 
@@ -2035,7 +2235,14 @@ func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx dat
 			SELECT DISTINCT cp_outside.chain_id
 			FROM chain_participants AS cp_outside
 			JOIN chain_participants AS frozen
-			  ON frozen.chain_id = $1 AND frozen.request_id = cp_outside.request_id
+			  ON frozen.chain_id = $1
+			 AND (
+				 frozen.request_id = cp_outside.request_id
+				 OR (
+					 frozen.cluster_id IS NOT NULL
+					 AND frozen.cluster_id = cp_outside.cluster_id
+				 )
+			 )
 			WHERE cp_outside.chain_id <> $1
 		`, chainID)
 		if err != nil {

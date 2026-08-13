@@ -3,6 +3,7 @@ export {
   ITEM_IMAGE_TYPES,
   ITEM_STATUS_META,
   getItemImageError,
+  isItemExchanged,
   type Item,
   type ItemPayload,
   type ItemsList,

@@ -9,7 +9,6 @@ interface AuthState {
   user: User | null;
 }
 
-// сессия восстанавливается из localStorage, чтобы переживать перезагрузку страницы
 const initialState: AuthState = {
   token: tokenStorage.get(),
   user: userStorage.get<User>(),

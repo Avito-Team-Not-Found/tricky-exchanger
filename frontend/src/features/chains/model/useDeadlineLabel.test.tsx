@@ -13,8 +13,8 @@ describe('useDeadlineLabel', () => {
     vi.useRealTimers();
   });
 
-  it('returns the label for a proposed chain and refreshes it on a 30-second tick', () => {
-    const { result } = renderHook(() => useDeadlineLabel('PROPOSED', '2026-08-10T10:01:00Z'));
+  it('returns the remaining time for the response deadline and refreshes it on a 30-second tick', () => {
+    const { result } = renderHook(() => useDeadlineLabel('response', '2026-08-10T10:01:00Z'));
 
     expect(result.current).toBe('1 мин');
 
@@ -25,9 +25,15 @@ describe('useDeadlineLabel', () => {
     expect(result.current).toBe('меньше минуты');
   });
 
+  it('counts the ship deadline the same way', () => {
+    const { result } = renderHook(() => useDeadlineLabel('ship', '2026-08-10T10:01:00Z'));
+
+    expect(result.current).toBe('1 мин');
+  });
+
   it('counts from the current time when the deadline arrives after mount', () => {
     const { result, rerender } = renderHook(
-      ({ deadline }: { deadline: string | null }) => useDeadlineLabel('PROPOSED', deadline),
+      ({ deadline }: { deadline: string | null }) => useDeadlineLabel('response', deadline),
       { initialProps: { deadline: null } as { deadline: string | null } },
     );
 
@@ -44,24 +50,20 @@ describe('useDeadlineLabel', () => {
     expect(result.current).toBe('меньше минуты');
   });
 
-  it('returns null outside PROPOSED even when a deadline is set', () => {
-    const { result: candidate } = renderHook(() =>
-      useDeadlineLabel('CANDIDATE', '2026-08-12T09:58:00Z'),
-    );
-    const { result: frozen } = renderHook(() => useDeadlineLabel('FROZEN', '2026-08-12T09:58:00Z'));
+  it('returns null when the purpose is disabled even with a deadline set', () => {
+    const { result } = renderHook(() => useDeadlineLabel(null, '2026-08-12T09:58:00Z'));
 
-    expect(candidate.current).toBeNull();
-    expect(frozen.current).toBeNull();
+    expect(result.current).toBeNull();
   });
 
   it('returns null when the deadline is absent', () => {
-    const { result } = renderHook(() => useDeadlineLabel('PROPOSED', null));
+    const { result } = renderHook(() => useDeadlineLabel('response', null));
 
     expect(result.current).toBeNull();
   });
 
   it('clears the interval on unmount', () => {
-    const { unmount } = renderHook(() => useDeadlineLabel('PROPOSED', '2026-08-12T09:58:00Z'));
+    const { unmount } = renderHook(() => useDeadlineLabel('ship', '2026-08-12T09:58:00Z'));
     expect(vi.getTimerCount()).toBe(1);
 
     unmount();
@@ -70,7 +72,7 @@ describe('useDeadlineLabel', () => {
   });
 
   it('does not set an interval while there is nothing to count', () => {
-    renderHook(() => useDeadlineLabel('FROZEN', '2026-08-12T09:58:00Z'));
+    renderHook(() => useDeadlineLabel(null, '2026-08-12T09:58:00Z'));
 
     expect(vi.getTimerCount()).toBe(0);
   });

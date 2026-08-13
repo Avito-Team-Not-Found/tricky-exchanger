@@ -38,7 +38,6 @@ const mockedCreateItem = vi.mocked(createItem);
 const mockedUpdateItem = vi.mocked(updateItem);
 const mockedArchiveItem = vi.mocked(archiveItem);
 
-// описание обязано быть не короче 50 символов — валидное значение для заполненных форм
 const LONG_DESCRIPTION = 'Работают как новые, отличное состояние, полный комплект документов';
 
 const existingItem = {
@@ -87,15 +86,13 @@ describe('ItemForm', () => {
     await user.upload(container.querySelector('input[type="file"]') as HTMLInputElement, photo);
     await user.type(screen.getByLabelText('Название'), 'Смарт-часы');
     await user.type(screen.getByLabelText('Описание'), LONG_DESCRIPTION);
-    // категория обязательна — без неё форма всё ещё не отправляется
     expect(submit).toBeDisabled();
 
     await pickCategory(user);
     expect(submit).toBeEnabled();
   });
 
-  // svg проходит image/* из старого accept, но бэкенд его не принимает — файл отклоняем
-  // при выборе, чтобы не получать 422 уже после сохранения товара
+  // svg проходит image/*, но бэкенд его не принимает — иначе 422 уже после сохранения
   it('does not select a file with a disallowed type as the photo', async () => {
     const user = userEvent.setup();
     const { container } = renderWithProviders(<ItemForm />);
@@ -133,8 +130,7 @@ describe('ItemForm', () => {
     expect(screen.getByRole('button', { name: /Сохранить/ })).toBeDisabled();
   });
 
-  // товары старше требования 50 символов иначе молча блокировали сохранение: кнопка
-  // неактивна, а ошибки на экране нет — пользователю нечем объяснить отказ
+  // иначе кнопка неактивна, а ошибки на экране нет — пользователю нечем объяснить отказ
   it('explains the blocked save for an item created before the 50-character rule', async () => {
     mockedUseItem.mockReturnValue(queryOk({ ...existingItem, description: 'Мощный' }));
     renderWithProviders(<ItemForm itemId={1} />);
@@ -183,9 +179,8 @@ describe('ItemForm', () => {
     );
   });
 
-  // категория товара может быть вне справочника (данные старше миграции на текстовую
-  // категорию) — она обязана остаться выбранной, иначе сохранение молча уводит товар
-  // в другой пул подбора
+  // категория вне справочника (данные старше миграции) обязана остаться выбранной,
+  // иначе сохранение молча уводит товар в другой пул подбора
   it('keeps a category that is missing from the catalog', async () => {
     mockedUseItem.mockReturnValue(queryOk({ ...existingItem, category: 'Антиквариат' } as Item));
     renderWithProviders(<ItemForm itemId={1} />);
@@ -193,8 +188,6 @@ describe('ItemForm', () => {
     expect(screen.getByTitle('Антиквариат')).toBeInTheDocument();
   });
 
-  // создание товара из формы запроса (PROJECT.md §2.4): фото не загрузилось — товар уже создан,
-  // ведём на редактирование, сохраняя returnTo=request, чтобы после дозагрузки вернуться в запрос
   it('redirects to edit with returnTo=request when the photo upload fails in create-from-request', async () => {
     const user = userEvent.setup();
     mockedCreateItem.mockRejectedValue(new ItemImageUploadError(existingItem, new Error('upload')));
@@ -299,5 +292,17 @@ describe('ItemForm', () => {
 
     expect(await screen.findByText('products screen')).toBeInTheDocument();
     expect(mockedArchiveItem).toHaveBeenCalledWith(1);
+  });
+
+  // на форму обменянного товара можно попасть только по прямой ссылке — редактировать
+  // и удалять нечего, бэкенд отклоняет мутации архивного товара
+  it('opens an exchanged item read-only', () => {
+    mockedUseItem.mockReturnValue(queryOk({ ...existingItem, status: 'ARCHIVED' }));
+    renderWithProviders(<ItemForm itemId={1} />);
+
+    expect(screen.getByText('Товар обменян и больше не редактируется')).toBeInTheDocument();
+    expect(screen.getByLabelText('Название')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Сохранить изменения/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Удалить товар/ })).not.toBeInTheDocument();
   });
 });

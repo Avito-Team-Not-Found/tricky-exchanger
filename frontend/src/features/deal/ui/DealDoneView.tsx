@@ -9,10 +9,6 @@ interface DealDoneViewProps {
   onGoToRequests: () => void;
 }
 
-// Финальные состояния сделки (макет 4.9): «Вы забрали товар» — ждём, пока остальные подтвердят
-// получение, «Обмен завершён» — вся цепочка DONE. На завершённой цепочке спора и кнопок сделки
-// нет — только переход к моим запросам и деталям. Статусы получения открываются кнопкой
-// «Посмотреть детали цепочки».
 export function DealDoneView({ state, onOpenDetails, onGoToRequests }: DealDoneViewProps) {
   const completed = state.status === 'completed';
 
@@ -23,10 +19,20 @@ export function DealDoneView({ state, onOpenDetails, onGoToRequests }: DealDoneV
           {completed ? '✅' : '🎉'}
         </p>
         <p className="deal-hero__title">{completed ? 'Обмен завершён' : 'Вы забрали товар'}</p>
-        {completed ? null : (
-          <p className="deal-hero__text">
-            Обмен завершится, когда все участники подтвердят получение
-          </p>
+        <p className="deal-hero__text">
+          {completed
+            ? 'Все участники подтвердили получение. Ваш товар передан, а вы получили новый.'
+            : 'Спасибо! Мы отметили, что вы забрали товар. Обмен завершится, как только все участники подтвердят получение.'}
+        </p>
+        {completed ? (
+          <p className="deal-hero__text">У вас есть 24 часа на возврат товара.</p>
+        ) : (
+          <>
+            <p className="deal-hero__text">Не используйте товар, пока не подтвердят получение.</p>
+            <p className="deal-hero__text">
+              После получения всеми участниками товара у вас будет 24 часа на возврат.
+            </p>
+          </>
         )}
       </div>
 

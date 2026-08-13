@@ -1,6 +1,11 @@
 menyayka.tech, www.menyayka.tech {
 	encode gzip
 
+	# Liveness бэкенда (не отдавать SPA с frontend)
+	handle /healthz {
+		reverse_proxy backend:8080
+	}
+
 	# Фото товаров из MinIO: https://menyayka.tech/s3/items/...
 	handle_path /s3/* {
 		reverse_proxy minio:9000

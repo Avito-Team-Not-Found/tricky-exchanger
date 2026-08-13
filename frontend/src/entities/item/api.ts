@@ -2,12 +2,12 @@ import { apiClient } from '@shared/api';
 
 import type { Item, ItemPayload, ItemsList } from './model';
 
-// Бэкенд не умеет фильтровать по статусу — список приходит вместе с архивными
-// (личный список владельца), поэтому архивные отсекаем на клиенте. Запрашиваем
-// максимальную страницу, чтобы на «Моих товарах» и в пикере товара ничего не терялось.
+// Личный список владельца: приходит вместе с ARCHIVED — это обменянные товары, их
+// показываем как историю (см. ITEM_STATUS_META). Запрашиваем максимальную страницу,
+// чтобы на «Моих товарах» и в пикере товара ничего не терялось.
 export async function fetchItems(): Promise<ItemsList> {
   const { data } = await apiClient.get<ItemsList>('/items', { params: { pageSize: 100 } });
-  return { items: data.items.filter((item) => item.status !== 'ARCHIVED'), total: data.total };
+  return data;
 }
 
 export async function fetchItem(itemId: number): Promise<Item> {

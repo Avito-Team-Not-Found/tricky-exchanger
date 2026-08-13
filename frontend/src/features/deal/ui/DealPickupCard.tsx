@@ -4,12 +4,9 @@ import './DealPickupCard.scss';
 
 interface DealPickupCardProps {
   address: string;
-  // кнопка «Изменить» есть только на экране отправки — там пользователь вправе выбрать свой ПВЗ
   onChange?: () => void;
 }
 
-// Карточка пункта выдачи (макет 4.9): иконка, название и адрес; адрес — клиентская имитация
-// (DEAL-PLAN.md §4.1), на бэкенде его нет.
 export function DealPickupCard({ address, onChange }: DealPickupCardProps) {
   return (
     <div className="deal-pickup">

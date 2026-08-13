@@ -15,7 +15,7 @@
   font-size: var(--font-size-caption);
 }
 
-// тач-таргет 44×44 через padding + компенсирующий negative margin, без сдвига текста (DESIGN.md §1.8)
+// тач-таргет 44×44 через padding + компенсирующий negative margin, без сдвига текста
 .auth-form__forgot a,
 .auth-form__switch-text a {
   display: inline-block;
