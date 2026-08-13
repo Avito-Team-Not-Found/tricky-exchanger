@@ -10,11 +10,102 @@
     { "key": "token_a", "value": "" },
     { "key": "token_b", "value": "" },
     { "key": "token_c", "value": "" },
+    { "key": "email_a", "value": "" },
+    { "key": "email_b", "value": "" },
+    { "key": "email_c", "value": "" },
+    { "key": "test_password", "value": "TestPass123!" },
     { "key": "replacement_request_id", "value": "" },
     { "key": "expired_chain_id", "value": "" },
     { "key": "expired_participant_token", "value": "" }
   ],
   "item": [
+    {
+      "name": "00 - Регистрация участников",
+      "description": "Запустите папку один раз перед подготовкой цепочек. Каждый запрос создаёт отдельного пользователя и сохраняет его токен и email в переменные коллекции.",
+      "item": [
+        {
+          "name": "Register participant A",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [
+                "const email = 'chain-cancel-' + Date.now() + '-a@example.test';",
+                "pm.variables.set('registration_email', email);"
+              ] }
+            },
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('A registered', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                "const body = pm.response.json();",
+                "pm.collectionVariables.set('token_a', body.token);",
+                "pm.collectionVariables.set('email_a', pm.variables.get('registration_email'));"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Chain Participant A\",\"email\":\"{{registration_email}}\",\"password\":\"{{test_password}}\"}" },
+            "url": "{{base_url}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "Register participant B",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [
+                "const email = 'chain-cancel-' + Date.now() + '-b@example.test';",
+                "pm.variables.set('registration_email', email);"
+              ] }
+            },
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('B registered', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                "const body = pm.response.json();",
+                "pm.collectionVariables.set('token_b', body.token);",
+                "pm.collectionVariables.set('email_b', pm.variables.get('registration_email'));"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Chain Participant B\",\"email\":\"{{registration_email}}\",\"password\":\"{{test_password}}\"}" },
+            "url": "{{base_url}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "Register replacement C",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [
+                "const email = 'chain-cancel-' + Date.now() + '-c@example.test';",
+                "pm.variables.set('registration_email', email);"
+              ] }
+            },
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('C registered', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                "const body = pm.response.json();",
+                "pm.collectionVariables.set('token_c', body.token);",
+                "pm.collectionVariables.set('email_c', pm.variables.get('registration_email'));"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"fullName\":\"Replacement Participant C\",\"email\":\"{{registration_email}}\",\"password\":\"{{test_password}}\"}" },
+            "url": "{{base_url}}/api/v1/auth/register"
+          }
+        }
+      ]
+    },
     {
       "name": "01 - Отзыв подтверждения в PROPOSED",
       "description": "Начальное состояние: цепочка PROPOSED, A уже подтвердил участие, остальные ещё ожидают.",
