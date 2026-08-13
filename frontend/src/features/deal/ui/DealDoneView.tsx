@@ -26,7 +26,7 @@ export function DealDoneView({ state, chainId, onOpenDetails, onGoToRequests }: 
         </p>
         <p className="deal-hero__text">
           {completed
-            ? 'Обмен прошёл успешно! Ваш товар передан, а вы получили новый.'
+            ? 'Обмен прошёл успешно!'
             : 'Спасибо! Мы отметили, что товар вам подходит. Обмен завершится, как только все участники подтвердят получение.'}
         </p>
         {completed ? (

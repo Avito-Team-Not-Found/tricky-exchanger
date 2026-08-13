@@ -103,10 +103,10 @@ describe('DealPage', () => {
 
     const { container } = renderDealPage();
 
-    expect(screen.getByText('Все товары доставлены')).toBeInTheDocument();
+    expect(screen.getByText('Ваш товар доставлен')).toBeInTheDocument();
     const hero = container.querySelector('.deal-hero--success');
     expect(hero).toBeInTheDocument();
-    expect(hero).toHaveTextContent('Все товары доставлены');
+    expect(hero).toHaveTextContent('Ваш товар доставлен');
     const button = screen.getByRole('button', { name: 'Товар устраивает' });
     expect(button).toBeEnabled();
   });
@@ -170,7 +170,7 @@ describe('DealPage', () => {
 
     expect(screen.getByText('Заберите свой товар')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'К моим запросам' })).toBeInTheDocument();
-    expect(screen.getByText('Предъявите этот штрих-код при получении')).toBeInTheDocument();
+    expect(screen.getByText('Предъявите этот штрих-код для осмотра')).toBeInTheDocument();
   });
 
   it('redirects to the chain screen when the deal is not reachable', async () => {
