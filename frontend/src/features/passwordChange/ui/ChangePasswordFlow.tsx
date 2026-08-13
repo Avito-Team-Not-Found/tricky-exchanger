@@ -12,7 +12,7 @@ export function ChangePasswordFlow() {
 
   if (state.status === 'success') {
     return (
-      <div className="password-change-success">
+      <div key={state.status} className="password-change-success motion-step">
         <div className="password-change-success__icon">
           <CheckOutlined aria-hidden />
         </div>
@@ -28,7 +28,7 @@ export function ChangePasswordFlow() {
   }
 
   return (
-    <div className="password-change">
+    <div key={state.status} className="password-change motion-step">
       <header className="password-change__header">
         <Button
           type="text"
