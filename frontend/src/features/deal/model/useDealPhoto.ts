@@ -37,9 +37,8 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-// Фото упаковки перед отправкой: хранится в localStorage на пару «цепочка + заявка». Запись в
-// try/catch — квота может кончиться, тогда фото остаётся в состоянии страницы, а кнопка
-// отправки всё равно разблокируется (тост пользователю не показываем).
+// квота localStorage может кончиться: тогда фото остаётся только в состоянии страницы,
+// но кнопку отправки всё равно разблокируем — молча
 export function useDealPhoto(chainId: number, requestId: number) {
   const key = photoKey(chainId, requestId);
   const [photo, setPhoto] = useState<string | null>(() => jsonStorage.get<string>(key));

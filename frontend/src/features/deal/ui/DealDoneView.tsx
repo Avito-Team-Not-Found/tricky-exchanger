@@ -9,10 +9,6 @@ interface DealDoneViewProps {
   onGoToRequests: () => void;
 }
 
-// Финальные состояния сделки: «Вы забрали товар» — ждём, пока остальные подтвердят
-// получение, «Обмен завершён» — вся цепочка DONE. На завершённой цепочке спора и кнопок сделки
-// нет — только переход к моим запросам и деталям. Статусы получения открываются кнопкой
-// «Посмотреть детали цепочки».
 export function DealDoneView({ state, onOpenDetails, onGoToRequests }: DealDoneViewProps) {
   const completed = state.status === 'completed';
 

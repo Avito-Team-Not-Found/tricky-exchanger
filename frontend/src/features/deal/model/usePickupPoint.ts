@@ -4,8 +4,7 @@ import { jsonStorage } from '@shared/lib/storage';
 
 import { defaultPickupPoint, pickupPointKey } from './pickupPoints';
 
-// Адрес ПВЗ экрана сделки: хранится в localStorage на цепочку, значение по умолчанию — первый
-// из списка. Пустой адрес не сохраняется — «Другой адрес» с пустым полем оставляет прежнее значение.
+// пустой адрес не сохраняется: «Другой адрес» с пустым полем оставляет прежнее значение
 export function usePickupPoint(chainId: number) {
   const [point, setPointState] = useState<string>(() => {
     return jsonStorage.get<string>(pickupPointKey(chainId)) ?? defaultPickupPoint();

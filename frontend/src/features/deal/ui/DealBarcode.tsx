@@ -5,18 +5,15 @@ import './DealBarcode.scss';
 
 interface DealBarcodeProps {
   chainId: number;
-  // для какого действия предъявляется штрих-код — меняет подпись и рисунок полос
   kind: BarcodeKind;
 }
 
-// подпись: зачем предъявлять штрих-код — отправка или получение
 const BARCODE_CAPTIONS: Record<BarcodeKind, string> = {
   handoff: 'Предъявите этот штрих-код при отправке',
   receipt: 'Предъявите этот штрих-код при получении',
 };
 
-// Фиктивный штрих-код сделки: полосы и цифры генерируются детерминированно из id цепочки,
-// реального сканирования нет — это имитация на время MVP, как адрес ПВЗ и фото упаковки.
+// реального сканирования нет — штрих-код такая же имитация, как адрес ПВЗ и фото упаковки
 export function DealBarcode({ chainId, kind }: DealBarcodeProps) {
   const seed = `${chainId}:${kind}`;
   const segments = barcodeBars(seed);

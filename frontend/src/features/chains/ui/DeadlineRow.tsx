@@ -12,10 +12,8 @@ interface DeadlineRowProps {
   showShipDeadline?: boolean;
 }
 
-// Таймер дедлайна цепочки (TimerRow): на PROPOSED — «Осталось … на ответ», на FROZEN с
-// showShipDeadline — «Осталось … на отправку». Рендерит null, когда метки нет (статус не подходит
-// или дедлайн не задан/прошёл) — вызывающим экранам не нужно дублировать условие.
-// role="status" не ставим: живой регион, обновляемый раз в 30 с, постоянно перебивал бы скринридер
+// без метки рендерит null, чтобы вызывающие экраны не дублировали условие; role="status" не
+// ставим — живой регион, обновляемый раз в 30 с, постоянно перебивал бы скринридер
 export function DeadlineRow({ status, deadlineAt, showShipDeadline }: DeadlineRowProps) {
   const purpose: DeadlinePurpose | null =
     status === 'PROPOSED' ? 'response' : showShipDeadline && status === 'FROZEN' ? 'ship' : null;

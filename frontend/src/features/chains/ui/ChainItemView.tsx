@@ -33,9 +33,6 @@ interface ChainItemViewProps {
   onProceed: () => void;
 }
 
-// Экран цепочки: товар, который пользователь получит в обмене, его описание,
-// отклик на кандидата получаемого звена и переход к схеме участников;
-// действие зависит от статуса цепочки
 export function ChainItemView({
   chain,
   receiveRequestId,

@@ -34,8 +34,6 @@ interface ChainCardProps {
   onConfirm: (chainId: number) => void;
 }
 
-// Карточка варианта обмена: один конкретный получаемый товар из пула кандидатов
-// следующего звена; действие и бейджи зависят от статуса цепочки
 export function ChainCard({
   options,
   option,

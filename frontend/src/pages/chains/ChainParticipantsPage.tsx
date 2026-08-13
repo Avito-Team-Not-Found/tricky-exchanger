@@ -16,8 +16,6 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Схема участников цепочки: строки по звеньям кольца с пулом кандидатов и
-// статусами откликов. Открывается с экрана товара цепочки.
 export function ChainParticipantsPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();

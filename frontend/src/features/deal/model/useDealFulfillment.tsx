@@ -28,10 +28,8 @@ const RECEIPT_ERROR_MESSAGES: Record<number, string> = {
   422: 'Заявка не является закреплённым товаром этой цепочки',
 };
 
-// Подтверждение отправки и получения — одна мутация на оба действия (AGENTS.md: мутации не
-// копипастятся). requestId различается: для handoff — моя заявка (chain.currentRequestId),
-// для receipt — заявка звена-источника, чей товар я забираю. Статусы заявок меняются, поэтому
-// инвалидируем и «Мои запросы» (exchange-requests). 409 — не ошибка пользователя: тост + перезагрузка.
+// одна мутация на оба действия, различается только requestId: для handoff — моя заявка,
+// для receipt — заявка звена-источника, чей товар я забираю
 export function useDealFulfillment(chain: Chain) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();

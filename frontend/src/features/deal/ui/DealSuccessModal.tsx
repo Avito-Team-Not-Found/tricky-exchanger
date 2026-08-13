@@ -9,10 +9,7 @@ interface DealSuccessModalProps {
   onClose: () => void;
 }
 
-// Контент модалок успеха сделки («Ваш товар в безопасности», «Жалоба отправлена»):
-// крупный эмодзи-глиф, заголовок, пояснение и «Понятно». Открывается
-// через App.useApp().modal — antd-Modal не импортируется (no-restricted-imports), поэтому
-// заголовок живёт здесь же в контенте, а не в title модалки.
+// antd-Modal не импортируется (no-restricted-imports), поэтому заголовок живёт в контенте
 export function DealSuccessModal({ emoji, title, text, onClose }: DealSuccessModalProps) {
   return (
     <div className="deal-success">

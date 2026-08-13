@@ -32,8 +32,7 @@ interface DealTransitViewProps {
   onOpenDetails: () => void;
 }
 
-// Статусы доставки товаров экрана сделки: пилюля по статусу заявки владельца товара.
-// Подпись текстом обязательна — статус не передаётся одним цветом.
+// подпись текстом обязательна — статус не передаётся одним цветом
 function deliveryPill(status: ChainParticipant['requestStatus']): {
   label: string;
   tone: 'warning' | 'accent' | 'success';
@@ -49,10 +48,6 @@ function deliveryPill(status: ChainParticipant['requestStatus']): {
   }
 }
 
-// Экраны «Товары в пути» и «Все товары доставлены»: пока отправили не все — ждём
-// остальных со статусом доставки каждого товара и заблокированной кнопкой получения, когда все
-// отправили — «Все товары доставлены» и кнопка «Я забрал товар». Кнопки-заглушки вместо ПВЗ:
-// «Я забрал товар» дёргает POST /chains/{id}/receipt.
 export function DealTransitView({ chain, state, onOpenDetails }: DealTransitViewProps) {
   const { modal } = AntApp.useApp();
   const { confirmReceipt, isFulfilling } = useDealFulfillment(chain);

@@ -4,8 +4,7 @@ import { Button, Radio } from 'antd';
 
 import './DealDisputeModal.scss';
 
-// Причины спора на этапе получения товара. Фиксированный набор — бэкенд ручку спора не отдаёт
-// (DEAL-PLAN §4), поэтому причина никуда не уходит и нужна только для осмысленного выбора.
+// ручки спора у бэкенда нет: причина никуда не уходит и нужна только для осмысленного выбора
 const DISPUTE_REASONS = ['Товар не тот', 'Товар испорчен', 'Другое'] as const;
 
 interface DealDisputeModalProps {
@@ -13,10 +12,7 @@ interface DealDisputeModalProps {
   onConfirm: (reason: (typeof DISPUTE_REASONS)[number]) => void;
 }
 
-// Контент модалки выбора причины спора: заголовок, пояснение, список причин и действия
-// «Отмена»/«Открыть спор». Открывается через App.useApp().modal — antd-Modal не импортируется
-// (no-restricted-imports), поэтому заголовок живёт здесь же в контенте. Кнопка «Открыть спор»
-// недоступна, пока причина не выбрана.
+// antd-Modal не импортируется (no-restricted-imports), поэтому заголовок живёт в контенте
 export function DealDisputeModal({ onClose, onConfirm }: DealDisputeModalProps) {
   const [reason, setReason] = useState<(typeof DISPUTE_REASONS)[number] | null>(null);
 

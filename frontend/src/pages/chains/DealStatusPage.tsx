@@ -11,8 +11,6 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainDetailPage.scss';
 
-// Статусы отправки/получения (/chains/:chainId/deal/shipments|receipts): один список
-// участников с пилюлей по mode. Псевдонимы вместо имён — правило анонимности сквозное.
 export function DealStatusPage() {
   const { chainId: chainIdParam, mode: modeParam } = useParams<{
     chainId: string;

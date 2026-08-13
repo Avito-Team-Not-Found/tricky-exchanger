@@ -1,7 +1,6 @@
 export type BarcodeKind = 'handoff' | 'receipt';
 
-// детерминированный PRNG (mulberry32) от строкового seed: штрих-код одной цепочки стабилен
-// между рендерами, у отправки и получения разный — без реального сканирования это просто имитация
+// детерминированный PRNG: штрих-код одной цепочки должен быть стабилен между рендерами
 function hashString(seed: string): number {
   let hash = 2166136261;
   for (let i = 0; i < seed.length; i += 1) {
@@ -22,8 +21,7 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-// чередующиеся штрихи и пробелы, чётные индексы — штрихи: набором вертикальных полос
-// переменной ширины штрих-код читается визуально даже без данных под ним
+// чередующиеся штрихи и пробелы, чётные индексы — штрихи
 export function barcodeBars(seed: string): number[] {
   const random = mulberry32(hashString(seed));
   const segments: number[] = [];

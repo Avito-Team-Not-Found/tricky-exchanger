@@ -19,9 +19,8 @@ const baseTokens = {
   controlHeightLG: 52,
 } satisfies ThemeConfig['token'];
 
-// colorBgContainer — фон Input/Select/Card (--color-bg-page), colorBgElevated — приподнятые поверхности
-// вроде AuthCard/Segmented-трека (--color-bg-card). Перепутанные местами, они гасили контраст
-// InputBox на фоне карточки (#FFFFFF на треке #F7F9FC).
+// colorBgContainer — фон Input/Select/Card, colorBgElevated — приподнятые поверхности вроде
+// AuthCard: перепутанные местами, они гасят контраст поля на фоне карточки
 const themeTokens: Record<ThemeMode, ThemeConfig['token']> = {
   light: {
     ...baseTokens,

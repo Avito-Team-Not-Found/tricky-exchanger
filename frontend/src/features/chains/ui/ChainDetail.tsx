@@ -35,8 +35,7 @@ interface ChainDetailProps {
   onProceed: () => void;
 }
 
-// Схема цепочки: строки по звеньям кольца. Отклик на кандидата — на экране товара цепочки
-// и на карточке списка, здесь только статусы откликов и действие второго раунда
+// откликаться отсюда нельзя: здесь только статусы откликов и действие второго раунда
 export function ChainDetail({ chain, receiveRequestId, onConfirm, onProceed }: ChainDetailProps) {
   const { token } = theme.useToken();
   // звено-источник сужается до выбранного варианта: его кандидаты — заявки разных
@@ -153,7 +152,7 @@ function ChainLinkRow({ link, isMine, isReceiveLink, canVote, confirmVote }: Cha
   );
 }
 
-// пилюля голоса второго раунда в шапке строки звена; null — вакансия после отказа
+// null — вакансия после отказа
 function ConfirmVotePill({ vote }: { vote: VoteValue | null }) {
   const meta = vote === null ? VACANCY_META : CONFIRM_VOTE_META[vote];
   return (
@@ -168,8 +167,7 @@ interface ChainLinkItemProps {
   canVote: boolean;
 }
 
-// Одна запись кандидата в звене: миниатюра, товар и «что хочет взамен», статус отклика.
-// Пилюли первого раунда на собранной цепочке не показываются — там у vote другой смысл.
+// на собранной цепочке пилюли первого раунда не показываются — там у vote другой смысл
 function ChainLinkItem({ participant, canVote }: ChainLinkItemProps) {
   const voteMeta = canVote && participant.vote ? VOTE_META[participant.vote] : null;
 

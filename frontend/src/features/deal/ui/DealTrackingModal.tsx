@@ -4,9 +4,7 @@ import type { RequestStatus } from '@entities/exchangeRequest';
 
 import './DealTrackingModal.scss';
 
-// Этапы трекинга. Событий и времени API не отдаёт — показываем фиксированный список,
-// «пройденность» считаем по requestStatus участника, без дат:
-// LOCKED — ничего, IN_PROGRESS — всё до «Доставлено в пункт выдачи», DONE — ещё и «Получено».
+// событий и дат API не отдаёт: список фиксированный, «пройденность» считается по requestStatus
 const DELIVERY_STEPS = [
   'Принято в отделении',
   'Отправлено в сортировочный центр',

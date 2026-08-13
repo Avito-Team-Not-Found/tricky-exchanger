@@ -6,9 +6,8 @@ import './ui.scss';
 
 export type StatusTone = 'success' | 'warning' | 'neutral' | 'error';
 
-// Пилюля, залитая статус-цветом полностью, с белым текстом.
-// Нейтральный статус — фиксированный серый: цвет text-secondary в тёмной теме слишком светлый
-// для белого текста (контраст падал бы ниже WCAG AA).
+// нейтральный статус — фиксированный серый: text-secondary в тёмной теме слишком светлый
+// для белого текста, контраст упал бы ниже WCAG AA
 const NEUTRAL_FILL = '#595959';
 
 const TONE_TOKEN: Partial<Record<StatusTone, keyof GlobalToken>> = {
