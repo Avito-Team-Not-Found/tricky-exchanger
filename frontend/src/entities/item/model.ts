@@ -47,8 +47,16 @@ export function getItemImageError(file: { type: string; size: number }): string 
   return null;
 }
 
+// ARCHIVED бэкенд ставит товару, когда сделка закрыта и товар уже отдан, — для владельца
+// это не «архив», а завершённый обмен; удаление товара архива не создаёт (запись удаляется).
 export const ITEM_STATUS_META: Record<ItemStatus, { label: string; tone: StatusTone }> = {
   ACTIVE: { label: 'Активен', tone: 'success' },
   UNAVAILABLE: { label: 'Зарезервирован', tone: 'warning' },
-  ARCHIVED: { label: 'В архиве', tone: 'neutral' },
+  ARCHIVED: { label: 'Обменян', tone: 'neutral' },
 };
+
+// обменянный товар остаётся в списке как история, но он уже отдан: ни редактировать,
+// ни предлагать в новой заявке его нельзя (бэкенд отклоняет мутации архивных)
+export function isItemExchanged(status: ItemStatus): boolean {
+  return status === 'ARCHIVED';
+}

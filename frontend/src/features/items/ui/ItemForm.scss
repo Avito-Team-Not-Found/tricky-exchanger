@@ -16,6 +16,24 @@
   padding: var(--spacing-md) 0;
 }
 
+// плашка «товар обменян» — как замок в форме заявки: форма остаётся видимой, но только на просмотр
+.item-form__lock {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background: color-mix(in srgb, var(--color-status-warning) 12%, transparent);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-body-sm);
+  color: var(--color-text-primary);
+}
+
+.item-form__lock-icon {
+  color: var(--color-status-warning);
+  font-size: 16px;
+}
+
 // фото: широкая карточка 343×213, пустая — кликабельная «Добавить фото»
 .item-form__photo-preview {
   position: relative;

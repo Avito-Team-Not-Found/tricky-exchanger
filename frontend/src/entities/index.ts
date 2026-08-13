@@ -2,6 +2,7 @@ export type { User } from './user';
 
 export {
   ITEM_STATUS_META,
+  isItemExchanged,
   useItem,
   useItems,
   type Item,

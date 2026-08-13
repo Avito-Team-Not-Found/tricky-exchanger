@@ -59,6 +59,14 @@ const items = [
     imageUrl: 'bike.png',
     status: 'UNAVAILABLE',
   },
+  {
+    id: 3,
+    title: 'Гитара',
+    description: 'Акустическая',
+    category: '',
+    imageUrl: null,
+    status: 'ARCHIVED',
+  },
 ] as unknown as Item[];
 
 const lockedRequest = {
@@ -188,6 +196,14 @@ describe('RequestForm', () => {
     renderWithProviders(<RequestForm />);
 
     expect(screen.getByRole('img', { name: 'Велосипед' })).toHaveAttribute('src', 'bike.png');
+  });
+
+  // обменянный товар остаётся в «Товарах» как история сделки, но отдать его повторно нельзя
+  it('keeps an exchanged item out of the offer picker', () => {
+    renderWithProviders(<RequestForm />);
+
+    expect(screen.getByText('Кухонный комбайн')).toBeInTheDocument();
+    expect(screen.queryByText('Гитара')).not.toBeInTheDocument();
   });
 
   it('leads to item creation when the user has no items', async () => {

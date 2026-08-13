@@ -10,6 +10,12 @@
   transition: box-shadow 0.2s ease;
 }
 
+// обменянный товар — история, не действие: курсор обычный, карточка приглушена
+.product-card--exchanged {
+  cursor: default;
+  opacity: 0.65;
+}
+
 .product-card:focus-visible {
   outline: 2px solid var(--color-accent-primary);
   outline-offset: 2px;
