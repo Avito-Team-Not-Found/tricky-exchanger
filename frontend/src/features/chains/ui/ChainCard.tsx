@@ -9,6 +9,7 @@ import {
   type VoteValue,
 } from '@entities/chain';
 
+import { plural } from '@shared/lib/plural';
 import { ProbabilityBadge } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
@@ -105,7 +106,7 @@ export function ChainCard({
 
       <div className="chain-card__meta">
         <span className="chain-card__count">
-          {options.length} {pluralize(options.length)}
+          {options.length} {plural(options.length, ['участник', 'участника', 'участников'])}
         </span>
         {canVote ? (
           <ProbabilityBadge score={options.score} />
@@ -209,12 +210,4 @@ export function ChainCard({
       ) : null}
     </article>
   );
-}
-
-function pluralize(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'участник';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'участника';
-  return 'участников';
 }
