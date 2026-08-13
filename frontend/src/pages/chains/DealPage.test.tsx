@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -83,6 +83,7 @@ function renderDealPage(routes: { path: string; element: ReactNode }[] = []) {
 describe('DealPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it('renders the ship screen with a photo-gated handoff button', () => {
@@ -193,5 +194,47 @@ describe('DealPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Посмотреть детали цепочки' }));
     expect(await screen.findByText('статусы получения')).toBeInTheDocument();
+  });
+
+  it('gates the dispute on a selected reason and then shows the complaint modal', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain('IN_PROGRESS')));
+
+    renderDealPage();
+
+    await user.click(screen.getByRole('button', { name: 'Открыть спор' }));
+
+    // модалка живёт в портале — ищем её по роли dialog, чтобы не спутать с кнопкой экрана
+    const dialog = await screen.findByRole('dialog');
+    const withinDialog = within(dialog);
+    // пока причина не выбрана — кнопка «Открыть спор» в модалке недоступна
+    const confirm = withinDialog.getByRole('button', { name: 'Открыть спор' });
+    expect(confirm).toBeDisabled();
+    for (const reason of ['Товар не тот', 'Товар испорчен', 'Другое']) {
+      expect(withinDialog.getByRole('radio', { name: reason })).toBeInTheDocument();
+    }
+
+    await user.click(withinDialog.getByRole('radio', { name: 'Товар испорчен' }));
+    expect(confirm).toBeEnabled();
+
+    await user.click(confirm);
+    expect(await screen.findByText('Жалоба отправлена')).toBeInTheDocument();
+  });
+
+  it('does not open a dispute when the reason modal is cancelled', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain('IN_PROGRESS')));
+
+    renderDealPage();
+
+    await user.click(screen.getByRole('button', { name: 'Открыть спор' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Отмена' }));
+
+    // jsdom не доигрывает анимации antd — модалка остаётся в DOM с классом ухода
+    await waitFor(() => expect(document.querySelector('.ant-modal')).toHaveClass('ant-zoom-leave'));
+    // спор не открыт: строка «Проблемы с товаром?» с кнопкой на месте, «Жалоба на рассмотрении» нет
+    expect(screen.getByText('Проблемы с товаром?')).toBeInTheDocument();
+    expect(screen.queryByText('Жалоба на рассмотрении')).not.toBeInTheDocument();
   });
 });

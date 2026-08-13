@@ -13,6 +13,7 @@ import { useDealFulfillment } from '../model/useDealFulfillment';
 import { useDispute } from '../model/useDispute';
 import { usePickupPoint } from '../model/usePickupPoint';
 
+import { DealDisputeModal } from './DealDisputeModal';
 import { DealItemSwap } from './DealItemSwap';
 import { DealPickupCard } from './DealPickupCard';
 import { DealSafetyBanner } from './DealSafetyBanner';
@@ -87,31 +88,34 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
   };
 
   const openDisputeConfirm = () => {
-    modal.confirm({
-      title: 'Открыть спор?',
-      content:
-        'Мы передадим ваше обращение в службу поддержки и свяжемся с вами в течение 24 часов.',
-      okText: 'Открыть спор',
-      okButtonProps: { danger: true },
-      cancelText: 'Отмена',
+    dispute.current = modal.confirm({
+      icon: null,
       centered: true,
-      onOk: () => {
-        openDispute();
-        dispute.current = modal.confirm({
-          icon: null,
-          centered: true,
-          width: 311,
-          content: (
-            <DealSuccessModal
-              emoji="🛠"
-              title="Жалоба отправлена"
-              text="Мы получили ваше обращение и свяжемся с вами в течение 24 часов, чтобы разобраться в ситуации."
-              onClose={closeDisputeModal}
-            />
-          ),
-          footer: null,
-        });
-      },
+      width: 311,
+      content: (
+        <DealDisputeModal
+          onClose={closeDisputeModal}
+          onConfirm={() => {
+            openDispute();
+            closeDisputeModal();
+            dispute.current = modal.confirm({
+              icon: null,
+              centered: true,
+              width: 311,
+              content: (
+                <DealSuccessModal
+                  emoji="🛠"
+                  title="Жалоба отправлена"
+                  text="Мы получили ваше обращение и свяжемся с вами в течение 24 часов, чтобы разобраться в ситуации."
+                  onClose={closeDisputeModal}
+                />
+              ),
+              footer: null,
+            });
+          }}
+        />
+      ),
+      footer: null,
     });
   };
 
