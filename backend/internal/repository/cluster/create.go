@@ -7,7 +7,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
-// Create создаёт пустой кластер; участника добавляет вызывающий сервис.
 func (r *Postgres) Create(ctx context.Context, tx database.Tx) (int64, error) {
 	var clusterID int64
 	err := tx.QueryRow(ctx, `

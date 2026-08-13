@@ -7,9 +7,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
-// ListActiveMembers возвращает текущий состав активного кластера. Метод нужен
-// сервисам поиска цепочек и быстрой замены, которые дополнительно проверяют
-// точную совместимость конкретных предложений.
 func (r *Postgres) ListActiveMembers(ctx context.Context, clusterID int64) ([]entity.ExchangeOffer, error) {
 	const query = `
 		SELECT eo.id, eo.user_id, eo.offered_item_id, eo.wanted_description,

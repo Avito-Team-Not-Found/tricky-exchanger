@@ -10,8 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// FindClusterForCandidates одним запросом возвращает кластер первого кандидата
-// в порядке релевантности, полученном от pgvector-поиска.
 func (r *Postgres) FindClusterForCandidates(
 	ctx context.Context,
 	tx database.Tx,
@@ -93,11 +91,6 @@ func (r *Postgres) FindClusterForCandidates(
 	return &clusterID, nil
 }
 
-// ConsolidateCandidateClusters heals historical cluster splits. Equal requests
-// can end up in separate clusters when they were created concurrently or when
-// matching rules changed. Only clusters whose every active member is compatible
-// with the current request are merged. Clusters already used by a live deal are
-// left untouched; their identity is part of the accepted proposal.
 func (r *Postgres) ConsolidateCandidateClusters(
 	ctx context.Context,
 	tx database.Tx,

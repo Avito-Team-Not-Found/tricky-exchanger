@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// DeleteMembership удаляет строку membership и возвращает прежний кластер.
 func (r *Postgres) DeleteMembership(ctx context.Context, tx database.Tx, offerID int64) (*int64, error) {
 	var clusterID int64
 	err := tx.QueryRow(ctx, `

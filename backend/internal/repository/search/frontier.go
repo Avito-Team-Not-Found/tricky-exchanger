@@ -8,7 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// LoadOutgoingFrontier загружает исходящие рёбра для набора заявок одним запросом.
 func (s *Search) LoadOutgoingFrontier(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -30,7 +29,6 @@ func (s *Search) LoadOutgoingFrontier(
 	return collectCandidateEdges(rows)
 }
 
-// LoadIncomingToStart загружает возможные замыкающие рёбра к стартовой заявке.
 func (s *Search) LoadIncomingToStart(
 	ctx context.Context,
 	tx pgx.Tx,

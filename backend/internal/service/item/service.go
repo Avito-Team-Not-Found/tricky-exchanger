@@ -5,7 +5,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/infrastructure/embedding"
 )
 
-// maxImageSize — максимальный размер загружаемого фото товара (5 МиБ).
 const maxImageSize = 5 << 20
 
 const (
@@ -14,7 +13,6 @@ const (
 	maxPageSize     = 100
 )
 
-// imageExtensionByContentType — разрешённые типы фото и их расширения в ключе объекта.
 var imageExtensionByContentType = map[string]string{
 	"image/jpeg": ".jpg",
 	"image/png":  ".png",
@@ -35,8 +33,6 @@ type UpdateInput struct {
 	Status      *entity.ItemStatus `json:"status" validate:"omitempty,item_status"`
 }
 
-// NormalizePagination подставляет значения по умолчанию и ограничивает pageSize,
-// чтобы список товаров нельзя было запросить целиком одним запросом.
 func NormalizePagination(page, pageSize int) (int, int) {
 	if page < 1 {
 		page = defaultPage

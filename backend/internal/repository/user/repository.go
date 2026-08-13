@@ -20,7 +20,6 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-// Create — ErrDuplicateKey при занятом email.
 func (r *Repository) Create(ctx context.Context, user *entity.User) error {
 	const q = `
 		INSERT INTO users (id, full_name, email, password_hash, created_at)
@@ -82,7 +81,6 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*entity.User, e
 	return &u, nil
 }
 
-// UpdatePassword — ErrNotFound, если пользователя нет.
 func (r *Repository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
 	const q = `
 		UPDATE users

@@ -1,18 +1,5 @@
 package search
 
-// constQueryOutgoing — поиск предметов, близких к want_embedding.
-// Параметры: $1 вектор, $2 исключаемый пользователь, $3 порог | $4 = k.
-//
-// Причина фильтров:
-//   - i.status='ACTIVE' и er.status='ACTIVE' — недоступные (заблокированные/архивные)
-//     предметы и заявки исключаются сразу на SQL: совпадения в них искать нельзя
-//     (критерий приёмки "в недоступных заявках совпадения не ищутся").
-//   - er.user_id <> $2 — не показываем человеку его собственные предметы.
-//   - i.embedding IS NOT NULL — без вектора не с чем сравнивать.
-//
-// ORDER BY i.embedding <=> $1 ранжирует по близости; оператор <=> (cosine distance)
-// согласован с HNSW-индексом idx_items_embedding (vector_cosine_ops).
-// Подобие считается как 1 - distance.
 const constQueryOutgoingThreshold = `
 	SELECT er.id AS request_id, i.id AS item_id, er.user_id AS owner_id,
 	       1 - (i.embedding <=> $1) AS score
@@ -39,10 +26,6 @@ const constQueryOutgoingTopK = `
 	LIMIT $3
 `
 
-// constQueryIncoming* — поиск заявок, чей want_embedding близок к предмету.
-// Параметры: $1 вектор, $2 исключаемый пользователь, $3 порог | $4 = k.
-// Аналогичные фильтры недоступности и исключение себя; ORDER BY по индексу
-// idx_er_want_embedding (vector_cosine_ops).
 const constQueryIncomingThreshold = `
 	SELECT er.id AS request_id, er.offered_item_id AS item_id, er.user_id AS owner_id,
 	       1 - (er.want_embedding <=> $1) AS score
@@ -69,10 +52,6 @@ const constQueryIncomingTopK = `
 	LIMIT $3
 `
 
-// querySimilarOffers ищет заявки с тем же направлением обмена:
-// одновременно похожи и отдаваемый товар, и описание желаемого товара.
-// Сначала HNSW-индекс ограничивает выборку ближайшими отдаваемыми товарами,
-// затем внутри Top-K применяется второй порог по want_embedding.
 const querySimilarOffers = `
 	WITH nearest_by_offer AS MATERIALIZED (
 		SELECT eo.id AS request_id,
@@ -109,11 +88,6 @@ const querySimilarOffers = `
 	ORDER BY offer_score + want_score DESC, request_id
 `
 
-// queryOutgoingFrontier загружает Top-K исходящих рёбер сразу для всего frontier.
-// Frontier состоит из опорных заявок, но вершины DFS — кластеры. Поэтому сначала
-// раскрываются все активные заявки кластеров frontier, иначе путь мог бы зависеть
-// от случайно выбранного представителя кластера.
-// Если wanted_category задана, ребро допускается только к товару той же категории.
 const queryOutgoingFrontier = `
 	WITH source_clusters AS (
 		SELECT DISTINCT member.cluster_id
@@ -158,11 +132,6 @@ const queryOutgoingFrontier = `
 	ORDER BY source.id, candidate.score DESC, candidate.request_id
 `
 
-// queryIncomingToStart ищет заявки, которые могут получить любой товар стартового
-// кластера. Полученное множество используется как проверка замыкающего ребра,
-// поэтому DFS не загружает пятый уровень размером K^5.
-// У заявки, замыкающей цикл, заданная wanted_category также должна совпадать
-// с категорией отдаваемого товара выбранного участника стартового кластера.
 const queryIncomingToStart = `
 	WITH start_request AS MATERIALIZED (
 		SELECT start.id, start.user_id, start_item.embedding, start_item.category,

@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// LoadVectors загружает векторы направления обмена для предложения.
 func (r *Postgres) LoadVectors(ctx context.Context, tx database.Tx, offerID int64) (clusterservice.OfferVectors, error) {
 	var offerEmbedding *string
 	var wantEmbedding *string

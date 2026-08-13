@@ -44,7 +44,6 @@ const listPendingVoteEdgesQuery = `
 	ORDER BY source_participant.position, vote.request_id, vote.target_request_id
 `
 
-// LockForVote serializes all responses for one chain and returns its current state.
 func (r *Postgres) LockForVote(
 	ctx context.Context,
 	tx database.Tx,
@@ -67,8 +66,6 @@ func (r *Postgres) LockForVote(
 	return status, length, nil
 }
 
-// ValidateVoteParticipants verifies ownership and the directed edge between
-// adjacent chain positions while the chain row is locked by the caller.
 func (r *Postgres) ValidateVoteParticipants(
 	ctx context.Context,
 	tx database.Tx,
@@ -99,8 +96,6 @@ func (r *Postgres) ValidateVoteParticipants(
 	return nil
 }
 
-// GetVote returns an existing response only when the source request belongs to
-// the authenticated user. It is used to make retries idempotent after proposal.
 func (r *Postgres) GetVote(
 	ctx context.Context,
 	tx database.Tx,
@@ -130,7 +125,6 @@ func (r *Postgres) GetVote(
 	return vote, nil
 }
 
-// UpsertPendingVote records a candidate response without creating duplicates.
 func (r *Postgres) UpsertPendingVote(
 	ctx context.Context,
 	tx database.Tx,
@@ -153,7 +147,7 @@ func (r *Postgres) UpsertPendingVote(
 }
 
 // DeletePendingVote withdraws only a candidate-stage response. A missing row
-// is not an error, which makes retries idempotent.
+
 func (r *Postgres) DeletePendingVote(
 	ctx context.Context,
 	tx database.Tx,
@@ -172,7 +166,6 @@ func (r *Postgres) DeletePendingVote(
 	return nil
 }
 
-// ListPendingVoteEdges returns candidate responses for the service's local DFS.
 func (r *Postgres) ListPendingVoteEdges(
 	ctx context.Context,
 	tx database.Tx,
@@ -198,7 +191,6 @@ func (r *Postgres) ListPendingVoteEdges(
 	return edges, nil
 }
 
-// MarkRequestInProposal переводит откликнувшуюся заявку в мягкую блокировку.
 func (r *Postgres) MarkRequestInProposal(ctx context.Context, tx database.Tx, requestID int64) error {
 	if _, err := tx.Exec(ctx, `
 		UPDATE exchange_offers
@@ -210,8 +202,6 @@ func (r *Postgres) MarkRequestInProposal(ctx context.Context, tx database.Tx, re
 	return nil
 }
 
-// RestoreActiveIfNoPendingVotes возвращает заявку в ACTIVE, когда у неё не
-// осталось других pending-голосов как откликнувшейся.
 func (r *Postgres) RestoreActiveIfNoPendingVotes(ctx context.Context, tx database.Tx, requestID int64) error {
 	if _, err := tx.Exec(ctx, `
 		UPDATE exchange_offers AS eo

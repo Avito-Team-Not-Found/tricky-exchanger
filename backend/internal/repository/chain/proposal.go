@@ -13,8 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Propose pins the concrete requests selected by DFS, locks them into
-// IN_PROPOSAL, and resets votes to pending while the chain is a candidate.
 func (r *Postgres) Propose(
 	ctx context.Context,
 	tx database.Tx,

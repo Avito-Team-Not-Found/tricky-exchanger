@@ -31,7 +31,6 @@ const refreshClusterQuery = `
 	  AND centroid.value IS NOT NULL
 `
 
-// Refresh пересчитывает агрегаты кластера или удаляет его, если он пуст.
 func (r *Postgres) Refresh(ctx context.Context, tx database.Tx, clusterID int64) error {
 	const deleteQuery = `
 		DELETE FROM clusters AS c

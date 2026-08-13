@@ -12,9 +12,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
-// ListReplacementOptions returns active requests from the declined position's
-// cluster. Only the previous participant, whose receive option disappeared,
-// may list them.
 func (r *Postgres) ListReplacementOptions(ctx context.Context, userID string, chainID int64) ([]entity.ReplacementOption, error) {
 	eligibility := ReplacementEligibilitySQL("$1", "v.position", "item", "previous_offer", "next_item", "$3", true)
 
@@ -74,9 +71,6 @@ func (r *Postgres) ListReplacementOptions(ctx context.Context, userID string, ch
 	return options, nil
 }
 
-// SelectReplacement atomically pins an alternative request and starts a new
-// confirmation round for the changed edge. The participant who selected the
-// alternative and the invited replacement both explicitly confirm it.
 func (r *Postgres) SelectReplacement(ctx context.Context, tx database.Tx, userID string, chainID, replacementRequestID int64) error {
 	var position, length int
 	var oldRequestID, actorRequestID, nextRequestID int64

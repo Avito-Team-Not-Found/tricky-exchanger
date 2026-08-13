@@ -8,7 +8,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
-// Update — optimistic version; инвалидирует затронутые цепочки.
 func (r *Postgres) Update(ctx context.Context, tx database.Tx, request entity.ExchangeOffer, expectedVersion int64) (entity.ExchangeOffer, error) {
 	if err := ensureMutableRequest(ctx, tx, request.ID, request.UserID, expectedVersion); err != nil {
 		return entity.ExchangeOffer{}, err
@@ -61,7 +60,6 @@ func (r *Postgres) Update(ctx context.Context, tx database.Tx, request entity.Ex
 	return updated, nil
 }
 
-// Archive — optimistic version; инвалидирует затронутые цепочки.
 func (r *Postgres) Archive(ctx context.Context, tx database.Tx, userID string, requestID, expectedVersion int64) (entity.ExchangeOffer, error) {
 	const query = `
 		UPDATE exchange_offers

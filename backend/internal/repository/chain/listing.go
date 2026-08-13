@@ -36,7 +36,6 @@ const loadVisibleChainsQuery = `
 	ORDER BY c.created_at DESC, c.id DESC
 `
 
-// List возвращает актуальные цепочки пользователя без N+1-запросов.
 func (r *Postgres) List(ctx context.Context, userID string) ([]entity.Chain, error) {
 	chains, err := r.loadVisibleChains(ctx, userID, 0, 0)
 	if err != nil || len(chains) == 0 {
@@ -48,7 +47,6 @@ func (r *Postgres) List(ctx context.Context, userID string) ([]entity.Chain, err
 	return chains, nil
 }
 
-// ListForOffer возвращает актуальные цепочки конкретной заявки её владельцу.
 func (r *Postgres) ListForOffer(ctx context.Context, userID string, offerID int64) ([]entity.Chain, error) {
 	var owned bool
 	if err := r.pool.QueryRow(ctx, `

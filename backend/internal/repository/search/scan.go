@@ -6,7 +6,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// collectCandidates читает строки результата и собирает список кандидатов.
 func collectCandidates(rows pgx.Rows) ([]entity.Candidate, error) {
 	defer rows.Close()
 

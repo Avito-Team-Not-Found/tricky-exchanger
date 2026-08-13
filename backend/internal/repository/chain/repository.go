@@ -4,13 +4,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Postgres хранит цепочки и их участников в PostgreSQL.
 type Postgres struct {
 	pool              *pgxpool.Pool
 	matchingThreshold float64
 }
 
-// NewRepository создаёт репозиторий цепочек.
 func NewRepository(pool *pgxpool.Pool, thresholds ...float64) *Postgres {
 	threshold := 0.5
 	if len(thresholds) > 0 && thresholds[0] > 0 && thresholds[0] <= 1 {

@@ -12,9 +12,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
-// UploadImage загружает фото товара в объектное хранилище и сохраняет публичный
-// URL в записи товара. Запрещено для архивных товаров и товаров с активной
-// hard-резервацией — как и остальные мутации (см. Update).
 func (s *Service) UploadImage(ctx context.Context, requesterID uuid.UUID, itemID int64, content io.Reader, size int64, contentType string) (*entity.Item, error) {
 	item, err := s.getOwned(ctx, requesterID, itemID)
 	if err != nil {

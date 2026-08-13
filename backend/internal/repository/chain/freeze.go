@@ -191,7 +191,7 @@ func (r *Postgres) ReleaseUnselectedFromChain(ctx context.Context, tx database.T
 }
 
 func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx database.Tx, chainID int64) ([]int64, error) {
-	// Удаляем голоса замороженных участников в других цепочках.
+
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM votes AS v
 		WHERE v.chain_id <> $1
@@ -205,7 +205,6 @@ func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx dat
 		return nil, repository.MapDBErr(err)
 	}
 
-	// Запоминаем, какие конкурирующие цепочки затронуты (до удаления участников).
 	affected, err := func() ([]int64, error) {
 		rows, err := tx.Query(ctx, `
 			SELECT DISTINCT cp_outside.chain_id
@@ -242,7 +241,6 @@ func (r *Postgres) ReleaseCompetitorsFromOtherChains(ctx context.Context, tx dat
 		return nil, err
 	}
 
-	// Убираем вхождения замороженных участников из конкурирующих цепочек.
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM chain_participants AS cp
 		WHERE cp.chain_id <> $1

@@ -45,7 +45,6 @@ func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 	return nil
 }
 
-// GetByID — без фильтра по владельцу (ownership в сервисе).
 func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) {
 	const q = `
 		SELECT id, owner_user_id, title, description, COALESCE(category, ''), image_url, status, created_at, updated_at
@@ -143,7 +142,6 @@ func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 	return nil
 }
 
-// UpdateStatus — ErrNotFound, если товара нет.
 func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status entity.ItemStatus) error {
 	const q = `
 		UPDATE items
@@ -166,7 +164,6 @@ func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status entity.Ite
 	return nil
 }
 
-// UpdateImageURL — ErrNotFound, если товара нет.
 func (r *Postgres) UpdateImageURL(ctx context.Context, id int64, url string) error {
 	const q = `
 		UPDATE items

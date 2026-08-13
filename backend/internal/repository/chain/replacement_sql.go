@@ -5,8 +5,6 @@ import (
 	"strings"
 )
 
-// replacementEligibility описывает общие предикаты отбора кандидата на замену.
-// Плейсхолдеры — готовые SQL-фрагменты ($N или выражение вроде declined.position).
 type replacementEligibility struct {
 	ChainID       string // $1 / $3 / c.id
 	VacancyPos    string // v.position / $6 / declined.position
@@ -18,8 +16,6 @@ type replacementEligibility struct {
 	ExcludeAlreadyInChain bool
 }
 
-// ReplacementEligibilitySQL builds shared WHERE predicates used by
-// ListReplacementOptions, SelectReplacement and DeclineParticipant.
 func ReplacementEligibilitySQL(
 	chainID, vacancyPos, candidateItem, previousOffer, nextItem, threshold string,
 	excludeAlreadyInChain bool,
@@ -35,7 +31,6 @@ func ReplacementEligibilitySQL(
 	}.sql()
 }
 
-// sql собирает AND-предикаты eligibility без ведущего AND на первой строке.
 func (p replacementEligibility) sql() string {
 	parts := []string{
 		`candidate.status = 'ACTIVE'`,

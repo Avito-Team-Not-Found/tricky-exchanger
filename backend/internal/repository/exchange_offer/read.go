@@ -33,8 +33,7 @@ func (r *Postgres) Get(ctx context.Context, userID string, requestID int64) (ent
 }
 
 func (r *Postgres) List(ctx context.Context, userID string) ([]entity.ExchangeOfferListItem, error) {
-	// The join fetches card data in this single query, avoiding N+1 lookups of
-	// offered item titles in the HTTP list endpoint.
+
 	const query = `
 		SELECT er.id, er.user_id, er.offered_item_id, er.wanted_description, COALESCE(er.wanted_category, ''),
 		       er.status, er.version, er.created_at,
