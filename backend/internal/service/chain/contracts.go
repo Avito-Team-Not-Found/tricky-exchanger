@@ -6,6 +6,7 @@ import (
 
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/core/database"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 // Repository описывает хранилище, необходимое сервису цепочек.
@@ -25,6 +26,8 @@ type Repository interface {
 	MarkRequestInProposal(ctx context.Context, tx database.Tx, requestID int64) error
 	RestoreActiveIfNoPendingVotes(ctx context.Context, tx database.Tx, requestID int64) error
 	LoadScoreFeatures(ctx context.Context, tx database.Tx, chainID int64) (cosines []float64, reliability []float64, sizes []int, err error)
+	LoadRankerContext(ctx context.Context, tx database.Tx, chainID int64) (ranker.ContextSnapshot, error)
+	LoadRankerContextForRequests(ctx context.Context, tx database.Tx, requestIDs []int64) (ranker.ContextSnapshot, error)
 	CountPendingVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error)
 	UpdateScore(ctx context.Context, tx database.Tx, chainID int64, score float64) error
 	ConfirmParticipant(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error

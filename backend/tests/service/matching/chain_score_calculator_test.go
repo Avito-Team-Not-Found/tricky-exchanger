@@ -168,6 +168,8 @@ func TestExtractFeaturesInProgressIsFrozen(t *testing.T) {
 		t.Fatalf("IN_PROGRESS Progress=%v, want 1", f.Progress)
 	}
 }
+
+func TestScoreInvalidChainState(t *testing.T) {
 	calc := newCalc()
 
 	s := state()

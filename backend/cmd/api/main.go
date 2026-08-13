@@ -37,8 +37,6 @@ import (
 	itemService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/item"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/matching"
 	userService "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/user"
-
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 func main() {
@@ -102,11 +100,16 @@ func main() {
 	transactionManager := database.NewTransactionManager(pool)
 	chainRepository := chainRepo.NewRepository(pool, cfg.MatchingThreshold)
 
-	scoreRanker := ranker.NewChainScoreCalculator(ranker.NewRankerConfig())
+	scoreRanker, err := matching.NewRuntimeRanker(cfg.RankerMode, cfg.RankerModelPath)
+	if err != nil {
+		logger.Fatalf("ranker init error: %v", err)
+	}
 	chainSvc := chainservice.NewService(chainRepository, transactionManager)
 	chainSvc = chainSvc.WithScorer(scoreRanker)
 
-	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).WithRanker(scoreRanker)
+	matchingFacade := matching.NewFacade(clusterSvc, cycleFinder, chainSvc).
+		WithRanker(scoreRanker).
+		WithRankerContextLoader(chainSvc)
 	freezer := chainservice.NewFreezeService(chainRepository, matchingFacade)
 	chainSvc = chainSvc.WithFreezer(freezer)
 	// Выбор embed-провайдера конфигом: tei | stub.

@@ -15,6 +15,7 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 	chainservice "github.com/Avito-Team-Not-Found/tricky-exchanger/internal/service/chain"
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
 // Postgres хранит цепочки и их участников в PostgreSQL.
@@ -874,6 +875,164 @@ func (r *Postgres) LoadScoreFeatures(
 		return nil, nil, nil, err
 	}
 	return cosines, reliability, sizes, nil
+}
+
+func mapTxErr(err error) error {
+	if mappedErr, ok := repository.DBErrToErr(err); ok {
+		return mappedErr
+	}
+	return err
+}
+
+func (r *Postgres) loadCategoryCatalog(ctx context.Context, tx database.Tx) (map[string]int, int, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT COALESCE(category, ''), COUNT(*)::int
+		FROM items
+		WHERE status = 'ACTIVE' AND COALESCE(category, '') <> ''
+		GROUP BY 1
+	`)
+	if err != nil {
+		return nil, 0, mapTxErr(err)
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	total := 0
+	for rows.Next() {
+		var cat string
+		var n int
+		if err := rows.Scan(&cat, &n); err != nil {
+			return nil, 0, mapTxErr(err)
+		}
+		counts[cat] = n
+		total += n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, mapTxErr(err)
+	}
+	return counts, total, nil
+}
+
+// LoadRankerContext читает created_at, таймстампы голосов и категории участников цепочки.
+func (r *Postgres) LoadRankerContext(
+	ctx context.Context, tx database.Tx, chainID int64,
+) (ranker.ContextSnapshot, error) {
+	var snap ranker.ContextSnapshot
+	if err := tx.QueryRow(ctx, `
+		SELECT created_at FROM chains WHERE id = $1
+	`, chainID).Scan(&snap.CreatedAt); err != nil {
+		return ranker.ContextSnapshot{}, mapTxErr(err)
+	}
+
+	voteRows, err := tx.Query(ctx, `
+		SELECT COALESCE(voted_at, created_at)
+		FROM votes
+		WHERE chain_id = $1
+		ORDER BY COALESCE(voted_at, created_at)
+	`, chainID)
+	if err != nil {
+		return ranker.ContextSnapshot{}, mapTxErr(err)
+	}
+	defer voteRows.Close()
+	for voteRows.Next() {
+		var ts time.Time
+		if err := voteRows.Scan(&ts); err != nil {
+			return ranker.ContextSnapshot{}, mapTxErr(err)
+		}
+		if !ts.IsZero() {
+			snap.VoteTimes = append(snap.VoteTimes, ts)
+		}
+	}
+	if err := voteRows.Err(); err != nil {
+		return ranker.ContextSnapshot{}, mapTxErr(err)
+	}
+	voteRows.Close()
+
+	catRows, err := tx.Query(ctx, `
+		SELECT COALESCE(item.category, ''), COALESCE(offer.wanted_category, '')
+		FROM chain_participants AS part
+		JOIN exchange_offers AS offer ON offer.id = part.request_id
+		JOIN items AS item ON item.id = offer.offered_item_id
+		WHERE part.chain_id = $1
+		ORDER BY part.position
+	`, chainID)
+	if err != nil {
+		return ranker.ContextSnapshot{}, mapTxErr(err)
+	}
+	defer catRows.Close()
+	for catRows.Next() {
+		var offered, wanted string
+		if err := catRows.Scan(&offered, &wanted); err != nil {
+			return ranker.ContextSnapshot{}, mapTxErr(err)
+		}
+		snap.OfferedCategories = append(snap.OfferedCategories, offered)
+		snap.WantedCategories = append(snap.WantedCategories, wanted)
+	}
+	if err := catRows.Err(); err != nil {
+		return ranker.ContextSnapshot{}, mapTxErr(err)
+	}
+	catRows.Close()
+
+	counts, total, err := r.loadCategoryCatalog(ctx, tx)
+	if err != nil {
+		return ranker.ContextSnapshot{}, err
+	}
+	snap.CategoryCounts = counts
+	snap.CategoryTotal = total
+	snap.StageEnteredAt = snap.CreatedAt
+	if n := len(snap.VoteTimes); n > 0 {
+		snap.StageEnteredAt = snap.VoteTimes[n-1]
+	}
+	return snap, nil
+}
+
+// LoadRankerContextForRequests — то же для ещё не сохранённого драфта (ADD).
+func (r *Postgres) LoadRankerContextForRequests(
+	ctx context.Context, tx database.Tx, requestIDs []int64,
+) (ranker.ContextSnapshot, error) {
+	var snap ranker.ContextSnapshot
+	counts, total, err := r.loadCategoryCatalog(ctx, tx)
+	if err != nil {
+		return ranker.ContextSnapshot{}, err
+	}
+	snap.CategoryCounts = counts
+	snap.CategoryTotal = total
+	if len(requestIDs) == 0 {
+		return snap, nil
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT offer.id, COALESCE(item.category, ''), COALESCE(offer.wanted_category, '')
+		FROM exchange_offers AS offer
+		JOIN items AS item ON item.id = offer.offered_item_id
+		WHERE offer.id = ANY($1)
+	`, requestIDs)
+	if err != nil {
+		return ranker.ContextSnapshot{}, mapTxErr(err)
+	}
+	defer rows.Close()
+
+	byID := make(map[int64][2]string, len(requestIDs))
+	for rows.Next() {
+		var id int64
+		var offered, wanted string
+		if err := rows.Scan(&id, &offered, &wanted); err != nil {
+			return ranker.ContextSnapshot{}, mapTxErr(err)
+		}
+		byID[id] = [2]string{offered, wanted}
+	}
+	if err := rows.Err(); err != nil {
+		return ranker.ContextSnapshot{}, mapTxErr(err)
+	}
+
+	snap.OfferedCategories = make([]string, 0, len(requestIDs))
+	snap.WantedCategories = make([]string, 0, len(requestIDs))
+	for _, id := range requestIDs {
+		pair := byID[id]
+		snap.OfferedCategories = append(snap.OfferedCategories, pair[0])
+		snap.WantedCategories = append(snap.WantedCategories, pair[1])
+	}
+	return snap, nil
 }
 
 // CountPendingVoters возвращает число откликнувшихся участников цепочки.

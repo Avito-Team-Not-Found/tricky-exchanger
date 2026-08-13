@@ -3,8 +3,8 @@ package ranker
 // RankerConfig — параметры линейной скоринг-головы FormulaRanker'а.
 // Веса компонент в сумме дают 1; при значении 0 (или отрицательном) используется дефолт.
 //
-// Структура намеренно переиспользуется и для будущего LightGBM: компоненты — это
-// фичи, а голова (FormulaRanker сейчас, LightGBM позже) ест один и тот же набор.
+// LiquidityCap и ReliabilityDefault переиспользуются ExtractMLFeatures.
+// Веса линейной головы в ТЗ-3 не меняются.
 type RankerConfig struct {
 	WeightMatch       float64 // вклад Match           (default 0.35)
 	WeightReliability float64 // вклад Reliability     (default 0.20)

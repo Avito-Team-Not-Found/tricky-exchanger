@@ -146,6 +146,8 @@ services:
       - MINIO_BUCKET=${MINIO_BUCKET:-items}
       - MINIO_USE_SSL=false
       - MINIO_PUBLIC_USE_SSL=true
+      - RANKER_MODE=${RANKER_MODE:-ml}
+      - RANKER_MODEL_PATH=${RANKER_MODEL_PATH:-/models/ranker_v1.txt}
     restart: unless-stopped
     networks:
       - menyayka-network
