@@ -140,8 +140,7 @@ describe('ChainParticipantsPage', () => {
     expect(screen.getByText('Планшет')).toBeInTheDocument();
   });
 
-  // строка звена рисует одного участника, а пул получаемого звена — заявки разных людей:
-  // по ссылке с выбранным вариантом показываем только его, а не весь кластер
+  // пул получаемого звена — заявки разных людей, поэтому по ссылке показываем только выбранную
   it('keeps only the selected option on the receiving link', () => {
     const pool = [
       {
@@ -184,12 +183,10 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // статус отклика — пилюля с подписью текстом, чтобы он читался не только по цвету
     expect(screen.getByText('Ожидаем')).toBeInTheDocument();
   });
 
-  // на собранной цепочке пилюли первого раунда заменяются голосами второго раунда, а отклики
-  // скрыты: у vote на PROPOSED другой смысл
+  // у vote на PROPOSED другой смысл, поэтому отклики первого раунда скрыты
   it('shows second-round confirm pills and hides vote actions on an assembled chain', () => {
     const voted = makeChain({ status: 'PROPOSED' });
     voted.participants[0].vote = 'pending';
@@ -198,15 +195,13 @@ describe('ChainParticipantsPage', () => {
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    // оба участника ещё не ответили — обе строки показывают «Ожидает ответа»
     expect(screen.getAllByText('Ожидает ответа')).toHaveLength(2);
     expect(screen.queryByText('Ожидаем')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
   });
 
-  // голос привязан к цели голосования: решение участника позиции p лежит в vote позиции p+1
-  // по кольцу, поэтому пилюли строятся по сдвигу, а не по полю строки напрямую
+  // голос привязан к цели: решение позиции p лежит в vote позиции p+1 по кольцу
   it('renders each confirm vote state on the shifted position', () => {
     const me = { ...MY_CANDIDATE, vote: 'pending' as const };
     const second = { ...makeChain().participants[1], position: 1, vote: 'thinking' as const };
@@ -320,7 +315,6 @@ describe('ChainParticipantsPage', () => {
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
-  // на собранной цепочке над списком — пилюля, внизу — подтверждение второго раунда
   it('shows the assembled pill and a confirm action on a PROPOSED chain', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 

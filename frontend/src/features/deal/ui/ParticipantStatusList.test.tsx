@@ -55,7 +55,6 @@ describe('ParticipantStatusList', () => {
     renderList(makeChain(), 'shipments');
 
     expect(screen.getByText('Вы')).toBeInTheDocument();
-    // участник позиции 1 — Лиса, реальное имя нигде не показывается
     expect(screen.getByText('Лиса')).toBeInTheDocument();
     expect(screen.queryByText('Алексей')).not.toBeInTheDocument();
   });
@@ -73,7 +72,6 @@ describe('ParticipantStatusList', () => {
 
   it('labels receipts by the source request status', () => {
     const chain = makeChain();
-    // источник моей позиции (позиция 1) уже DONE — я получил товар
     chain.participants[1].requestStatus = 'DONE';
 
     renderList(chain, 'receipts');

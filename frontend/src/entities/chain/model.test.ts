@@ -118,7 +118,6 @@ describe('receivesItem', () => {
     expect(receivesItem(chain)).toEqual([]);
   });
 
-  // заявки одного кластера принадлежат разным людям: экран показывает только выбранную
   it('narrows the pool to the requested option', () => {
     const other = { ...OTHER, requestId: 203, offeredItemTitle: 'Планшет' };
     const chain = buildChain([MYSELF, OTHER, other]);
@@ -152,7 +151,6 @@ describe('isAssembled', () => {
 });
 
 describe('needsShipment', () => {
-  // до первого handoff цепочка не покидает FROZEN — это строго «пора отправлять свой товар»
   it('requires shipment only on a frozen chain', () => {
     expect(needsShipment('FROZEN')).toBe(true);
     expect(needsShipment('IN_PROGRESS')).toBe(false);

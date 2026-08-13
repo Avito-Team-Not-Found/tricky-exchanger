@@ -91,8 +91,7 @@ describe('ProductsPage', () => {
     expect(await screen.findByText('edit screen')).toBeInTheDocument();
   });
 
-  // товар из завершённой сделки остаётся в списке как история, но открывать в форме нечего:
-  // бэкенд отклоняет мутации архивного товара
+  // бэкенд отклоняет мутации архивного товара — открывать его в форме нечего
   it('shows an exchanged item as a non-interactive card', () => {
     mockedUseItems.mockReturnValue(queryOk({ items, total: items.length }));
     renderWithProviders(<ProductsPage />);

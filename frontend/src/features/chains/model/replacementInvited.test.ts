@@ -23,7 +23,6 @@ describe('replacementInvited', () => {
     replacementInvited.set(7, OPTION);
 
     expect(replacementInvited.get(7)).toEqual({ requestId: 42, option: OPTION });
-    // ключ на цепочку: приглашение в одной цепочке ничего не говорит о другой
     expect(replacementInvited.get(8)).toBeNull();
   });
 
@@ -34,8 +33,7 @@ describe('replacementInvited', () => {
     expect(replacementInvited.get(7)).toBeNull();
   });
 
-  // ключ предыдущей версии хранил только факт приглашения: экран ожидания обязан остаться,
-  // иначе апдейт выбросил бы актора на выбор кандидата с уже пустым пулом
+  // после апдейта экран ожидания обязан остаться — иначе актор попадёт на пустой пул
   it('reads a legacy flag as an invitation with an unknown candidate', () => {
     localStorage.setItem('tricky_exchanger_replacement_invited_7', '1');
 

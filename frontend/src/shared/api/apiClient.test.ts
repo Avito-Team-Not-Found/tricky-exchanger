@@ -46,8 +46,7 @@ describe('apiClient', () => {
     expect(assign).toHaveBeenCalledWith('/login');
   });
 
-  // выход из аккаунта с протухшим токеном — штатный сценарий, 401 обрабатывается
-  // локально в useLogout без полного редиректа и без очистки хранилища здесь
+  // 401 на логауте обрабатывает useLogout локально, без полного редиректа
   it('does not redirect or clear the session on a 401 from the logout call', async () => {
     const error = new AxiosError('Request failed');
     Object.assign(error, { response: { status: 401 }, config: { url: '/auth/logout' } });

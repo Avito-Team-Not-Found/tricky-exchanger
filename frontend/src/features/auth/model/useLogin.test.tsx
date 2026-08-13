@@ -37,8 +37,6 @@ describe('useLogin', () => {
     vi.clearAllMocks();
   });
 
-  // реактивность canSubmit на ввод в поля формы завязана на смонтированные Form.Item
-  // (antd Form.useWatch не отслеживает поля вне рендера) — проверяется в LoginForm.test.tsx
   it('disallows submit on an empty form', () => {
     const { result } = renderHook(() => useLogin(), { wrapper });
     expect(result.current.canSubmit).toBe(false);

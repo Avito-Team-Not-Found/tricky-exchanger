@@ -104,7 +104,6 @@ describe('DealPage', () => {
     const { container } = renderDealPage();
 
     expect(screen.getByText('Все товары доставлены')).toBeInTheDocument();
-    // «Все товары доставлены» — зелёный блок
     const hero = container.querySelector('.deal-hero--success');
     expect(hero).toBeInTheDocument();
     expect(hero).toHaveTextContent('Все товары доставлены');
@@ -119,12 +118,11 @@ describe('DealPage', () => {
 
     expect(screen.getByText('Вы отправили товар')).toBeInTheDocument();
     expect(screen.getByText('1 из 2 отправлено')).toBeInTheDocument();
-    // статусы отправки открываются кнопкой «Посмотреть детали цепочки» — отдельной ссылки нет
+    // отдельной ссылки на статусы нет — они открываются «Посмотреть детали цепочки»
     expect(screen.queryByRole('button', { name: 'Статусы отправки' })).not.toBeInTheDocument();
   });
 
-  // на «Вы отправили товар» модалка безопасности та же, что и на отправке, — про отправку,
-  // а не про доставку
+  // модалка на экране ожидания — про отправку, а не про доставку
   it('opens the shipping-safety modal on the waiting screen, not a delivery one', async () => {
     const user = userEvent.setup();
     mockedUseChain.mockReturnValue(queryOk(makeShippedWaitingChain()));
@@ -184,7 +182,6 @@ describe('DealPage', () => {
   });
 
   it('shows the received screen with the confirmation text on the page, not in a modal', async () => {
-    // источник DONE — ветка received-waiting «Вы забрали товар», куда экран переходит после receipt
     const chain = makeChain('IN_PROGRESS');
     chain.participants[1].requestStatus = 'DONE';
     mockedUseChain.mockReturnValue(queryOk(chain));
@@ -192,13 +189,11 @@ describe('DealPage', () => {
     renderDealPage();
 
     expect(screen.getByText('Вы забрали товар')).toBeInTheDocument();
-    // текст подтверждения выведен на страницу, а не в модалку
     expect(
       screen.getByText(
         /Спасибо! Мы отметили, что вы забрали товар\. Обмен завершится, как только все участники/,
       ),
     ).toBeInTheDocument();
-    // предупреждение не использовать товар и срок возврата идут сразу после подтверждения
     expect(
       screen.getByText('Не используйте товар, пока не подтвердят получение.'),
     ).toBeInTheDocument();
@@ -219,15 +214,12 @@ describe('DealPage', () => {
     await user.click(screen.getByRole('button', { name: 'Я забрал товар' }));
 
     await waitFor(() => expect(mockedReceipt).toHaveBeenCalledWith(1, 202));
-    // подтверждение получения не требуется — «Забрать товар?» не показывается
     expect(screen.queryByText('Забрать товар?')).not.toBeInTheDocument();
-    // модалки успеха больше нет — экран сам перейдёт в «Вы забрали товар» после перечитанной цепочки
     expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
   });
 
   it('opens the receipt statuses from the details button on the received screen', async () => {
     const user = userEvent.setup();
-    // источник DONE — ветка received-waiting «Вы забрали товар»
     const chain = makeChain('IN_PROGRESS');
     chain.participants[1].requestStatus = 'DONE';
     mockedUseChain.mockReturnValue(queryOk(chain));
@@ -237,7 +229,6 @@ describe('DealPage', () => {
     ]);
 
     expect(screen.getByText('Вы забрали товар')).toBeInTheDocument();
-    // отдельной ссылки на статусы нет — они открываются «Посмотреть детали цепочки»
     expect(screen.queryByRole('button', { name: 'Статусы получения' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Посмотреть детали цепочки' }));
@@ -255,7 +246,6 @@ describe('DealPage', () => {
     // модалка живёт в портале — ищем её по роли dialog, чтобы не спутать с кнопкой экрана
     const dialog = await screen.findByRole('dialog');
     const withinDialog = within(dialog);
-    // пока причина не выбрана — кнопка «Открыть спор» в модалке недоступна
     const confirm = withinDialog.getByRole('button', { name: 'Открыть спор' });
     expect(confirm).toBeDisabled();
     for (const reason of ['Товар не тот', 'Товар испорчен', 'Другое']) {
@@ -281,7 +271,6 @@ describe('DealPage', () => {
 
     // jsdom не доигрывает анимации antd — модалка остаётся в DOM с классом ухода
     await waitFor(() => expect(document.querySelector('.ant-modal')).toHaveClass('ant-zoom-leave'));
-    // спор не открыт: строка «Проблемы с товаром?» с кнопкой на месте, «Жалоба на рассмотрении» нет
     expect(screen.getByText('Проблемы с товаром?')).toBeInTheDocument();
     expect(screen.queryByText('Жалоба на рассмотрении')).not.toBeInTheDocument();
   });

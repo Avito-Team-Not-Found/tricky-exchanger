@@ -33,8 +33,6 @@ describe('useRecoveryFlow', () => {
     vi.clearAllMocks();
   });
 
-  // реактивность emailReady/passwordReady на ввод в поля формы завязана на смонтированные
-  // Form.Item (antd Form.useWatch не отслеживает поля вне рендера) — проверяется в RecoveryFlow.test.tsx
   it('starts on the email step with emailReady false', () => {
     const { result } = renderHook(() => useRecoveryFlow(), { wrapper });
     expect(result.current.emailReady).toBe(false);

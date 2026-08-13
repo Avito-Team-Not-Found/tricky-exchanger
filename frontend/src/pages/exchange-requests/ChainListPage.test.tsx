@@ -52,8 +52,7 @@ const mockedVote = vi.mocked(voteForRequest);
 const mockedWithdraw = vi.mocked(withdrawVote);
 const mockedConfirm = vi.mocked(confirmChain);
 
-// отдаваемый товар заявки (offeredItemId: 1) — деталь заявки его не отдаёт,
-// ChainListPage берёт его из кеша товаров
+// деталь заявки не отдаёт снимок товара — страница берёт его из кеша товаров
 const offeredItem = {
   id: 1,
   title: 'Велосипед',
@@ -145,20 +144,17 @@ describe('ChainListPage', () => {
     expect(screen.getByText('Варианты обмена')).toBeInTheDocument();
     expect(screen.getByText('Отдаёте: Велосипед')).toBeInTheDocument();
     expect(screen.getByText('Получаете: Хочу фотоаппарат')).toBeInTheDocument();
-    // два кандидата следующего звена — две карточки, у обеих есть кнопка отклика
     expect(screen.getAllByText('Фотоаппарат')).toHaveLength(1);
     expect(screen.getByText('Планшет')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Откликнуться' })).toHaveLength(2);
   });
 
-  // длина цепочки — отдельное значение (chain.length), а не размер пула receiveOptions
   it('takes the chain length from the response, not from the pool size', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(queryOk([makeOptions({ length: 5 })]));
 
     renderWithProviders(<ChainListPage />);
 
-    // у каждого из двух вариантов своя карточка со своим счётчиком
     expect(screen.getAllByText('5 участников')).toHaveLength(2);
   });
 
@@ -175,8 +171,7 @@ describe('ChainListPage', () => {
     expect(await screen.findByText('chain detail')).toBeInTheDocument();
   });
 
-  // экраны цепочки одни на chainId — карточка передаёт им свой вариант получения,
-  // иначе они снова развернут звено во весь пул кандидатов
+  // экраны цепочки одни на chainId — без варианта получения они развернут звено во весь пул
   it('passes the picked option to the chain detail', async () => {
     const user = userEvent.setup();
     mockedUseRequest.mockReturnValue(queryOk(request));
@@ -240,7 +235,6 @@ describe('ChainListPage', () => {
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
   });
 
-  // бэкенд отдаёт цепочки по дате создания — экран обязан показать их по убыванию вероятности
   it('orders the cards by descending probability, not by the backend order', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     const weak = makeOptions({ score: 0.55 });
@@ -257,7 +251,6 @@ describe('ChainListPage', () => {
     expect(titles).toEqual(['Сильный вариант', 'Слабый вариант']);
   });
 
-  // на собранной цепочке место кнопки отклика занимает подтверждение второго раунда
   it('confirms participation of a PROPOSED chain through the decision modal', async () => {
     mockedConfirm.mockResolvedValue({ chainId: 1, status: 'PROPOSED' });
     const user = userEvent.setup();
@@ -273,9 +266,7 @@ describe('ChainListPage', () => {
     await waitFor(() => expect(mockedConfirm).toHaveBeenCalledWith(1));
   });
 
-  // сделка по одной из цепочек заморожена: баннер, кнопка «Требуется действие» на замороженной
-  // карточке (пора отправлять товар), остальные варианты приглушены и недоступны, правка запроса
-  // заблокирована
+  // на замороженной цепочке остальные варианты приглушены, а правка запроса заблокирована
   it('locks the request once one of its chains is frozen', async () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(
@@ -330,7 +321,6 @@ describe('ChainListPage', () => {
     expect(editButton).toBeDisabled();
   });
 
-  // на замороженной карточке бейдж согласий всегда «M/M» — все участники подтвердили
   it('shows the M/M consent badge on a frozen chain card', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(
@@ -357,8 +347,7 @@ describe('ChainListPage', () => {
     expect(screen.getByText('3/3 согласий')).toBeInTheDocument();
   });
 
-  // на PROPOSED-карточке число согласий считается из participants[].vote детали цепочки,
-  // которую exchange-options не отдаёт (GET /chains/{id})
+  // число согласий считается по деталям цепочки — exchange-options их не отдаёт
   it('shows the N/M consent badge on a proposed chain from the chain details', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(
@@ -403,8 +392,7 @@ describe('ChainListPage', () => {
     expect(screen.getByText('1/2 согласий')).toBeInTheDocument();
   });
 
-  // дедлайн ответа по PROPOSED-цепочке приходит из детали (GET /chains/{id}), exchange-options
-  // его не отдаёт: таймер «Осталось … на ответ» виден на собранной карточке (TimerRow)
+  // дедлайн приходит из детали цепочки — exchange-options его не отдаёт
   it('shows the response deadline on a proposed card from the chain details', () => {
     vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
     mockedUseRequest.mockReturnValue(queryOk(request));
@@ -447,8 +435,7 @@ describe('ChainListPage', () => {
     expect(screen.getByText('Осталось 47 ч 58 мин на ответ')).toBeInTheDocument();
   });
 
-  // на FROZEN freezeDeadlineAt несёт дедлайн отправки товара — тот же TimerRow, но «на отправку»;
-  // дедлайн, как и у PROPOSED, берётся из детали цепочки
+  // на FROZEN то же поле несёт дедлайн отправки товара
   it('shows the shipping deadline on a frozen card from the chain details', () => {
     vi.setSystemTime(new Date('2026-08-10T10:00:00Z'));
     mockedUseRequest.mockReturnValue(queryOk(request));
@@ -491,8 +478,8 @@ describe('ChainListPage', () => {
     expect(screen.getByText('Осталось 47 ч 58 мин на отправку')).toBeInTheDocument();
   });
 
-  // exchange-options не откатывает просроченный PROPOSED — это делает только GET /chains/{id}.
-  // Пока список не перезапрошен, карточка держит живые кнопки второго раунда и confirm ловит 410
+  // просроченный PROPOSED откатывает только GET /chains/{id} — до перезапроса списка
+  // карточка держит живые кнопки и confirm ловит 410
   it('refetches the offer list once the chain detail has expired the proposal', async () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(queryOk([makeOptions({ status: 'PROPOSED' })]));
@@ -532,8 +519,7 @@ describe('ChainListPage', () => {
     expect(screen.queryByText(/Осталось .* на ответ/)).not.toBeInTheDocument();
   });
 
-  // голос thinking клиент больше не выставляет, но по старым данным он приходить может:
-  // решение не принято, значит карточка требует действий на общих основаниях
+  // thinking клиент не выставляет, но по старым данным он приходить может
   it('keeps the action button on a card with a legacy thinking vote', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     const options = makeOptions({ status: 'PROPOSED' });
@@ -547,7 +533,6 @@ describe('ChainListPage', () => {
     expect(screen.queryByText('⚠ Примите решение как можно скорее!')).not.toBeInTheDocument();
   });
 
-  // подтвердил — кнопки на карточке сменяются статусной строкой
   it('replaces the action with the confirmed line once my vote is approved', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     const options = makeOptions({ status: 'PROPOSED' });
@@ -561,8 +546,7 @@ describe('ChainListPage', () => {
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
-  // когда одна из цепочек замкнулась (PROPOSED, требует подтверждения), остальные варианты
-  // приглушены и недоступны — доступной остаётся сама собранная цепочка
+  // сама собранная цепочка остаётся доступной, приглушаются только кандидатные
   it('dims candidate chains when one chain is PROPOSED and needs confirmation', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(
@@ -599,7 +583,6 @@ describe('ChainListPage', () => {
 
     renderWithProviders(<ChainListPage />);
 
-    // собранная цепочка остаётся доступной — действие второго раунда активно
     expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeEnabled();
 
     const dimmedCard = screen
@@ -609,7 +592,6 @@ describe('ChainListPage', () => {
     expect(screen.getByRole('button', { name: 'Откликнуться' })).toBeDisabled();
   });
 
-  // при нескольких собранных цепочках они все остаются доступными — приглушаются только кандидатные
   it('keeps several PROPOSED chains available and dims only candidate chains', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     mockedUseOptions.mockReturnValue(

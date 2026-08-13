@@ -165,8 +165,6 @@ describe('useRequestForm', () => {
     expect(result.current.canSubmit).toBe(false);
   });
 
-  // правка заявки пересчитывает цепочки на сервере: кроме списка заявок нужно
-  // инвалидировать и кеш цепочек — иначе «Варианты обмена» ещё минуту держат старые
   it('invalidates exchange requests and chains after an update', async () => {
     mockedUseRequest.mockReturnValue(queryOk(editableRequest));
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
@@ -209,7 +207,6 @@ describe('useRequestForm', () => {
     expect(result.current.items).toEqual([]);
   });
 
-  // ранний выход до отправки (кеш заявки опустел) не должен навсегда блокировать форму
   it('resets submitting when the edited request disappears from the cache', async () => {
     const { result } = renderHook(() => useRequestForm(1), { wrapper });
 
