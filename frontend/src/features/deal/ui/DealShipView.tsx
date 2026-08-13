@@ -129,11 +129,8 @@ export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewP
       </section>
 
       <div className="deal-ship__pickup">
+        <h2 className="deal-ship__section-title">Где будем получать?</h2>
         <DealPickupCard address={point} onChange={openPickupModal} />
-        <p className="deal-ship__pickup-note">
-          Это пункт назначения — куда должен прийти ваш товар для получателя. Отправить его вы
-          можете через любой удобный ближайший пункт приёма.
-        </p>
       </div>
 
       <section className="deal-ship__photo">

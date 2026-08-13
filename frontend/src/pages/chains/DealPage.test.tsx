@@ -91,6 +91,7 @@ describe('DealPage', () => {
     renderDealPage();
 
     expect(screen.getByText('Что нужно сделать')).toBeInTheDocument();
+    expect(screen.getByText('Где будем получать?')).toBeInTheDocument();
     const button = screen.getByRole('button', { name: 'Я отправил товар' });
     expect(button).toBeDisabled();
     expect(screen.getByText('Прикрепите фото товара перед отправкой')).toBeInTheDocument();
