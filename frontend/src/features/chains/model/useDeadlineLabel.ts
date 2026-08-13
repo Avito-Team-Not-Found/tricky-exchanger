@@ -1,14 +1,20 @@
 import { useSyncExternalStore } from 'react';
 
-import { formatRemaining } from '@entities/chain';
+import { formatRemaining, isFrozenReplacement, needsMyAction, type Chain } from '@entities/chain';
 
 // тик раз в 30 с — минутного разрешения достаточно («47 ч 58 мин»), а серверный рефетч
 // обновляет сам дедлайн; без локального тика строка застыла бы
 const TICK_MS = 30_000;
 
-// оба дедлайна лежат в freezeDeadlineAt и различаются только статусом цепочки,
+// все дедлайны лежат в freezeDeadlineAt и различаются только статусом цепочки/причиной,
 // поэтому выбор остаётся за вызывающим компонентом
-export type DeadlinePurpose = 'response' | 'ship';
+export type DeadlinePurpose = 'response' | 'ship' | 'replacement';
+
+// дедлайн замены общий, но приглашённому кандидату он отсчитывает срок ответа
+export function chainDeadlinePurpose(chain: Chain): DeadlinePurpose | undefined {
+  if (!isFrozenReplacement(chain)) return undefined;
+  return needsMyAction(chain) ? 'response' : 'replacement';
+}
 
 // внешний стор, а не useState с интервалом: Date.now() нельзя читать прямо в рендере, а снимок
 // обновляется ещё и в момент подписки — дедлайн, пришедший позже монтирования карточки,

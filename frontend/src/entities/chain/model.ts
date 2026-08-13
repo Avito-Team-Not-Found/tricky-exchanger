@@ -10,7 +10,8 @@ export type VoteValue = 'pending' | 'approved' | 'rejected' | 'thinking';
 
 // participants — пул кандидатов, а не участники: на CANDIDATE каждая позиция кольца развёрнута
 // во все заявки своего кластера. vote привязан к цели: решение позиции p лежит в vote следующей.
-// freezeDeadlineAt на PROPOSED — дедлайн ответа, на FROZEN — дедлайн отправки
+// freezeDeadlineAt на PROPOSED — дедлайн ответа (или подбора быстрой замены при
+// invalidReason = 'frozen_replacement'), на FROZEN — дедлайн отправки
 export interface ChainParticipant {
   clusterId: number;
   requestId: number;
@@ -168,6 +169,12 @@ export function needsShipment(status: ChainStatus): boolean {
 // уже с PROPOSED цепочка занимает заявку — остальные варианты запроса приглушаются
 export function isAssembled(status: ChainStatus): boolean {
   return status === 'PROPOSED' || isHardLocked(status);
+}
+
+// быстрая замена после отказа на FROZEN: цепочка снова PROPOSED, но дедлайн у неё — подбор
+// замены, а не ответа (см. PROJECT.md §4.8)
+export function isFrozenReplacement(chain: Chain): boolean {
+  return chain.status === 'PROPOSED' && chain.invalidReason === 'frozen_replacement';
 }
 
 export function myParticipant(chain: Chain): ChainParticipant | null {

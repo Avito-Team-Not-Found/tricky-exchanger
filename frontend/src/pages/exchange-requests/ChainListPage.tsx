@@ -8,6 +8,8 @@ import {
   useChainVote,
   useProposalExpiry,
   ChainCard,
+  chainDeadlinePurpose,
+  type DeadlinePurpose,
 } from '@features/chains';
 
 import {
@@ -86,6 +88,11 @@ export function ChainListPage() {
 
   function deadlineAtFor(entry: ExchangeOptions): string | null | undefined {
     return detailByChain.get(entry.chainId)?.freezeDeadlineAt;
+  }
+
+  function deadlinePurposeFor(entry: ExchangeOptions): DeadlinePurpose | undefined {
+    const detail = detailByChain.get(entry.chainId);
+    return detail ? chainDeadlinePurpose(detail) : undefined;
   }
 
   // непустой пул — единственный признак вакансии: в теле цепочки отказ не виден
@@ -182,6 +189,7 @@ export function ChainListPage() {
                 locked={hasAssembled && !isAssembled(entry.status)}
                 approvedCount={approvedCountFor(entry)}
                 deadlineAt={deadlineAtFor(entry)}
+                deadlinePurpose={deadlinePurposeFor(entry)}
                 needsReplacement={needsReplacementFor(entry)}
                 onOpen={() =>
                   navigate(`/chains/${entry.chainId}${receiveOptionQuery(option.requestId)}`)

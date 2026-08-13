@@ -17,6 +17,8 @@ import {
 import { plural } from '@shared/lib/plural';
 import { FadeInImage, ProbabilityBadge } from '@shared/ui';
 
+import { chainDeadlinePurpose } from '../model/useDeadlineLabel';
+
 import { ConsentBadge } from './ConsentBadge';
 import { DeadlineRow } from './DeadlineRow';
 
@@ -107,7 +109,11 @@ export function ChainItemView({
         <p className="chain-item__lock">{HARD_LOCK_MESSAGE}</p>
       ) : null}
 
-      <DeadlineRow status={chain.status} deadlineAt={chain.freezeDeadlineAt} />
+      <DeadlineRow
+        status={chain.status}
+        deadlineAt={chain.freezeDeadlineAt}
+        purpose={chainDeadlinePurpose(chain)}
+      />
 
       {single?.offeredItemDescription ? (
         <section className="chain-item__section">

@@ -12,6 +12,8 @@ import {
 import { plural } from '@shared/lib/plural';
 import { FadeInImage, ProbabilityBadge } from '@shared/ui';
 
+import type { DeadlinePurpose } from '../model/useDeadlineLabel';
+
 import { ConsentBadge } from './ConsentBadge';
 import { DeadlineRow } from './DeadlineRow';
 
@@ -26,6 +28,8 @@ interface ChainCardProps {
   approvedCount?: number;
   // exchange-options дедлайн не отдаёт — без даты таймер не рисуем
   deadlineAt?: string | null;
+  // быстрая замена после отказа на FROZEN — тоже PROPOSED, но с дедлайном подбора замены
+  deadlinePurpose?: DeadlinePurpose;
   // непустой пул замен — вакансия в цепочке: кнопка ведёт на выбор замены вместо подтверждения
   needsReplacement?: boolean;
   onOpen: () => void;
@@ -42,6 +46,7 @@ export function ChainCard({
   locked,
   approvedCount,
   deadlineAt,
+  deadlinePurpose,
   needsReplacement,
   onOpen,
   onProceed,
@@ -120,7 +125,12 @@ export function ChainCard({
         )}
       </div>
 
-      <DeadlineRow status={options.status} deadlineAt={deadlineAt} showShipDeadline />
+      <DeadlineRow
+        status={options.status}
+        deadlineAt={deadlineAt}
+        showShipDeadline
+        purpose={deadlinePurpose}
+      />
 
       {canAct ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
