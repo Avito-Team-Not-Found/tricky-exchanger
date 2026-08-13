@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router';
 
 import {
   ChainItemView,
+  ExpiredChainState,
+  isChainExpired,
   receiveOptionQuery,
   useChainConfirm,
   useChainVote,
@@ -23,10 +25,13 @@ export function ChainDetailPage() {
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
   const receiveRequestId = useReceiveOption();
-  const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
+  const { data: chain, isLoading: isChainLoading, isError, error, refetch } = useChain(chainId);
   const { confirmVote, isVoting } = useChainVote(refetch);
-  const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
-
+  const { openConfirm, openDecline } = useChainConfirm(
+    refetch,
+    () => navigate('/exchange-requests'),
+    { suppressExpiryToast: true },
+  );
   // непустой пул — единственный признак вакансии: в теле цепочки отличий после отказа не видно
   const { data: replacements = [], isLoading: isReplacementsLoading } = useReplacements(chainId, {
     enabled: chain?.status === 'PROPOSED',
@@ -59,6 +64,8 @@ export function ChainDetailPage() {
       <div className="chain-detail-page__body">
         {isLoading ? (
           <Skeleton active paragraph={{ rows: 6 }} />
+        ) : isChainExpired(error) ? (
+          <ExpiredChainState />
         ) : isError || !chain ? (
           <ErrorState onRetry={refetch} />
         ) : (
@@ -83,6 +90,7 @@ export function ChainDetailPage() {
             onConfirm={() => openConfirm(chain.id)}
             onProceed={() => navigate(`/chains/${chain.id}/deal`)}
             onReplace={() => navigate(`/chains/${chain.id}/replacement`)}
+            onDecline={() => openDecline(chain.id, true)}
           />
         )}
       </div>

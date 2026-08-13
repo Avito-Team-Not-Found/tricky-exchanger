@@ -36,6 +36,7 @@ interface ChainItemViewProps {
   onConfirm: () => void;
   onProceed: () => void;
   onReplace: () => void;
+  onDecline: () => void;
 }
 
 export function ChainItemView({
@@ -48,6 +49,7 @@ export function ChainItemView({
   onConfirm,
   onProceed,
   onReplace,
+  onDecline,
 }: ChainItemViewProps) {
   const { token } = theme.useToken();
   const received = receivesItem(chain, receiveRequestId);
@@ -163,15 +165,27 @@ export function ChainItemView({
             Вы подтвердили · ждём остальных
           </p>
         ) : shipRequired ? (
-          <Button
-            className="chain-item__action"
-            type="primary"
-            size="large"
-            block
-            onClick={onProceed}
-          >
-            Требуется действие
-          </Button>
+          <>
+            <Button
+              className="chain-item__action"
+              type="primary"
+              size="large"
+              block
+              onClick={onProceed}
+            >
+              Требуется действие
+            </Button>
+            <Button
+              className="chain-item__decline"
+              type="text"
+              danger
+              size="large"
+              block
+              onClick={onDecline}
+            >
+              Отказаться от сделки
+            </Button>
+          </>
         ) : hasDeal(chain.status) ? (
           <Button
             className="chain-item__action"

@@ -98,7 +98,9 @@ describe('useChainConfirm', () => {
     act(() => result.current.openConfirm(1));
     await user.click(await screen.findByRole('button', { name: 'Да' }));
 
-    expect(await screen.findByText('Сделка подтверждена')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Сделка подтверждена. Письмо придёт на почту'),
+    ).toBeInTheDocument();
   });
 
   it('invalidates chains and exchange-options after a confirmation', async () => {
@@ -271,9 +273,64 @@ describe('useChainConfirm', () => {
     act(() => result.current.openConfirm(1));
     await user.click(await screen.findByRole('button', { name: 'Да' }));
 
-    expect(
-      await screen.findByText('Время на ответ истекло, цепочка распалась'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Время истекло, цепочка распалась')).toBeInTheDocument();
     expect(refetch).toHaveBeenCalled();
+  });
+
+  it('skips the expiry toast when the page will show ExpiredChainState', async () => {
+    const refetch = vi.fn();
+    mockedConfirm.mockRejectedValue(axiosError(410));
+    const user = userEvent.setup();
+    const { result } = renderHook(
+      () => useChainConfirm(refetch, undefined, { suppressExpiryToast: true }),
+      { wrapper },
+    );
+
+    act(() => result.current.openConfirm(1));
+    await user.click(await screen.findByRole('button', { name: 'Да' }));
+
+    await waitFor(() => expect(refetch).toHaveBeenCalled());
+    expect(screen.queryByText('Время истекло, цепочка распалась')).not.toBeInTheDocument();
+  });
+
+  it('treats an expired deadline on a frozen decline as a warning', async () => {
+    const refetch = vi.fn();
+    mockedDecline.mockRejectedValue(axiosError(410));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(refetch), { wrapper });
+
+    act(() => result.current.openDecline(1));
+    await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
+
+    expect(await screen.findByText('Время истекло, цепочка распалась')).toBeInTheDocument();
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('leaves the chain screen after declining from FROZEN even when the chain survives', async () => {
+    const onNotFound = vi.fn();
+    // отказ на FROZEN уводит цепочку под быструю замену (PROPOSED), а не ломает её
+    mockedDecline.mockResolvedValue(declined('PROPOSED'));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(vi.fn(), onNotFound), { wrapper });
+
+    act(() => result.current.openDecline(1, true));
+    await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
+
+    await waitFor(() => expect(onNotFound).toHaveBeenCalled());
+  });
+
+  it('stays on the chain screen when a non-frozen decline keeps the chain alive', async () => {
+    const onNotFound = vi.fn();
+    mockedDecline.mockResolvedValue(declined('CANDIDATE'));
+    const user = userEvent.setup();
+    const { result } = renderHook(() => useChainConfirm(vi.fn(), onNotFound), { wrapper });
+
+    act(() => result.current.openDecline(1));
+    await user.click(await screen.findByRole('button', { name: 'Да, отказаться' }));
+
+    expect(
+      await screen.findByText('Вы вышли из сделки. Цепочка вернулась к сбору откликов'),
+    ).toBeInTheDocument();
+    expect(onNotFound).not.toHaveBeenCalled();
   });
 });

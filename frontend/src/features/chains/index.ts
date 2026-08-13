@@ -1,9 +1,13 @@
 export { useChainConfirm } from './model/useChainConfirm.tsx';
 export { useChainVote } from './model/useChainVote';
+export { EXPIRED_CHAIN_MESSAGE, isChainExpired } from './model/expiredChain';
+export { chainDeadlinePurpose } from './model/useDeadlineLabel';
+export type { DeadlinePurpose } from './model/useDeadlineLabel';
 export { useProposalExpiry, type ProposalExpiryState } from './model/useProposalExpiry';
 export { receiveOptionQuery, useReceiveOption } from './model/useReceiveOption';
 export { useReplacementSelection } from './model/useReplacementSelection';
 export { ChainCard } from './ui/ChainCard';
 export { ChainDetail } from './ui/ChainDetail';
 export { ChainItemView } from './ui/ChainItemView';
+export { ExpiredChainState } from './ui/ExpiredChainState';
 export { ReplacementCandidateCard } from './ui/ReplacementCandidateCard';

@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router';
 
 import {
   declineChain,
+  invalidateChainQueries,
   selectReplacement,
   useChain,
   useReplacements,
@@ -16,6 +17,7 @@ import {
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
 import { declineMessage } from './declineMessage';
+import { EXPIRED_CHAIN_MESSAGE, isChainExpired } from './expiredChain';
 import { replacementInvited } from './replacementInvited';
 import { replacementStage, type ReplacementStage } from './replacementStage';
 
@@ -114,6 +116,12 @@ export function useReplacementSelection(chainId?: number) {
       queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
     },
     onError: (error) => {
+      if (isChainExpired(error)) {
+        message.warning(EXPIRED_CHAIN_MESSAGE);
+        invalidateChainQueries(queryClient);
+        navigate('/exchange-requests');
+        return;
+      }
       message.error(
         getErrorMessage(
           error,
@@ -174,6 +182,12 @@ export function useReplacementSelection(chainId?: number) {
       navigate(requestId ? `/exchange-requests/${requestId}` : '/exchange-requests');
     },
     onError: (error) => {
+      if (isChainExpired(error)) {
+        message.warning(EXPIRED_CHAIN_MESSAGE);
+        invalidateChainQueries(queryClient);
+        navigate('/exchange-requests');
+        return;
+      }
       message.error(
         getErrorMessage(
           error,

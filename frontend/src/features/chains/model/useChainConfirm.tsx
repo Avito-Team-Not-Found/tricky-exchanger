@@ -17,18 +17,35 @@ import { getErrorMessage } from '@shared/lib/errorMessage';
 import { FreezeDecisionModal } from '../ui/FreezeDecisionModal';
 
 import { declineMessage } from './declineMessage';
+import { EXPIRED_CHAIN_MESSAGE, isChainExpired } from './expiredChain';
 
-export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
+type ChainConfirmOptions = {
+  // страницы с ExpiredChainState сами показывают истечение — тост её продублировал бы
+  suppressExpiryToast?: boolean;
+};
+
+export function useChainConfirm(
+  refetch?: () => void,
+  onNotFound?: () => void,
+  { suppressExpiryToast = false }: ChainConfirmOptions = {},
+) {
   const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
   // модалка живёт в портале вне дерева роутов — иначе останется висеть поверх нового экрана
   // с живой кнопкой «Да»
   const decision = useRef<{ destroy: () => void } | null>(null);
+  // отказ из FROZEN завершает для нас цепочку при любом исходе: товар высвобожден, цепочка ушла
+  // под быструю замену или распалась — флаг переносит переход в общий onSuccess мутации
+  const declineFromFrozen = useRef(false);
 
   const mutation = useMutation<ConfirmResult, Error, number>({
     mutationFn: (chainId) => confirmChain(chainId),
     onSuccess: (data) => {
-      message.success(data.status === 'FROZEN' ? 'Сделка подтверждена' : 'Участие подтверждено');
+      message.success(
+        data.status === 'FROZEN'
+          ? 'Сделка подтверждена. Письмо придёт на почту'
+          : 'Участие подтверждено',
+      );
       invalidate();
     },
     onError: (error) => handleError(error, 'Не удалось подтвердить участие'),
@@ -39,7 +56,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     onSuccess: (data) => {
       message.success(declineMessage(data.status));
       invalidate();
-      if (data.status === 'BROKEN') {
+      if (data.status === 'BROKEN' || declineFromFrozen.current) {
         closeDecision();
         onNotFound?.();
       }
@@ -58,10 +75,9 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
 
   function handleError(error: Error, fallback: string) {
     invalidate();
-    // дедлайн истёк, цепочку уже откатил сервер — подтверждать нечего
-    if (isAxiosError(error) && error.response?.status === 410) {
+    if (isChainExpired(error)) {
       closeDecision();
-      message.warning('Время на ответ истекло, цепочка распалась');
+      if (!suppressExpiryToast) message.warning(EXPIRED_CHAIN_MESSAGE);
       refetch?.();
       return;
     }
@@ -86,7 +102,8 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
   }
 
   // какой из трёх исходов случится, клиент заранее не знает — формулировка обтекаемая
-  function openDecline(chainId: number) {
+  function openDecline(chainId: number, fromFrozen = false) {
+    declineFromFrozen.current = fromFrozen;
     modal.confirm({
       title: 'Отказаться от сделки?',
       content:
@@ -119,5 +136,5 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     });
   }
 
-  return { openConfirm };
+  return { openConfirm, openDecline };
 }

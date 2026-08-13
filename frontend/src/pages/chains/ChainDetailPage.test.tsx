@@ -1,5 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { AxiosError } from 'axios';
 import { useSearchParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,6 +20,12 @@ import { ChainDetailPage } from './ChainDetailPage';
 
 function queryOk(data: unknown) {
   return { data, isPending: false, isError: false, refetch: vi.fn() } as never;
+}
+
+function axiosError(status: number) {
+  const error = new AxiosError('request failed');
+  Object.assign(error, { response: { status } });
+  return error;
 }
 
 vi.mock('@entities/chain', async (importOriginal) => {
@@ -473,5 +480,37 @@ describe('ChainDetailPage', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Повторить попытку' }));
     expect(refetch).toHaveBeenCalled();
+  });
+
+  it('shows the probability badge with the score on a candidate chain', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'CANDIDATE', score: 0.9 })));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('Высокая · 90%')).toBeInTheDocument();
+  });
+
+  it('offers to decline from FROZEN through the secondary button', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Отказаться от сделки' }));
+    expect(await screen.findByRole('button', { name: 'Да, отказаться' })).toBeInTheDocument();
+  });
+
+  it('shows the expired state when the detail request returns 410', () => {
+    mockedUseChain.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      isError: true,
+      error: axiosError(410),
+    } as never);
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.getByText('Время истекло')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'К моим запросам' })).toBeInTheDocument();
   });
 });
