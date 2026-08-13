@@ -29,6 +29,8 @@ export {
   type ExchangeOption,
   type ExchangeOptions,
   type FulfillmentResult,
+  type ReplacementOption,
+  type SelectReplacementResult,
   type VotePayload,
   type VoteValue,
 } from './model';
@@ -42,7 +44,15 @@ export {
   declineChain,
   fetchChain,
   fetchExchangeOptions,
+  fetchReplacements,
+  selectReplacement,
   voteForRequest,
   withdrawVote,
 } from './api';
-export { chainQueryOptions, useChain, useChains, useExchangeOptions } from './hooks';
+export {
+  chainQueryOptions,
+  useChain,
+  useChains,
+  useExchangeOptions,
+  useReplacements,
+} from './hooks';

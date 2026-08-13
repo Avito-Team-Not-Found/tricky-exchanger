@@ -7,6 +7,7 @@ import {
   ChainDetailPage,
   ChainListPage,
   ChainParticipantsPage,
+  ChainReplacementPage,
   ChangePasswordPage,
   DealPage,
   DealStatusPage,
@@ -64,6 +65,7 @@ export function AppRoutes() {
         <Route path="/exchange-requests/:requestId" element={<ChainListPage />} />
         <Route path="/chains/:chainId" element={<ChainDetailPage />} />
         <Route path="/chains/:chainId/participants" element={<ChainParticipantsPage />} />
+        <Route path="/chains/:chainId/replacement" element={<ChainReplacementPage />} />
         <Route path="/chains/:chainId/deal" element={<DealPage />} />
         <Route path="/chains/:chainId/deal/:mode" element={<DealStatusPage />} />
         <Route path="/profile" element={<ProfilePage />} />

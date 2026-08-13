@@ -7,6 +7,8 @@ import type {
   DeclineResult,
   ExchangeOptions,
   FulfillmentResult,
+  ReplacementOption,
+  SelectReplacementResult,
   VotePayload,
 } from './model';
 
@@ -33,6 +35,24 @@ export async function voteForRequest(
 
 export async function withdrawVote(chainId: number, payload: VotePayload): Promise<void> {
   await apiClient.delete(`/chains/${chainId}/votes`, { params: payload });
+}
+
+// пул кандидатов на замену выбывшего участника; ответ — плоский массив, не {data: [...]}
+export async function fetchReplacements(chainId: number): Promise<ReplacementOption[]> {
+  const { data } = await apiClient.get<ReplacementOption[]>(`/chains/${chainId}/replacements`);
+  return data;
+}
+
+// приглашение кандидата на освободившуюся позицию; не идемпотентно — повторный PUT тем же
+// requestId сервер отклонит (422)
+export async function selectReplacement(
+  chainId: number,
+  requestId: number,
+): Promise<SelectReplacementResult> {
+  const { data } = await apiClient.put<SelectReplacementResult>(`/chains/${chainId}/replacement`, {
+    requestId,
+  });
+  return data;
 }
 
 // повторное подтверждение участия в собранной цепочке (второй раунд)

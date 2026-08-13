@@ -2,7 +2,13 @@ import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { confirmChain, useChain, type Chain } from '@entities/chain';
+import {
+  confirmChain,
+  useChain,
+  useReplacements,
+  type Chain,
+  type ReplacementOption,
+} from '@entities/chain';
 
 import { createTestQueryClient, renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -14,11 +20,21 @@ function queryOk(data: unknown) {
 
 vi.mock('@entities/chain', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@entities/chain')>();
-  return { ...actual, useChain: vi.fn(), confirmChain: vi.fn() };
+  return { ...actual, useChain: vi.fn(), confirmChain: vi.fn(), useReplacements: vi.fn() };
 });
 
 const mockedUseChain = vi.mocked(useChain);
 const mockedConfirm = vi.mocked(confirmChain);
+const mockedUseReplacements = vi.mocked(useReplacements);
+
+function mockReplacements(options: ReplacementOption[]) {
+  mockedUseReplacements.mockReturnValue({
+    data: options,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  } as never);
+}
 
 function makeChain(overrides: Partial<Chain> = {}): Chain {
   return {
@@ -65,6 +81,7 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
 describe('ChainDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockReplacements([]);
   });
 
   afterEach(() => {
@@ -237,6 +254,63 @@ describe('ChainDetailPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Получаете: 5 вариантов', level: 2 }),
     ).toBeInTheDocument();
+  });
+
+  // непустой пул замен — единственный признак вакансии: в теле цепочки отказ не виден (TZ §2)
+  it('offers to pick a replacement when the pool is not empty', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
+    mockReplacements([
+      {
+        requestId: 42,
+        offeredItemId: 17,
+        title: 'Кофемашина капсульная',
+        description: '',
+        wantedDescription: 'Ищу фотоаппарат',
+        reliability: 0.82,
+        respondedAt: '2026-08-09T12:00:00Z',
+      },
+    ]);
+
+    renderWithProviders(<ChainDetailPage />, {
+      routes: [{ path: '/chains/1/replacement', element: <div>экран замены</div> }],
+    });
+
+    expect(
+      screen.getByText('Участник отказался. Выберите замену, чтобы продолжить обмен'),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Выбрать замену' }));
+    expect(await screen.findByText('экран замены')).toBeInTheDocument();
+  });
+
+  // выключенный react-query-запрос сохраняет прошлые данные: без проверки статуса баннер
+  // «выберите замену» пережил бы подтверждение замены и висел бы на собранной цепочке
+  it('drops the replacement banner once the chain leaves PROPOSED', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
+    mockReplacements([
+      {
+        requestId: 42,
+        offeredItemId: 17,
+        title: 'Кофемашина капсульная',
+        description: '',
+        wantedDescription: 'Ищу фотоаппарат',
+        reliability: 0.82,
+        respondedAt: '2026-08-09T12:00:00Z',
+      },
+    ]);
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.queryByRole('button', { name: 'Выбрать замену' })).not.toBeInTheDocument();
+  });
+
+  it('leaves a healthy proposed chain without the replacement banner', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
+
+    renderWithProviders(<ChainDetailPage />);
+
+    expect(screen.queryByRole('button', { name: 'Выбрать замену' })).not.toBeInTheDocument();
   });
 
   it('shows an error state with retry when the chain fails to load', async () => {
