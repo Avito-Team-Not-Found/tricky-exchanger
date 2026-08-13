@@ -367,7 +367,11 @@ describe('useReplacementSelection', () => {
   // отказ расформировывает цепочку не всегда: сервер вправе откатить её в CANDIDATE, и обещать
   // «Цепочка расформирована» тогда нельзя — исход виден только из ответа
   it('reports the real outcome when the chain survives the refusal', async () => {
-    mockedDecline.mockResolvedValue({ chainId: 1, status: 'CANDIDATE', replacementAvailable: true });
+    mockedDecline.mockResolvedValue({
+      chainId: 1,
+      status: 'CANDIDATE',
+      replacementAvailable: true,
+    });
     const { result } = await renderSelecting();
 
     act(() => result.current.abandon());
