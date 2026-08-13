@@ -12,6 +12,7 @@ export {
   myParticipant,
   needsMyAction,
   needsShipment,
+  nextInRing,
   receivesItem,
   sourceParticipant,
   VACANCY_META,
@@ -45,9 +46,4 @@ export {
   withdrawVote,
 } from './api';
 export type { ThinkResult } from './api';
-export {
-  chainQueryOptions,
-  useChain,
-  useChains,
-  useExchangeOptions,
-} from './hooks';
+export { chainQueryOptions, useChain, useChains, useExchangeOptions } from './hooks';
