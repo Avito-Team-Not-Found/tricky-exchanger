@@ -418,14 +418,15 @@ describe('ChainDetailPage', () => {
     expect(
       screen.getByText('Участник отказался. Выберите замену, чтобы продолжить обмен'),
     ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Выбрать замену' }));
+    await user.click(screen.getByRole('button', { name: 'Требуется действие' }));
     expect(await screen.findByText('экран замены')).toBeInTheDocument();
   });
 
-  // выключенный react-query-запрос сохраняет прошлые данные: без проверки статуса баннер
-  // пережил бы подтверждение замены
-  it('drops the replacement banner once the chain leaves PROPOSED', () => {
+  // выключенный react-query-запрос сохраняет прошлые данные: без проверки статуса плашка
+  // пережила бы подтверждение замены
+  it('drops the replacement plate once the chain leaves PROPOSED', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'FROZEN' })));
     mockReplacements([
       {
@@ -441,15 +442,20 @@ describe('ChainDetailPage', () => {
 
     renderWithProviders(<ChainDetailPage />);
 
-    expect(screen.queryByRole('button', { name: 'Выбрать замену' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Участник отказался. Выберите замену, чтобы продолжить обмен'),
+    ).not.toBeInTheDocument();
   });
 
-  it('leaves a healthy proposed chain without the replacement banner', () => {
+  it('leaves a healthy proposed chain without the replacement plate', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 
     renderWithProviders(<ChainDetailPage />);
 
-    expect(screen.queryByRole('button', { name: 'Выбрать замену' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Участник отказался. Выберите замену, чтобы продолжить обмен'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeInTheDocument();
   });
 
   it('shows an error state with retry when the chain fails to load', async () => {

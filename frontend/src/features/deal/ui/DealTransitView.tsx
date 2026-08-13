@@ -9,6 +9,8 @@ import {
   type ChainParticipant,
 } from '@entities/chain';
 
+import { FadeInImage } from '@shared/ui';
+
 import { useDealFulfillment } from '../model/useDealFulfillment';
 import { useDispute } from '../model/useDispute';
 import { usePickupPoint } from '../model/usePickupPoint';
@@ -147,6 +149,7 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
                   <span className="deal-transit__item-main">
                     <span className="deal-transit__item-name">{participant.offeredItemTitle}</span>
                     <span
+                      key={pill.label}
                       className={`deal-transit__item-pill deal-transit__item-pill--${pill.tone}`}
                     >
                       {pill.label}
@@ -254,7 +257,7 @@ function ItemThumb({ participant }: { participant: ChainParticipant }) {
       aria-hidden
     >
       {participant.imageUrl ? (
-        <img className="deal-transit__thumb-img" src={participant.imageUrl} alt="" />
+        <FadeInImage className="deal-transit__thumb-img" src={participant.imageUrl} alt="" />
       ) : (
         (participant.offeredItemTitle[0] ?? '')
       )}

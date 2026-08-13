@@ -3,6 +3,7 @@ import { Button, Form, Input, Result } from 'antd';
 import { Link } from 'react-router';
 
 import { maskEmail } from '@shared/lib/maskEmail';
+import { useStepMotionClass } from '@shared/lib/useStepMotion';
 import { EMAIL_PATTERN, PASSWORD_MIN_LENGTH, VALIDATE_DEBOUNCE_MS } from '@shared/lib/validation';
 
 import { OTP_LENGTH, useRecoveryFlow } from '../model/useRecoveryFlow';
@@ -26,6 +27,8 @@ export function RecoveryFlow() {
     goToLogin,
   } = useRecoveryFlow();
 
+  const stepMotionClass = useStepMotionClass(state.step);
+
   const backButton = state.step !== 'success' && (
     <Button
       type="text"
@@ -39,7 +42,7 @@ export function RecoveryFlow() {
 
   if (state.step === 'email') {
     return (
-      <>
+      <div key={state.step} className={`auth-flow__step${stepMotionClass}`}>
         {backButton}
         <h1 className="recovery-title">Восстановление пароля</h1>
         <p className="recovery-description">
@@ -79,7 +82,7 @@ export function RecoveryFlow() {
             Вспомнили пароль? <Link to="/login">Войти</Link>
           </p>
         </Form>
-      </>
+      </div>
     );
   }
 
@@ -88,7 +91,7 @@ export function RecoveryFlow() {
     const verifying = state.action === 'verifying';
 
     return (
-      <>
+      <div key={state.step} className={`auth-flow__step${stepMotionClass}`}>
         {backButton}
         <h1 className="recovery-title">Введите код</h1>
         <p className="recovery-description">
@@ -125,13 +128,13 @@ export function RecoveryFlow() {
         >
           Подтвердить
         </Button>
-      </>
+      </div>
     );
   }
 
   if (state.step === 'password') {
     return (
-      <>
+      <div key={state.step} className={`auth-flow__step${stepMotionClass}`}>
         {backButton}
         <h1 className="recovery-title">Новый пароль</h1>
         <p className="recovery-description">Придумайте новый пароль для входа</p>
@@ -193,20 +196,22 @@ export function RecoveryFlow() {
             Изменить пароль
           </Button>
         </Form>
-      </>
+      </div>
     );
   }
 
   return (
-    <Result
-      status="success"
-      title="Пароль изменён"
-      subTitle="Используйте новый пароль при следующем входе"
-      extra={
-        <Button type="primary" size="large" onClick={goToLogin}>
-          Войти
-        </Button>
-      }
-    />
+    <div key={state.step} className={`auth-flow__step${stepMotionClass}`}>
+      <Result
+        status="success"
+        title="Пароль изменён"
+        subTitle="Используйте новый пароль при следующем входе"
+        extra={
+          <Button type="primary" size="large" onClick={goToLogin}>
+            Войти
+          </Button>
+        }
+      />
+    </div>
   );
 }

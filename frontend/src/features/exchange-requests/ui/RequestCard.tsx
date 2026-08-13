@@ -2,7 +2,7 @@ import { ArrowRightOutlined } from '@ant-design/icons';
 
 import { REQUEST_STATUS_META, type ExchangeRequest } from '@entities/exchangeRequest';
 
-import { StatusTag } from '@shared/ui';
+import { FadeInImage, StatusTag } from '@shared/ui';
 
 import './RequestCard.scss';
 
@@ -32,7 +32,7 @@ export function RequestCard({ request, offeredItemImageUrl, onClick }: RequestCa
     >
       <div className="request-card__thumb">
         {offeredItemImageUrl ? (
-          <img className="request-card__image" src={offeredItemImageUrl} alt="" />
+          <FadeInImage className="request-card__image" src={offeredItemImageUrl} alt="" />
         ) : (
           <div className="request-card__placeholder" aria-hidden />
         )}

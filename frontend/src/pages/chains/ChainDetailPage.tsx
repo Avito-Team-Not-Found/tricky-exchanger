@@ -1,4 +1,4 @@
-import { Alert, Button, Skeleton } from 'antd';
+import { Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
 import {
@@ -62,40 +62,28 @@ export function ChainDetailPage() {
         ) : isError || !chain ? (
           <ErrorState onRetry={refetch} />
         ) : (
-          <>
-            {showReplacementBanner ? (
-              <Alert
-                type="warning"
-                showIcon
-                message="Участник отказался. Выберите замену, чтобы продолжить обмен"
-                action={
-                  <Button onClick={() => navigate(`/chains/${chain.id}/replacement`)}>
-                    Выбрать замену
-                  </Button>
-                }
-              />
-            ) : null}
-            <ChainItemView
-              chain={chain}
-              receiveRequestId={receiveRequestId}
-              isVoting={isVoting}
-              onVote={(candidate, active) =>
-                confirmVote(
-                  {
-                    chainId: chain.id,
-                    requestId: chain.currentRequestId,
-                    targetRequestId: candidate.requestId,
-                  },
-                  active,
-                )
-              }
-              onOpenParticipants={() =>
-                navigate(`/chains/${chain.id}/participants${receiveOptionQuery(receiveRequestId)}`)
-              }
-              onConfirm={() => openConfirm(chain.id)}
-              onProceed={() => navigate(`/chains/${chain.id}/deal`)}
-            />
-          </>
+          <ChainItemView
+            chain={chain}
+            receiveRequestId={receiveRequestId}
+            isVoting={isVoting}
+            needsReplacement={showReplacementBanner}
+            onVote={(candidate, active) =>
+              confirmVote(
+                {
+                  chainId: chain.id,
+                  requestId: chain.currentRequestId,
+                  targetRequestId: candidate.requestId,
+                },
+                active,
+              )
+            }
+            onOpenParticipants={() =>
+              navigate(`/chains/${chain.id}/participants${receiveOptionQuery(receiveRequestId)}`)
+            }
+            onConfirm={() => openConfirm(chain.id)}
+            onProceed={() => navigate(`/chains/${chain.id}/deal`)}
+            onReplace={() => navigate(`/chains/${chain.id}/replacement`)}
+          />
         )}
       </div>
     </div>

@@ -55,4 +55,5 @@ export {
   useChains,
   useExchangeOptions,
   useReplacements,
+  useReplacementsForChains,
 } from './hooks';

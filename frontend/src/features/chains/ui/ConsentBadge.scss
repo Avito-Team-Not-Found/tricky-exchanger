@@ -1,4 +1,6 @@
+// вызывающие ставят key от count, поэтому каждое новое согласие заново проигрывает pop-in
 .consent-badge {
+  animation: motion-pop-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   display: inline-flex;
   align-items: center;
   padding: var(--spacing-xs) var(--spacing-sm);

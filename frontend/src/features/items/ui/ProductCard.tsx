@@ -2,7 +2,7 @@ import type { KeyboardEvent } from 'react';
 
 import { ITEM_STATUS_META, isItemExchanged, type Item } from '@entities/item';
 
-import { StatusTag } from '@shared/ui';
+import { FadeInImage, StatusTag } from '@shared/ui';
 
 import './ProductCard.scss';
 
@@ -42,7 +42,7 @@ export function ProductCard({ item, onClick }: ProductCardProps) {
     >
       <div className="product-card__photo">
         {item.imageUrl ? (
-          <img className="product-card__image" src={item.imageUrl} alt={item.title} />
+          <FadeInImage className="product-card__image" src={item.imageUrl} alt={item.title} />
         ) : (
           <div className="product-card__placeholder" aria-hidden />
         )}

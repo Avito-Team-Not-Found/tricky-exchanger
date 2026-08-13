@@ -1,0 +1,104 @@
+// Переиспользуемые keyframes и утилитарные классы движения.
+
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes motion-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--motion-slide-distance));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(var(--motion-slide-distance));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(calc(-1 * var(--motion-slide-distance)));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  60% {
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// только вход: обёртка <Outlet /> перемонтируется по key={pathname}, старый экран снимается мгновенно
+.motion-screen {
+  animation: motion-slide-in-right var(--motion-duration-slow) var(--motion-ease-out);
+}
+
+.motion-screen--back {
+  animation-name: motion-slide-in-left;
+}
+
+@media (min-width: 1024px) {
+  .motion-screen,
+  .motion-screen--back {
+    animation-name: motion-fade-in;
+    animation-duration: var(--motion-duration-base);
+  }
+}
+
+.motion-step {
+  animation: motion-slide-in-right var(--motion-duration-base) var(--motion-ease-out) backwards;
+}
+
+// backwards обязателен: без него элемент был бы виден до старта своей задержки и мигнул бы
+.motion-cascade > * {
+  animation: motion-rise-in var(--motion-duration-base) var(--motion-ease-out) backwards;
+}
+
+.motion-cascade > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.motion-cascade > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.motion-cascade > *:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.motion-cascade > *:nth-child(5) {
+  animation-delay: 160ms;
+}
+
+// дальше задержка не растёт — иначе низ длинного списка доезжал бы заметно позже остального
+.motion-cascade > *:nth-child(n + 6) {
+  animation-delay: 200ms;
+}

@@ -6,7 +6,11 @@
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: box-shadow 0.2s ease;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.request-card:active {
+  transform: scale(0.98);
 }
 
 @media (min-width: 1024px) {

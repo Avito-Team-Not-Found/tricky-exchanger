@@ -1,6 +1,7 @@
 import { ArrowLeftOutlined, CheckOutlined } from '@ant-design/icons';
 import { Button, Form, Input } from 'antd';
 
+import { useStepMotionClass } from '@shared/lib/useStepMotion';
 import { PASSWORD_MIN_LENGTH } from '@shared/lib/validation';
 
 import { useChangePassword } from '../model/useChangePassword';
@@ -9,10 +10,11 @@ import './ChangePasswordFlow.scss';
 
 export function ChangePasswordFlow() {
   const { form, state, canSubmit, handleSubmit, goToProfile } = useChangePassword();
+  const stepMotionClass = useStepMotionClass(state.status);
 
   if (state.status === 'success') {
     return (
-      <div className="password-change-success">
+      <div key={state.status} className={`password-change-success${stepMotionClass}`}>
         <div className="password-change-success__icon">
           <CheckOutlined aria-hidden />
         </div>
@@ -28,7 +30,7 @@ export function ChangePasswordFlow() {
   }
 
   return (
-    <div className="password-change">
+    <div key={state.status} className={`password-change${stepMotionClass}`}>
       <header className="password-change__header">
         <Button
           type="text"

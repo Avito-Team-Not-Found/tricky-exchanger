@@ -29,53 +29,46 @@ export function ReplacementCandidateCard({
     .filter(Boolean)
     .join(' ');
 
-  const photo = (
-    <span className="replacement-card__photo">
-      {option.imageUrl ? (
-        // description на карточке не показывается, но остаётся доступным как подсказка фото
-        <img
-          className="replacement-card__image"
-          src={option.imageUrl}
-          alt={option.title}
-          title={option.description}
-        />
-      ) : (
-        <span className="replacement-card__photo-placeholder" aria-hidden />
-      )}
-    </span>
-  );
-
-  const info = (
-    <span className="replacement-card__info">
-      <span className="replacement-card__title">{option.title}</span>
-      <span className={`replacement-card__pill replacement-card__pill--${pill.tone}`}>
-        {pill.text}
-      </span>
-    </span>
+  const content = (
+    <>
+      <div className="replacement-card__photo">
+        {option.imageUrl ? (
+          <img className="replacement-card__image" src={option.imageUrl} alt={option.title} />
+        ) : (
+          <span className="replacement-card__photo-placeholder" aria-hidden>
+            {option.title[0] ?? ''}
+          </span>
+        )}
+      </div>
+      <div className="replacement-card__body">
+        <p className="replacement-card__title">{option.title}</p>
+        {option.description ? (
+          <p className="replacement-card__description">{option.description}</p>
+        ) : null}
+        <p className="replacement-card__wanted">Хочет: {option.wantedDescription}</p>
+        <div className="replacement-card__meta">
+          <span className={`replacement-card__pill replacement-card__pill--${pill.tone}`}>
+            {pill.text}
+          </span>
+          {onSelect ? (
+            <input
+              className="replacement-card__radio"
+              type="radio"
+              name="replacement"
+              checked={selected}
+              aria-checked={selected}
+              disabled={disabled}
+              onChange={onSelect}
+            />
+          ) : null}
+        </div>
+      </div>
+    </>
   );
 
   if (!onSelect) {
-    return (
-      <div className={className}>
-        {photo}
-        {info}
-      </div>
-    );
+    return <div className={className}>{content}</div>;
   }
 
-  return (
-    <label className={className}>
-      {photo}
-      {info}
-      <input
-        className="replacement-card__radio"
-        type="radio"
-        name="replacement"
-        checked={selected}
-        aria-checked={selected}
-        disabled={disabled}
-        onChange={onSelect}
-      />
-    </label>
-  );
+  return <label className={className}>{content}</label>;
 }

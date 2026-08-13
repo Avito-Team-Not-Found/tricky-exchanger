@@ -29,6 +29,25 @@
   white-space: nowrap;
 }
 
+.fade-in-image {
+  opacity: 0;
+  transition: opacity var(--motion-duration-base) var(--motion-ease-out);
+}
+
+.fade-in-image--loaded {
+  opacity: 1;
+}
+
+.empty-state,
+.error-state {
+  animation: motion-rise-in var(--motion-duration-base) var(--motion-ease-out) backwards;
+}
+
+.empty-state__icon,
+.error-state__icon {
+  animation: motion-pop-in var(--motion-duration-base) var(--motion-ease-out) 60ms backwards;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;

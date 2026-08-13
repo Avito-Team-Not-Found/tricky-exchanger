@@ -100,8 +100,10 @@
   white-space: nowrap;
 }
 
-// подпись текстом обязательна — статус не передаётся одним цветом
+// пилюля статуса доставки товара — 15%-я заливка тона и подпись текстом (§1.8)
+// вызывающий ставит key от подписи, поэтому смена статуса проявляется, а не подменяет текст молча
 .deal-transit__item-pill {
+  animation: motion-fade-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   display: inline-flex;
   align-items: center;
   align-self: flex-start;

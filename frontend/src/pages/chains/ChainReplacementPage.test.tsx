@@ -156,6 +156,25 @@ describe('ChainReplacementPage', () => {
     expect(first).not.toBeChecked();
   });
 
+  // карточка кандидата — как ChainCard: крупное фото и полное описание товара
+  it('renders the candidate photo and the full item description', () => {
+    mockOptions([
+      {
+        ...makeOption(1),
+        imageUrl: 'https://example.com/photo.jpg',
+        description: 'Полное описание товара кандидата',
+      },
+    ]);
+
+    renderWithProviders(<ChainReplacementPage />);
+
+    const img = screen.getByRole('img', { name: 'Кандидат 1' });
+    expect(img).toHaveAttribute('src', 'https://example.com/photo.jpg');
+    expect(screen.getByText('Полное описание товара кандидата')).toBeInTheDocument();
+    expect(screen.getByText('Хочет: Ищу фотоаппарат')).toBeInTheDocument();
+    expect(screen.getByText('Актуальна')).toBeInTheDocument();
+  });
+
   it('blocks the invite button until a candidate is picked', async () => {
     const user = userEvent.setup();
     mockOptions([makeOption(1)]);

@@ -15,7 +15,7 @@ import {
 } from '@entities/chain';
 
 import { plural } from '@shared/lib/plural';
-import { ProbabilityBadge } from '@shared/ui';
+import { FadeInImage, ProbabilityBadge } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
 import { DeadlineRow } from './DeadlineRow';
@@ -27,20 +27,25 @@ interface ChainItemViewProps {
   // заявка выбранного варианта получения: экран показывает именно её товар
   receiveRequestId?: number;
   isVoting: boolean;
+  // непустой пул замен — вакансия в цепочке: плашка и кнопка ведут на выбор замены
+  needsReplacement?: boolean;
   onVote: (candidate: ChainParticipant, active: boolean) => void;
   onOpenParticipants: () => void;
   onConfirm: () => void;
   onProceed: () => void;
+  onReplace: () => void;
 }
 
 export function ChainItemView({
   chain,
   receiveRequestId,
   isVoting,
+  needsReplacement,
   onVote,
   onOpenParticipants,
   onConfirm,
   onProceed,
+  onReplace,
 }: ChainItemViewProps) {
   const { token } = theme.useToken();
   const received = receivesItem(chain, receiveRequestId);
@@ -60,7 +65,7 @@ export function ChainItemView({
     <div className="chain-item">
       <div className="chain-item__photo">
         {single?.imageUrl ? (
-          <img
+          <FadeInImage
             className="chain-item__photo-img"
             src={single.imageUrl}
             alt={single.offeredItemTitle}
@@ -82,7 +87,11 @@ export function ChainItemView({
           {assembled ? (
             <span className="chain-item__badges">
               <span className="chain-item__ready">Цепочка собрана</span>
-              <ConsentBadge count={approvedVotes(chain)} total={chain.length} />
+              <ConsentBadge
+                key={approvedVotes(chain)}
+                count={approvedVotes(chain)}
+                total={chain.length}
+              />
             </span>
           ) : (
             <ProbabilityBadge score={chain.score} />
@@ -90,7 +99,13 @@ export function ChainItemView({
         </div>
       </div>
 
-      {hardLocked ? <p className="chain-item__lock">{HARD_LOCK_MESSAGE}</p> : null}
+      {needsReplacement ? (
+        <p className="chain-item__replacement" role="status">
+          Участник отказался. Выберите замену, чтобы продолжить обмен
+        </p>
+      ) : hardLocked ? (
+        <p className="chain-item__lock">{HARD_LOCK_MESSAGE}</p>
+      ) : null}
 
       <DeadlineRow status={chain.status} deadlineAt={chain.freezeDeadlineAt} />
 
@@ -116,6 +131,16 @@ export function ChainItemView({
             onClick={() => onVote(voteCandidate, !withdraw)}
           >
             {withdraw ? 'Отозвать отклик' : 'Откликнуться'}
+          </Button>
+        ) : needsReplacement ? (
+          <Button
+            className="chain-item__action"
+            type="primary"
+            size="large"
+            block
+            onClick={onReplace}
+          >
+            Требуется действие
           </Button>
         ) : needsMyAction(chain) ? (
           <Button

@@ -203,4 +203,17 @@ describe('RecoveryFlow', () => {
       await screen.findByText('Пароль должен быть не короче 8 символов', {}, { timeout: 3000 }),
     ).toBeInTheDocument();
   });
+
+  // анимации в jsdom не исполняются — проверяем только узел шага, на remount которого они держатся
+  it('renders each step in its own animated container', async () => {
+    const user = userEvent.setup();
+    mockedSend.mockResolvedValue({ message: 'code_sent' });
+    const { container } = setup();
+
+    const emailStep = container.querySelector('.auth-flow__step');
+    await sendCode(user);
+    await screen.findByText('Введите код');
+
+    expect(container.querySelector('.auth-flow__step')).not.toBe(emailStep);
+  });
 });

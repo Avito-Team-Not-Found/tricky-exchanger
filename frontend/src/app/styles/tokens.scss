@@ -28,6 +28,15 @@
   --font-weight-semibold: 600;
   --font-weight-medium: 500;
   --font-weight-regular: 400;
+
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 200ms;
+  --motion-duration-slow: 280ms;
+
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-out: cubic-bezier(0, 0, 0, 1);
+
+  --motion-slide-distance: 16px;
 }
 
 :root[data-theme='light'] {

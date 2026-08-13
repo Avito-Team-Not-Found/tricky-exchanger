@@ -62,14 +62,26 @@ export function useExchangeOptions(offerId?: number) {
 
 // ключ намеренно вложен в ['chains']: пул замен протухающий и должен перечитываться
 // при любой мутации над цепочкой, а инвалидация идёт по префиксу
-export function useReplacements(
+export function replacementQueryOptions(
   chainId?: number,
   options: { enabled?: boolean; refetchInterval?: number | false } = {},
 ) {
-  return useQuery({
+  return {
     queryKey: ['chains', chainId, 'replacements'],
     queryFn: () => fetchReplacements(chainId as number),
     enabled: Boolean(chainId) && options.enabled !== false,
     refetchInterval: options.refetchInterval ?? false,
-  });
+  };
+}
+
+export function useReplacements(
+  chainId?: number,
+  options: { enabled?: boolean; refetchInterval?: number | false } = {},
+) {
+  return useQuery(replacementQueryOptions(chainId, options));
+}
+
+// списку «Варианты обмена» пул замен нужен для всех PROPOSED-цепочек сразу
+export function useReplacementsForChains(chainIds: number[]) {
+  return useQueries({ queries: chainIds.map((chainId) => replacementQueryOptions(chainId)) });
 }

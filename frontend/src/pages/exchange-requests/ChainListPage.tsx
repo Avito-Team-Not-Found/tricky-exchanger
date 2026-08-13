@@ -16,13 +16,15 @@ import {
   isHardLocked,
   useChains,
   useExchangeOptions,
+  useReplacementsForChains,
   type Chain,
   type ExchangeOptions,
+  type ReplacementOption,
 } from '@entities/chain';
 import { useRequest } from '@entities/exchangeRequest';
 import { useItems } from '@entities/item';
 
-import { EmptyState, ErrorState } from '@shared/ui';
+import { EmptyState, ErrorState, FadeInImage } from '@shared/ui';
 
 import './ChainListPage.scss';
 
@@ -56,6 +58,17 @@ export function ChainListPage() {
     if (query.data) detailByChain.set(detailChainIds[index], query.data);
   });
 
+  // пул замен отдаётся только актору: на его карточке кнопка «Требуется действие» зовёт
+  // выбрать замену вместо подтверждения, у остальных пул пуст и подтверждение не заменяется
+  const replacementChainIds = options
+    .filter((entry) => entry.status === 'PROPOSED')
+    .map((entry) => entry.chainId);
+  const replacementQueries = useReplacementsForChains(replacementChainIds);
+  const replacementByChain = new Map<number, ReplacementOption[]>();
+  replacementQueries.forEach((query, index) => {
+    if (query.data) replacementByChain.set(replacementChainIds[index], query.data);
+  });
+
   useProposalExpiry(
     options.map((entry) => ({
       chainId: entry.chainId,
@@ -73,6 +86,11 @@ export function ChainListPage() {
 
   function deadlineAtFor(entry: ExchangeOptions): string | null | undefined {
     return detailByChain.get(entry.chainId)?.freezeDeadlineAt;
+  }
+
+  // непустой пул — единственный признак вакансии: в теле цепочки отказ не виден
+  function needsReplacementFor(entry: ExchangeOptions): boolean {
+    return entry.status === 'PROPOSED' && (replacementByChain.get(entry.chainId)?.length ?? 0) > 0;
   }
 
   if (requestQuery.isLoading || optionsQuery.isLoading || itemsQuery.isLoading) {
@@ -114,7 +132,11 @@ export function ChainListPage() {
           <div className="chain-list-page__summary">
             {/* миниатюра отдаваемого товара — 40×40, radius-sm */}
             {offeredItem?.imageUrl ? (
-              <img className="chain-list-page__summary-photo" src={offeredItem.imageUrl} alt="" />
+              <FadeInImage
+                className="chain-list-page__summary-photo"
+                src={offeredItem.imageUrl}
+                alt=""
+              />
             ) : (
               <div className="chain-list-page__summary-photo" aria-hidden />
             )}
@@ -150,7 +172,7 @@ export function ChainListPage() {
             description="Попробуйте изменить запрос позже"
           />
         ) : (
-          <div className="chain-list-page__list">
+          <div className="chain-list-page__list motion-cascade">
             {receiveOptions.map(({ entry, option }) => (
               <ChainCard
                 key={`${entry.chainId}-${option.requestId}`}
@@ -160,11 +182,13 @@ export function ChainListPage() {
                 locked={hasAssembled && !isAssembled(entry.status)}
                 approvedCount={approvedCountFor(entry)}
                 deadlineAt={deadlineAtFor(entry)}
+                needsReplacement={needsReplacementFor(entry)}
                 onOpen={() =>
                   navigate(`/chains/${entry.chainId}${receiveOptionQuery(option.requestId)}`)
                 }
                 onProceed={() => navigate(`/chains/${entry.chainId}/deal`)}
                 onConfirm={(chainId) => openConfirm(chainId)}
+                onReplace={() => navigate(`/chains/${entry.chainId}/replacement`)}
                 onVote={(active) =>
                   confirmVote(
                     {

@@ -1,4 +1,5 @@
 .deadline-row {
+  animation: motion-fade-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);

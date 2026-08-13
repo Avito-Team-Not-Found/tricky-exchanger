@@ -1,3 +1,10 @@
+// повторяет колонку .auth-page__card: без этого вложение убрало бы отступы между блоками шага
+.auth-flow__step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
 .recovery-title {
   font-size: var(--font-size-h2);
   font-weight: var(--font-weight-semibold);

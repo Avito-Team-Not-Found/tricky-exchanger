@@ -60,7 +60,7 @@ export function ProductsPage() {
         </EmptyState>
       ) : (
         <>
-          <div className="products-page__grid">
+          <div className="products-page__grid motion-cascade">
             {items.map((item) => (
               <ProductCard
                 key={item.id}
