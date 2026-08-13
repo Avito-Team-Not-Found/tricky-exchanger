@@ -48,9 +48,7 @@ export function ChainItemView({
   const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);
   const shipRequired = needsShipment(chain.status);
-  // кандидат, на которого действует отклик: при pending-отклике кнопка становится
-  // «Отозвать отклик», при отсутствии отклика — «Откликнуться» (как на карточке списка);
-  // при approved/rejected отклика кнопки нет (DELETE их не снимает)
+  // approved/rejected отклик снять нельзя (DELETE их не снимает) — кнопки для них нет
   const voteCandidate =
     received.find((candidate) => candidate.vote === 'pending') ??
     received.find((candidate) => !candidate.vote) ??

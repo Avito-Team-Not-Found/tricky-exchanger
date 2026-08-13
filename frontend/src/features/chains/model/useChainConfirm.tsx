@@ -39,7 +39,6 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
     onSuccess: (data) => {
       message.success(declineMessage(data.status));
       invalidate();
-      // цепочки больше нет — остаться на её экране нельзя
       if (data.status === 'BROKEN') {
         closeDecision();
         onNotFound?.();

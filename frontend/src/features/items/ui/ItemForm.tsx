@@ -70,9 +70,7 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
     });
   }
 
-  // товар уже отдан по завершённой сделке — бэкенд отклоняет любые мутации архивного
-  // товара, поэтому форма открывается только на просмотр (сюда можно попасть по прямой
-  // ссылке: в списке карточка обменянного товара не кликабельна)
+  // бэкенд отклоняет любые мутации архивного товара, а попасть сюда можно по прямой ссылке
   const exchanged = Boolean(item && isItemExchanged(item.status));
 
   return (
@@ -108,15 +106,11 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
               )}
             </div>
           ) : (
-            // без фото сама карточка является триггером загрузки («Добавить фото»)
             <Upload
               className="item-form__photo-upload"
               accept={ITEM_IMAGE_TYPES.join(',')}
               showUploadList={false}
               beforeUpload={(file) => {
-                // accept фильтрует диалог выбора, но файл можно притащить drag-and-drop'ом —
-                // тип и размер проверяем на месте, чтобы неверный файл не уходил на сервер
-                // и не откатывался 422 после успешного сохранения товара
                 const imageError = getItemImageError(file);
                 if (imageError) {
                   message.error(imageError);

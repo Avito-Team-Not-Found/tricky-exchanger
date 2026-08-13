@@ -7,8 +7,7 @@ import './DeadlineRow.scss';
 interface DeadlineRowProps {
   status: ChainStatus;
   deadlineAt?: string | null;
-  // показывать на FROZEN и дедлайн отправки товара (тот же freezeDeadlineAt) — карточка списка
-  // вариантов; экран цепочки оставляет прежнее поведение, только дедлайн ответа на PROPOSED
+  // дедлайн отправки показывает только карточка списка вариантов
   showShipDeadline?: boolean;
 }
 

@@ -14,7 +14,6 @@ interface DealSafetyBannerProps {
 // значение не передаётся одним цветом — перед текстом стоит замок
 export function DealSafetyBanner({ label, message }: DealSafetyBannerProps) {
   const { modal } = AntApp.useApp();
-  // модалка живёт в портале вне дерева роутов: закрываем руками, как остальные модалки сделки
   const safety = useRef<{ destroy: () => void } | null>(null);
 
   const close = () => {

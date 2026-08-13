@@ -37,9 +37,8 @@ export function ChainReplacementPage() {
     invitedOption,
   } = useReplacementSelection(chainId);
 
-  // Заголовок отказавшегося товара — участник на позиции вакансии. participants — это пул, а не
-  // по записи на позицию: имя показываем, только если кандидат на вакантной позиции ровно один
-  // (так же страхуется ChainItemView), иначе формулировка без товара.
+  // participants — пул, а не запись на позицию: товар показываем, только если кандидат
+  // на вакантной позиции ровно один
   const vacant =
     chain?.participants.filter(
       (participant) => participant.position === chain.receivesFromPosition,

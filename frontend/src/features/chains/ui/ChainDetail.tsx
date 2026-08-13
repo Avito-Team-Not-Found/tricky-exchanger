@@ -48,8 +48,7 @@ export function ChainDetail({ chain, receiveRequestId, onConfirm, onProceed }: C
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
   const assembled = isAssembled(chain.status);
-  // голос привязан к цели голосования, а не к голосующему: решение участника позиции p лежит
-  // в vote следующей по кольцу позиции; на CANDIDATE сдвига нет — там это отклики
+  // на CANDIDATE сдвига целей нет — там vote означает отклик первого раунда
   const showConfirmPills = chain.status !== 'CANDIDATE';
 
   return (
@@ -134,7 +133,6 @@ function ChainLinkRow({ link, isMine, isReceiveLink, canVote, confirmVote }: Cha
       {candidates.length === 1 ? (
         <ChainLinkItem participant={candidates[0]} canVote={canVote} />
       ) : isReceiveLink ? (
-        // на получаемом звене пул показан полностью — у каждой записи свой статус отклика
         <ul className="chain-detail__candidates">
           {candidates.map((candidate) => (
             <li key={candidate.requestId} className="chain-detail__candidate">
@@ -143,7 +141,6 @@ function ChainLinkRow({ link, isMine, isReceiveLink, canVote, confirmVote }: Cha
           ))}
         </ul>
       ) : (
-        // кандидаты остальных звеньев для отклика не нужны — сворачиваем их в счётчик
         <span className="chain-detail__collapsed">
           {candidates.length} {plural(candidates.length, ['вариант', 'варианта', 'вариантов'])}
         </span>

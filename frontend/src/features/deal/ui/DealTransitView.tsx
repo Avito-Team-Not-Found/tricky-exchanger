@@ -115,7 +115,6 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
     });
   };
 
-  // пока отправили не все — ждём остальных
   if (state.status === 'shipped-waiting') {
     return (
       <div className="deal-transit">
@@ -180,7 +179,6 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
     );
   }
 
-  // in-transit: все отправили, мой товар уже в пункте выдачи — могу забрать
   const me = myParticipant(chain);
   const source = sourceParticipant(chain);
   // в гонке статусов источник мог быть ещё LOCKED — кнопку держим заблокированной до рефетча

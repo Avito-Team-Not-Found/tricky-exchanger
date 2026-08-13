@@ -22,11 +22,9 @@ interface ChainCardProps {
   option: ExchangeOption;
   isVoting: boolean;
   locked?: boolean;
-  // число согласий второго раунда: на FROZEN всегда = length, на PROPOSED — из деталей цепочки
-  // (exchange-options его не отдаёт); undefined — бейдж не рисуем, пока счётчик неизвестен
+  // exchange-options счётчик не отдаёт: undefined — бейдж не рисуем, пока он неизвестен
   approvedCount?: number;
-  // дедлайн цепочки — из детали (GET /chains/{id}), exchange-options его не отдаёт: на PROPOSED
-  // это дедлайн ответа, на FROZEN — дедлайн отправки; без даты таймер не рисуем
+  // exchange-options дедлайн не отдаёт — без даты таймер не рисуем
   deadlineAt?: string | null;
   onOpen: () => void;
   onProceed: () => void;
@@ -50,9 +48,8 @@ export function ChainCard({
   const canVote = options.status === 'CANDIDATE';
   const canAct = canVote && (!option.vote || option.vote === 'pending');
   const hardLocked = isHardLocked(options.status);
-  // на FROZEN сделка началась, товар ещё не отправлен — вместо «Перейти к сделке» зовём действовать
+  // на FROZEN сделка началась, но товар не отправлен — зовём действовать, а не «к сделке»
   const shipRequired = needsShipment(options.status);
-  // на COMPLETED жёсткой блокировки уже нет, но сделку открыть нужно — кнопка по hasDeal
   const dealReady = hasDeal(options.status) && !shipRequired;
   // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя;
   // на CANDIDATE то же поле — отклик первого раунда, myVote им не считается

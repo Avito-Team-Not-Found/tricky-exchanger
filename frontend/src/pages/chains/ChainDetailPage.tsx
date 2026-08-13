@@ -32,14 +32,10 @@ export function ChainDetailPage() {
     enabled: chain?.status === 'PROPOSED',
   });
   const isLoading = isChainLoading || isReplacementsLoading;
-  // статус проверяем и здесь, а не только через enabled: выключенный запрос сохраняет прошлые
-  // данные и не перезапрашивается, поэтому после ухода цепочки из PROPOSED (замену подтвердили)
-  // непустой пул из кеша иначе продолжил бы звать выбирать замену на уже собранной цепочке
+  // выключенный запрос сохраняет прошлые данные, поэтому статус проверяем и здесь: иначе пул
+  // из кеша продолжит звать выбирать замену на уже собранной цепочке
   const showReplacementBanner = chain?.status === 'PROPOSED' && replacements.length > 0;
 
-  // после дедлайна ответа бэкенд откатывает PROPOSED лениво — в самом GET /chains/{id}. Без
-  // перезапроса в момент дедлайна таймер молча исчезает (formatRemaining → null), а «Требуются
-  // действия» остаётся живым до следующего 30-секундного опроса и упирается в 410
   useProposalExpiry(
     chain
       ? [{ chainId: chain.id, detailStatus: chain.status, deadlineAt: chain.freezeDeadlineAt }]

@@ -45,8 +45,7 @@ export function useDealFulfillment(chain: Chain) {
     onSuccess: (data, kind) => {
       invalidate();
       if (kind === 'receipt') {
-        // после подтверждения получения экран сам перейдёт в «Вы забрали товар» — модалка успеха
-        // не нужна; на завершённой цепочке он перейдёт в «Обмен завершён»
+        // экран сам перейдёт в нужное состояние — отдельная модалка успеха не нужна
         if (data.status === 'COMPLETED') message.success('Обмен завершён');
         return;
       }
@@ -69,9 +68,8 @@ export function useDealFulfillment(chain: Chain) {
   }
 
   function run(kind: DealFulfillmentKind) {
-    // модалку-подтверждение не показываем ни для отправки, ни для получения: отправку подтверждает
-    // обязательное фото упаковки, получение необратимо, но ручки идемпотентны, а повторный клик
-    // гасится isPending
+    // модалку-подтверждение не показываем: отправку подтверждает обязательное фото упаковки,
+    // а ручки идемпотентны — повторный клик гасится isPending
     mutation.mutateAsync(kind).then(
       () => undefined,
       () => undefined,

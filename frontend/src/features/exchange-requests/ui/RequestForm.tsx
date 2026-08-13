@@ -127,7 +127,6 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
       <section className="request-form__block">
         <h2 className="request-form__heading">Что вы отдаёте?</h2>
         {isEdit ? (
-          // деталь заявки не отдаёт снимок товара — берём название из кеша товаров
           <p className="request-form__summary">
             {items.find((item) => item.id === request?.offeredItemId)?.title ?? 'Товар не найден'}
           </p>
@@ -194,8 +193,6 @@ export function RequestForm({ requestId, ref }: RequestFormProps) {
             { required: true, message: 'Опишите желаемый товар' },
             { max: 500, message: 'Описание не длиннее 500 символов' },
             {
-              // кастомный validator вместо min: antd считает символы до обрезки, а на бэкенд
-              // уходит values.wantedDescription.trim() — 50 пробелов прошли бы через min
               validator(_, value: string | undefined) {
                 if (!value || value.trim().length >= DESCRIPTION_MIN_LENGTH) {
                   return Promise.resolve();

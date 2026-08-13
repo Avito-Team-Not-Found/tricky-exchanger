@@ -46,9 +46,7 @@ export function ChainListPage() {
   // деталь заявки не отдаёт снимок отдаваемого товара — берём его из кеша товаров
   const offeredItem = itemsQuery.data?.items.find((item) => item.id === request?.offeredItemId);
 
-  // exchange-options не отдаёт ни число согласий второго раунда, ни дедлайны (ответа/отправки):
-  // всё это для PROPOSED- и FROZEN-цепочек берётся из детали (GET /chains/{id}) — см.
-  // approvedCountFor/deadlineAtFor
+  // ни счётчика согласий, ни дедлайнов exchange-options не отдаёт — их берём из детали цепочки
   const detailChainIds = options
     .filter((entry) => entry.status === 'PROPOSED' || entry.status === 'FROZEN')
     .map((entry) => entry.chainId);
@@ -58,9 +56,6 @@ export function ChainListPage() {
     if (query.data) detailByChain.set(detailChainIds[index], query.data);
   });
 
-  // exchange-options не откатывает просроченный PROPOSED (это делает только GET /chains/{id}),
-  // поэтому после дедлайна список надо перезапросить — иначе карточка останется с живыми
-  // кнопками второго раунда
   useProposalExpiry(
     options.map((entry) => ({
       chainId: entry.chainId,
@@ -105,9 +100,8 @@ export function ChainListPage() {
     );
   }
 
-  // бэкенд отдаёт цепочки по дате создания (repository.go: ORDER BY c.created_at DESC), а экран
-  // показывает их по убыванию вероятности. Сортировка стабильная, поэтому
-  // варианты одной цепочки сохраняют исходный порядок между собой
+  // бэкенд отдаёт цепочки по дате создания, а экран показывает их по убыванию вероятности;
+  // сортировка стабильная, поэтому варианты одной цепочки сохраняют исходный порядок
   const receiveOptions = options
     .flatMap((entry) => entry.receiveOptions.map((option) => ({ entry, option })))
     .sort((a, b) => b.entry.score - a.entry.score);
@@ -166,8 +160,6 @@ export function ChainListPage() {
                 locked={hasAssembled && !isAssembled(entry.status)}
                 approvedCount={approvedCountFor(entry)}
                 deadlineAt={deadlineAtFor(entry)}
-                // карточка — один вариант получения, а экраны цепочки одни на chainId:
-                // без ссылки на заявку они снова развернули бы звено во весь пул кандидатов
                 onOpen={() =>
                   navigate(`/chains/${entry.chainId}${receiveOptionQuery(option.requestId)}`)
                 }
