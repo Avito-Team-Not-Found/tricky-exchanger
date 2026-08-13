@@ -5,6 +5,7 @@ import { App as AntApp, Form } from 'antd';
 import { isAxiosError } from 'axios';
 import { useNavigate, useSearchParams } from 'react-router';
 
+import { fetchExchangeOptions, invalidateChainQueries } from '@entities/chain';
 import {
   createRequest,
   isRequestEditable,
@@ -44,17 +45,14 @@ export function useRequestForm(requestId?: number) {
   const isLoading = isEdit ? requestQuery.isPending : itemsQuery.isPending;
   const isLoadError = isEdit ? requestQuery.isError : itemsQuery.isError;
 
-  // пресет выбранного товара при возврате из формы создания товара (PROJECT.md §2.4)
   const preselectedItemId = searchParams.get('offeredItemId');
 
-  // форма монтируется только после загрузки данных (RequestForm рендерит Skeleton),
-  // поэтому префоллы задаются через initialValues, а не setState в эффекте
+  // форма монтируется только после загрузки данных, поэтому хватает initialValues
   const initialValues: Partial<RequestFormValues> | undefined = isEdit
     ? request
       ? {
           offeredItemId: request.offeredItemId,
           wantedDescription: request.wantedDescription,
-          // пустую категорию не подставляем: Select с value='' рисует пустой чип вместо placeholder'а
           wantedCategory: request.wantedCategory || undefined,
         }
       : undefined
@@ -70,15 +68,11 @@ export function useRequestForm(requestId?: number) {
   const wantedDescription = Form.useWatch('wantedDescription', form);
   const wantedCategory = Form.useWatch('wantedCategory', form);
 
-  // заявки, созданные до требования 50 символов, приходят с коротким описанием: antd не
-  // валидирует initialValues, поэтому без явной проверки кнопка молча оставалась бы
-  // заблокированной без единой подсказки на экране
   useEffect(() => {
     if (!request || readOnly) return;
     form.validateFields(['wantedDescription']).catch(() => undefined);
   }, [form, request, readOnly]);
 
-  // гейт кнопки повторяет правило формы, иначе короткое описание уйдёт в молчаливый сабмит
   const canSubmit =
     (wantedDescription?.trim().length ?? 0) >= DESCRIPTION_MIN_LENGTH &&
     Boolean(wantedCategory) &&
@@ -87,7 +81,6 @@ export function useRequestForm(requestId?: number) {
     !readOnly;
 
   async function handleSubmit(values: RequestFormValues) {
-    // повторная отправка при активном запросе недопустима — кнопка блокируется на время сабмита
     if (submitting) return;
     setSubmitting(true);
     try {
@@ -101,10 +94,8 @@ export function useRequestForm(requestId?: number) {
           version: request.version,
         });
         message.success('Запрос обновлён');
-        queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
-        // правка заявки пересчитывает кандидатные цепочки на сервере — иначе список
-        // вариантов ещё минуту показывает старые цепочки (кеш 'chains' живёт 60 с)
-        queryClient.invalidateQueries({ queryKey: ['chains'] });
+        // правка заявки пересчитывает кандидатные цепочки на сервере
+        invalidateChainQueries(queryClient);
         navigate('/exchange-requests');
       } else {
         const created = await createRequest({
@@ -112,11 +103,12 @@ export function useRequestForm(requestId?: number) {
           wantedDescription: values.wantedDescription.trim(),
           wantedCategory: values.wantedCategory ?? '',
         });
-        // матчинг на бэкенде — заглушка (SCRUM-50 §5), цепочки на фронте выключены флагом
-        setResult({ request: created, matching: { createdCandidateChains: 0 } });
-        queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
+        // матчинг на бэкенде синхронный, поэтому цепочки уже в базе к моменту ответа —
+        // их число берём из exchange-options
+        const options = await fetchExchangeOptions(created.id).catch(() => []);
+        setResult({ request: created, matching: { createdCandidateChains: options.length } });
+        invalidateChainQueries(queryClient);
       }
-      // после успешного сохранения уход с формы не должен спрашивать про несохранённое
       setDirty(false);
     } catch (error) {
       // конфликт версии (409) — заявка успела измениться в другом окне; кеш устарел, а не форма
@@ -133,8 +125,7 @@ export function useRequestForm(requestId?: number) {
         ),
       );
     } finally {
-      // в том числе при раннем выходе до отправки (кеш заявки опустел) — иначе форма
-      // навсегда остаётся заблокированной (disabled={submitting || readOnly})
+      // в том числе при раннем выходе до отправки: иначе форма останется заблокированной навсегда
       setSubmitting(false);
     }
   }
@@ -143,13 +134,11 @@ export function useRequestForm(requestId?: number) {
     navigate('/exchange-requests');
   }
 
-  // после создания с найденными цепочками ведём на экран «Варианты обмена» (PROJECT.md §2.6)
   function goToChains() {
     if (!result) return;
     navigate(`/exchange-requests/${result.request.id}`);
   }
 
-  // у пользователя нет товаров — ведём в форму создания товара, оттуда вернёмся с выбором нового (PROJECT.md §2.4)
   function goCreateItem() {
     navigate('/products/new?returnTo=request');
   }
@@ -163,7 +152,6 @@ export function useRequestForm(requestId?: number) {
       goToList();
       return;
     }
-    // форма заполнена не полностью — сохранять нечего, предлагаем только уйти или остаться
     if (!canSubmit) {
       modal.confirm({
         title: 'Изменения не сохранены',
@@ -186,8 +174,6 @@ export function useRequestForm(requestId?: number) {
       closable: false,
       centered: true,
       mask: { closable: false },
-      // form.submit()/validateFields() из колбэка модалки не завершаются в этом контексте —
-      // берём значения синхронно и шлём сами (сюда попадаем только при canSubmit)
       onOk: () => {
         handleSubmit(form.getFieldsValue() as RequestFormValues);
       },

@@ -7,6 +7,7 @@ export { RequestFormPage } from './exchange-requests/RequestFormPage';
 export { ChainListPage } from './exchange-requests/ChainListPage';
 export { ChainDetailPage } from './chains/ChainDetailPage';
 export { ChainParticipantsPage } from './chains/ChainParticipantsPage';
+export { ChainReplacementPage } from './chains/ChainReplacementPage';
 export { DealPage } from './chains/DealPage';
 export { DealStatusPage } from './chains/DealStatusPage';
 export { ProfilePage } from './profile/ProfilePage';

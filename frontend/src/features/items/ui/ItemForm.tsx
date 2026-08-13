@@ -1,10 +1,10 @@
 import { useImperativeHandle, type Ref } from 'react';
 
-import { DeleteOutlined, PictureOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, LockOutlined, PictureOutlined, UploadOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Form, Input, Select, Skeleton, Upload } from 'antd';
 import { useNavigate } from 'react-router';
 
-import { getItemImageError, ITEM_IMAGE_TYPES } from '@entities/item';
+import { getItemImageError, isItemExchanged, ITEM_IMAGE_TYPES } from '@entities/item';
 
 import { categoryOptions, DESCRIPTION_MIN_LENGTH } from '@shared/config/categories';
 import { ErrorState } from '@shared/ui';
@@ -70,6 +70,9 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
     });
   }
 
+  // бэкенд отклоняет любые мутации архивного товара, а попасть сюда можно по прямой ссылке
+  const exchanged = Boolean(item && isItemExchanged(item.status));
+
   return (
     <Form
       className="item-form"
@@ -77,10 +80,16 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
       layout="vertical"
       name="item-form"
       initialValues={initialValues}
-      disabled={submitting}
+      disabled={submitting || exchanged}
       onValuesChange={handleValuesChange}
       onFinish={handleSubmit}
     >
+      {exchanged ? (
+        <div className="item-form__lock" role="status">
+          <LockOutlined className="item-form__lock-icon" aria-hidden />
+          <span>Товар обменян и больше не редактируется</span>
+        </div>
+      ) : null}
       <Form.Item label="Фото" required>
         <div className="item-form__photo">
           {hasPhoto ? (
@@ -97,15 +106,11 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
               )}
             </div>
           ) : (
-            // без фото сама карточка является триггером загрузки («Добавить фото»)
             <Upload
               className="item-form__photo-upload"
               accept={ITEM_IMAGE_TYPES.join(',')}
               showUploadList={false}
               beforeUpload={(file) => {
-                // accept фильтрует диалог выбора, но файл можно притащить drag-and-drop'ом —
-                // тип и размер проверяем на месте, чтобы неверный файл не уходил на сервер
-                // и не откатывался 422 после успешного сохранения товара
                 const imageError = getItemImageError(file);
                 if (imageError) {
                   message.error(imageError);
@@ -184,11 +189,13 @@ export function ItemForm({ itemId, ref }: ItemFormProps) {
         size="large"
         block
         loading={submitting}
-        disabled={!canSubmit}
+        // явный disabled у кнопки перекрывает disabled формы (antd мержит как
+        // customDisabled ?? contextDisabled) — обменянный товар дописываем сюда сами
+        disabled={!canSubmit || exchanged}
       >
         {isEdit ? 'Сохранить изменения' : 'Сохранить'}
       </Button>
-      {isEdit ? (
+      {isEdit && !exchanged ? (
         <Button
           className="item-form__archive"
           danger

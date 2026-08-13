@@ -54,7 +54,6 @@ describe('dealState', () => {
   });
 
   it('keeps the ship screen when a neighbour shipped before me', () => {
-    // цепочка IN_PROGRESS, но моя заявка ещё LOCKED — отправлять всё ещё мне
     const chain = buildChain({ status: 'IN_PROGRESS' });
     source(chain).requestStatus = 'IN_PROGRESS';
     expect(dealState(chain)).toEqual({ status: 'ship', deadlineAt: null });

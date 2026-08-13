@@ -3,5 +3,3 @@ export const env = {
   // чтобы бэкенду не требовался CORS
   apiBaseUrl: (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '',
 };
-
-export const isDev = import.meta.env.DEV;

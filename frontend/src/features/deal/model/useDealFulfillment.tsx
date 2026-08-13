@@ -1,11 +1,10 @@
-import { useRef } from 'react';
-
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 
 import {
   confirmHandoff,
   confirmReceipt,
+  invalidateChainQueries,
   sourceParticipant,
   type Chain,
   type FulfillmentResult,
@@ -13,11 +12,9 @@ import {
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
-import { DealSuccessModal } from '../ui/DealSuccessModal';
-
 export type DealFulfillmentKind = 'handoff' | 'receipt';
 
-// Коды ошибок ручек отправки/получения различаются только по 409 (DEAL-PLAN.md §2.2)
+// Коды ошибок ручек отправки/получения различаются только по 409
 const HANDOFF_ERROR_MESSAGES: Record<number, string> = {
   404: 'Цепочка не найдена',
   409: 'Цепочка ещё не готова к передаче товаров',
@@ -31,31 +28,25 @@ const RECEIPT_ERROR_MESSAGES: Record<number, string> = {
   422: 'Заявка не является закреплённым товаром этой цепочки',
 };
 
-// Подтверждение отправки и получения — одна мутация на оба действия (AGENTS.md: мутации не
-// копипастятся). requestId различается: для handoff — моя заявка (chain.currentRequestId),
-// для receipt — заявка звена-источника, чей товар я забираю (DEAL-PLAN.md §2.2). Статусы заявок
-// меняются, поэтому инвалидируем и «Мои запросы» (exchange-requests). 409 — не ошибка
-// пользователя: тост + перезагрузка данных.
+// одна мутация на оба действия, различается только requestId: для handoff — моя заявка,
+// для receipt — заявка звена-источника, чей товар я забираю
 export function useDealFulfillment(chain: Chain) {
-  const { message, modal } = AntApp.useApp();
+  const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
-  // модалка успеха живёт в портале вне дерева роутов и сама уход с экрана не переживает
-  const success = useRef<{ destroy: () => void } | null>(null);
 
   const mutation = useMutation<FulfillmentResult, Error, DealFulfillmentKind>({
     mutationFn: (kind) => {
-      const requestId =
-        kind === 'handoff' ? chain.currentRequestId : (sourceParticipant(chain)?.requestId ?? -1);
-      return kind === 'handoff'
-        ? confirmHandoff(chain.id, requestId)
-        : confirmReceipt(chain.id, requestId);
+      if (kind === 'handoff') return confirmHandoff(chain.id, chain.currentRequestId);
+      const source = sourceParticipant(chain);
+      // не должно случиться: кнопку получения UI держит заблокированной, пока источник не IN_PROGRESS
+      if (!source) return Promise.reject(new Error('Источник товара не найден'));
+      return confirmReceipt(chain.id, source.requestId);
     },
     onSuccess: (data, kind) => {
       invalidate();
       if (kind === 'receipt') {
-        // на завершённой цепочке экран и так перейдёт в «Обмен завершён» — модалка успеха лишняя
+        // экран сам перейдёт в нужное состояние — отдельная модалка успеха не нужна
         if (data.status === 'COMPLETED') message.success('Обмен завершён');
-        else openReceivedModal();
         return;
       }
       message.success('Отправка подтверждена');
@@ -73,37 +64,12 @@ export function useDealFulfillment(chain: Chain) {
   });
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ['chains'] });
-    queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
-    queryClient.invalidateQueries({ queryKey: ['exchange-requests'] });
-  }
-
-  function closeReceivedModal() {
-    success.current?.destroy();
-    success.current = null;
-  }
-
-  function openReceivedModal() {
-    success.current = modal.confirm({
-      icon: null,
-      centered: true,
-      width: 311,
-      content: (
-        <DealSuccessModal
-          emoji="🎉"
-          title="Получение подтверждено"
-          text="Спасибо! Мы отметили, что вы забрали товар. Обмен завершится, как только все участники подтвердят получение."
-          onClose={closeReceivedModal}
-        />
-      ),
-      footer: null,
-    });
+    invalidateChainQueries(queryClient);
   }
 
   function run(kind: DealFulfillmentKind) {
-    // модалку-подтверждение не показываем ни для отправки, ни для получения: отправку подтверждает
-    // обязательное фото упаковки, получение необратимо, но ручки идемпотентны, а повторный клик
-    // гасится isPending (DEAL-PLAN §11)
+    // модалку-подтверждение не показываем: отправку подтверждает обязательное фото упаковки,
+    // а ручки идемпотентны — повторный клик гасится isPending
     mutation.mutateAsync(kind).then(
       () => undefined,
       () => undefined,

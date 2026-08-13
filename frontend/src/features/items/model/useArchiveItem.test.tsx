@@ -34,8 +34,7 @@ describe('useArchiveItem', () => {
     queryClient = createTestQueryClient();
   });
 
-  // сервер удаляет вместе с товаром и его заявки, поэтому их список тоже надо инвалидировать:
-  // иначе удалённая заявка ещё минуту висит в кеше и клик по ней уводит в 404
+  // сервер удаляет вместе с товаром и его заявки — иначе клик по удалённой уводит в 404
   it('invalidates both items and exchange requests', async () => {
     mockedArchiveItem.mockResolvedValue(undefined);
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');

@@ -39,8 +39,7 @@ describe('useProposalExpiry', () => {
     );
   }
 
-  // просрочку снимает только GET /chains/{id}: пока список не перезапросили, он отдаёт
-  // устаревший PROPOSED и карточка держит живые кнопки второго раунда
+  // пока список не перезапросили, он отдаёт устаревший PROPOSED с живыми кнопками
   it('invalidates the offer list once the detail has left PROPOSED', () => {
     const { rerender } = render([
       {
@@ -81,7 +80,6 @@ describe('useProposalExpiry', () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  // без детали (её ещё не запросили) статус списка сам по себе ничего не говорит о просрочке
   it('ignores entries whose detail has not arrived yet', () => {
     render([{ chainId: 7, listStatus: 'PROPOSED' }]);
 
@@ -104,7 +102,6 @@ describe('useProposalExpiry', () => {
     });
     expect(invalidate).not.toHaveBeenCalled();
 
-    // запас на расхождение часов клиента и сервера
     act(() => {
       vi.advanceTimersByTime(2_000);
     });
@@ -136,7 +133,6 @@ describe('useProposalExpiry', () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  // 4.7: списка рядом нет, дедлайн виден только в детали — таймер всё равно нужен
   it('refetches the detail after the deadline without a list status', () => {
     render([{ chainId: 7, detailStatus: 'PROPOSED', deadlineAt: '2026-08-10T10:01:00Z' }]);
 
@@ -147,8 +143,7 @@ describe('useProposalExpiry', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['chains', 7] });
   });
 
-  // список остаётся протухшим на весь staleTime, если откат случился на 4.7 — возврат на 4.6
-  // показал бы PROPOSED с живыми кнопками
+  // после отката на экране детали список остаётся протухшим на весь staleTime
   it('invalidates the offer list when the watched detail leaves PROPOSED', () => {
     const { rerender } = render([
       { chainId: 7, detailStatus: 'PROPOSED', deadlineAt: '2026-08-10T10:01:00Z' },
@@ -161,7 +156,6 @@ describe('useProposalExpiry', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['exchange-options'] });
   });
 
-  // деталь, открытая уже не в PROPOSED, ничего не говорит о свежести списка
   it('keeps the list untouched for a detail that was never seen as PROPOSED', () => {
     render([{ chainId: 7, detailStatus: 'COMPLETED', deadlineAt: null }]);
 

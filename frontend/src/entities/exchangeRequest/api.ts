@@ -3,7 +3,7 @@ import { apiClient } from '@shared/api';
 import type { CreateRequestPayload, ExchangeRequest, UpdateRequestPayload } from './model';
 
 // Контракт бэкенда: ресурс называется /exchange-offers, но внутри фронта сущность
-// остаётся «заявкой на обмен» (ExchangeRequest) — см. SCRUM-50 §6.2.
+// остаётся «заявкой на обмен» (ExchangeRequest).
 export async function fetchRequests(): Promise<ExchangeRequest[]> {
   const { data } = await apiClient.get<ExchangeRequest[]>('/exchange-offers');
   return data;

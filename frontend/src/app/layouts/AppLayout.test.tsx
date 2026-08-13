@@ -27,7 +27,6 @@ describe('AppLayout', () => {
     expect(container.querySelector('.app-header')).not.toBeInTheDocument();
   });
 
-  // макеты цепочки только мобильные — боковое меню десктопа на этих экранах остаётся
   it('keeps the side menu on chain screens', () => {
     const { container } = renderLayout(['/chains/chain-1']);
 

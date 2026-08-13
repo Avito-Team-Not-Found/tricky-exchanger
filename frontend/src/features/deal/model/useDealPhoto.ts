@@ -10,7 +10,7 @@ export function photoKey(chainId: number, requestId: number): string {
 }
 
 // Сжатие фото упаковки перед отправкой: canvas ужимает файл до 512px по большей стороне и
-// отдаёт JPEG 0.7 — иначе снимок не влезет в квоту localStorage (DEAL-PLAN.md §4.2)
+// отдаёт JPEG 0.7 — иначе снимок не влезет в квоту localStorage
 export async function compressImageFile(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
@@ -37,16 +37,14 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-// Фото упаковки перед отправкой: хранится в localStorage на пару «цепочка + заявка» (DEAL-PLAN.md
-// §4.2). Запись в try/catch — квота может кончиться, тогда фото остаётся в состоянии страницы,
-// а кнопка отправки всё равно разблокируется (тост пользователю не показываем).
+// квота localStorage может кончиться: тогда фото остаётся только в состоянии страницы,
+// но кнопку отправки всё равно разблокируем — молча
 export function useDealPhoto(chainId: number, requestId: number) {
   const key = photoKey(chainId, requestId);
   const [photo, setPhoto] = useState<string | null>(() => jsonStorage.get<string>(key));
 
   const setPhotoFile = async (file: File) => {
     const dataUrl = await compressImageFile(file);
-    // имитация: на бэкенде этого нет (DEAL-PLAN.md §4)
     jsonStorage.set(key, dataUrl);
     setPhoto(dataUrl);
   };

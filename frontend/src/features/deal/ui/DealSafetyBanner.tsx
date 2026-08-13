@@ -7,17 +7,13 @@ import { DealSuccessModal } from './DealSuccessModal';
 import './DealSafetyBanner.scss';
 
 interface DealSafetyBannerProps {
-  // текст строки: «Мы сохраним ваш товар» до отправки, «Сделка защищена» дальше (макет 4.9)
   label: string;
-  // текст модалки: вариант «Безопасность сделки» до отправки, «Товары под защитой» — после
   message: string;
 }
 
-// Зелёная строка «🔒 … ›» экрана сделки (макет 4.9): клик открывает модалку «Сделка защищена».
-// Значение не передаётся одним цветом — перед текстом стоит замок, статус читается и без него.
+// значение не передаётся одним цветом — перед текстом стоит замок
 export function DealSafetyBanner({ label, message }: DealSafetyBannerProps) {
   const { modal } = AntApp.useApp();
-  // модалка живёт в портале вне дерева роутов: закрываем руками, как остальные модалки сделки
   const safety = useRef<{ destroy: () => void } | null>(null);
 
   const close = () => {
@@ -31,7 +27,12 @@ export function DealSafetyBanner({ label, message }: DealSafetyBannerProps) {
       centered: true,
       width: 311,
       content: (
-        <DealSuccessModal emoji="🔒" title="Сделка защищена" text={message} onClose={close} />
+        <DealSuccessModal
+          emoji="🔒"
+          title="Ваш товар в безопасности"
+          text={message}
+          onClose={close}
+        />
       ),
       footer: null,
     });

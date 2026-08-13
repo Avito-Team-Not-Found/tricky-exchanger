@@ -8,8 +8,7 @@ interface ProbabilityBadgeProps {
   score: number;
 }
 
-// Пилюля с 15%-й заливкой уровня (Penpot, макеты 4.6/4.7): вероятность никогда не передаётся
-// только цветом — уровень и проценты всегда текстом
+// вероятность не передаётся одним цветом — уровень и проценты всегда текстом
 export function ProbabilityBadge({ score }: ProbabilityBadgeProps) {
   const { token } = theme.useToken();
   const meta = PROBABILITY_META[probabilityLevel(score)];

@@ -36,6 +36,14 @@ const items = [
     imageUrl: null,
     status: 'UNAVAILABLE',
   },
+  {
+    id: 3,
+    title: 'Гитара',
+    description: 'Акустическая',
+    category: '',
+    imageUrl: null,
+    status: 'ARCHIVED',
+  },
 ] as unknown as Item[];
 
 describe('ProductsPage', () => {
@@ -81,6 +89,16 @@ describe('ProductsPage', () => {
 
     await user.click(screen.getByRole('button', { name: /Кухонный комбайн/ }));
     expect(await screen.findByText('edit screen')).toBeInTheDocument();
+  });
+
+  // бэкенд отклоняет мутации архивного товара — открывать его в форме нечего
+  it('shows an exchanged item as a non-interactive card', () => {
+    mockedUseItems.mockReturnValue(queryOk({ items, total: items.length }));
+    renderWithProviders(<ProductsPage />);
+
+    expect(screen.getByText('Гитара')).toBeInTheDocument();
+    expect(screen.getByText('Обменян')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Гитара/ })).not.toBeInTheDocument();
   });
 
   it('shows a note when the server holds more items than the page', () => {

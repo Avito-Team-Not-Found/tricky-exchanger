@@ -13,16 +13,16 @@ function makeChain(): Chain {
     length: 2,
     version: 1,
     currentRequestId: 101,
-    currentPosition: 1,
+    currentPosition: 0,
     givesToPosition: 0,
-    receivesFromPosition: 2,
+    receivesFromPosition: 1,
     createdAt: '',
     updatedAt: '',
     participants: [
       {
         clusterId: 1,
         requestId: 101,
-        position: 1,
+        position: 0,
         isCurrentUser: true,
         offeredItemId: 1,
         offeredItemTitle: 'Мой товар',
@@ -33,7 +33,7 @@ function makeChain(): Chain {
       {
         clusterId: 2,
         requestId: 202,
-        position: 2,
+        position: 1,
         isCurrentUser: false,
         offeredItemId: 2,
         offeredItemTitle: 'Их товар',
@@ -55,7 +55,6 @@ describe('ParticipantStatusList', () => {
     renderList(makeChain(), 'shipments');
 
     expect(screen.getByText('Вы')).toBeInTheDocument();
-    // участник позиции 2 — Лиса, реальное имя нигде не показывается (DESIGN.md §2.9)
     expect(screen.getByText('Лиса')).toBeInTheDocument();
     expect(screen.queryByText('Алексей')).not.toBeInTheDocument();
   });
@@ -73,7 +72,6 @@ describe('ParticipantStatusList', () => {
 
   it('labels receipts by the source request status', () => {
     const chain = makeChain();
-    // источник моей позиции (позиция 2) уже DONE — я получил товар
     chain.participants[1].requestStatus = 'DONE';
 
     renderList(chain, 'receipts');
