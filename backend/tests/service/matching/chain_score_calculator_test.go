@@ -5,7 +5,6 @@ import (
 	"math"
 	"testing"
 
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
@@ -151,18 +150,35 @@ func TestClampHoldsAnomalies(t *testing.T) {
 	}
 }
 
-func TestValidationErrors(t *testing.T) {
+func TestExtractFeaturesInProgressIsFrozen(t *testing.T) {
+	s := state()
+	s.Stage = ranker.ChainStateInProgress
+	s.ApprovedVotes = s.Count
+	f, err := ranker.ExtractFeatures(s, ranker.NewRankerConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.IsFrozen != 1 {
+		t.Fatalf("IN_PROGRESS IsFrozen=%d, want 1", f.IsFrozen)
+	}
+	if f.IsProposed != 1 {
+		t.Fatalf("IN_PROGRESS IsProposed=%d, want 1", f.IsProposed)
+	}
+	if math.Abs(f.Progress-1) > 1e-9 {
+		t.Fatalf("IN_PROGRESS Progress=%v, want 1", f.Progress)
+	}
+}
 	calc := newCalc()
 
 	s := state()
 	s.Count = 1
-	if _, err := calc.Score(s); !errors.Is(err, entity.ErrInvalidChainState) {
+	if _, err := calc.Score(s); !errors.Is(err, ranker.ErrInvalidChainState) {
 		t.Fatalf("want ErrInvalidChainState, got %v", err)
 	}
 
 	s = state()
 	s.ApprovedVotes = 99
-	if _, err := calc.Score(s); !errors.Is(err, entity.ErrInvalidChainState) {
+	if _, err := calc.Score(s); !errors.Is(err, ranker.ErrInvalidChainState) {
 		t.Fatalf("want ErrInvalidChainState, got %v", err)
 	}
 }

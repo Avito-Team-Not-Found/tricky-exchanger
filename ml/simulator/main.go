@@ -1,9 +1,8 @@
 // Симулятор синтетических историй цепочек (ТЗ-1).
-// Не пишет в БД, не импортирует backend/internal — только pkg/ranker и stdlib.
+// Не пишет в БД, не импортирует backend/internal — только pkg/utils/ranker и stdlib.
 //
-//	go run ./ml/simulator -seed 42 -n 10000 -out ml/data/synthetic_v1.csv -report ml/reports/sim_v1.md
+//	go run . -seed 42 -n 10000 -out ../data/synthetic_v1.csv -report ../reports/sim_v1.md
 package main
-
 
 import (
 	"flag"
@@ -15,8 +14,8 @@ import (
 func main() {
 	seed := flag.Int64("seed", 42, "RNG seed")
 	n := flag.Int("n", 10000, "number of chains")
-	out := flag.String("out", "ml/data/synthetic_v1.csv", "CSV output path")
-	report := flag.String("report", "ml/reports/sim_v1.md", "markdown report path")
+	out := flag.String("out", "../data/synthetic_v1.csv", "CSV output path")
+	report := flag.String("report", "../reports/sim_v1.md", "markdown report path")
 	flag.Parse()
 
 	if *n < 1 {

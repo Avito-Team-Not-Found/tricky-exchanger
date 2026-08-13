@@ -1,8 +1,9 @@
 package ranker
 
-import (
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
-)
+import "errors"
+
+// ErrInvalidChainState — Count < 2 или ApprovedVotes вне [0, Count].
+var ErrInvalidChainState = errors.New("invalid chain state: Count must be >= 2 and ApprovedVotes must be in [0, Count]")
 
 // ChainStateStatus — этап жизненного цикла цепочки для скоринга.
 // Свой изолированный enum: Ranker отвязан от PR-типов (entity.chain_status пуст),
@@ -74,16 +75,16 @@ type ChainFeatures struct {
 }
 
 // ExtractFeatures превращает ChainState в компоненты-фичи. Валидирует вход
-// (Count >= 2, ApprovedVotes в [0, Count]) и возвращает entity.ErrInvalidChainState
+// (Count >= 2, ApprovedVotes в [0, Count]) и возвращает ErrInvalidChainState
 // при несоответствии.
 func ExtractFeatures(s ChainState, cfg RankerConfig) (ChainFeatures, error) {
 	cfg = cfg.normalize()
 
 	if s.Count < 2 {
-		return ChainFeatures{}, entity.ErrInvalidChainState
+		return ChainFeatures{}, ErrInvalidChainState
 	}
 	if s.ApprovedVotes < 0 || s.ApprovedVotes > s.Count {
-		return ChainFeatures{}, entity.ErrInvalidChainState
+		return ChainFeatures{}, ErrInvalidChainState
 	}
 
 	f := ChainFeatures{}
