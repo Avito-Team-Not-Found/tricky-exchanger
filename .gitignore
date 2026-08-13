@@ -34,3 +34,11 @@ Thumbs.db
 loadtest/k6/results.txt
 loadtest/k6/results-summary.json
 loadtest/k6/results*.json
+
+# ML: датасет генерируется симулятором; reports/golden/models — артефакты ТЗ-2
+/ml/data/*.csv
+/ml/.venv/
+# pip --target / случайные локальные копии колёс (не коммитить)
+/ml/vendor/
+**/__pycache__/
+.ipynb_checkpoints/

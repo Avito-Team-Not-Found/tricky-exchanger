@@ -44,6 +44,16 @@ func (s *Service) WithScorer(scorer ranker.Ranker) *Service {
 	return s
 }
 
+// LoadRankerContextForRequests реализует matching.RankerContextLoader.
+func (s *Service) LoadRankerContextForRequests(
+	ctx context.Context, tx database.Tx, requestIDs []int64,
+) (ranker.ContextSnapshot, error) {
+	if s.repository == nil {
+		return ranker.ContextSnapshot{}, entity.ErrChainRepositoryNotConfigured
+	}
+	return s.repository.LoadRankerContextForRequests(ctx, tx, requestIDs)
+}
+
 // WithNotifier подключает отправку уведомлений о событиях цепочки.
 func (s *Service) WithNotifier(notifier Notifier) *Service {
 	s.notifier = notifier
@@ -366,7 +376,11 @@ func (s *Service) refreshScore(ctx context.Context, tx database.Tx, chainID int6
 	if err != nil {
 		return err
 	}
-	score, err := s.scorer.Score(ranker.ChainState{
+	snap, err := s.repository.LoadRankerContext(ctx, tx, chainID)
+	if err != nil {
+		return err
+	}
+	state := ranker.ApplyContext(ranker.ChainState{
 		Count:                   len(cosines),
 		Stage:                   scoreStage(stage),
 		Event:                   event,
@@ -374,7 +388,9 @@ func (s *Service) refreshScore(ctx context.Context, tx database.Tx, chainID int6
 		ParticipantReliability:  reliability,
 		ParticipantClusterSizes: sizes,
 		ApprovedVotes:           approved,
-	})
+	}, snap, time.Now())
+	ranker.LogSparseChainState(state)
+	score, err := s.scorer.Score(state)
 	if err != nil {
 		return err
 	}

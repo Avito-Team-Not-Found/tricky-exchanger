@@ -20,6 +20,14 @@ type ChainScoreCalculator struct {
 	cfg RankerConfig
 }
 
+// FormulaRanker — имя линейной головы в ТЗ-3. Веса и сабсет фич не меняются.
+type FormulaRanker = ChainScoreCalculator
+
+// NewFormulaRanker — алиас NewChainScoreCalculator.
+func NewFormulaRanker(cfg RankerConfig) *FormulaRanker {
+	return NewChainScoreCalculator(cfg)
+}
+
 // NewChainScoreCalculator создаёт калькулятор score. cfg нормализуется дефолтами.
 func NewChainScoreCalculator(cfg RankerConfig) *ChainScoreCalculator {
 	return &ChainScoreCalculator{cfg: cfg.normalize()}

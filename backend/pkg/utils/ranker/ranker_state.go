@@ -1,8 +1,12 @@
 package ranker
 
 import (
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/entity"
+	"errors"
+	"time"
 )
+
+// ErrInvalidChainState — Count < 2 или ApprovedVotes вне [0, Count].
+var ErrInvalidChainState = errors.New("invalid chain state: Count must be >= 2 and ApprovedVotes must be in [0, Count]")
 
 // ChainStateStatus — этап жизненного цикла цепочки для скоринга.
 // Свой изолированный enum: Ranker отвязан от PR-типов (entity.chain_status пуст),
@@ -60,6 +64,24 @@ type ChainState struct {
 
 	// PrevScore — прошлое значение score (вход правила/нормировки, не слагаемое).
 	PrevScore float64
+
+	// Поля ниже нужны ML-голове (16 фич). FormulaRanker их игнорирует:
+	// веса и сабсет ExtractFeatures не меняются.
+
+	// Now — момент скоринга. Нулевое значение → time.Now() в ExtractMLFeatures.
+	Now time.Time
+	// CreatedAt — chains.created_at (для ADD — время сборки драфта).
+	CreatedAt time.Time
+	// StageEnteredAt — вход в текущую стадию (created_at или последний голос).
+	StageEnteredAt time.Time
+	// VoteTimes — COALESCE(voted_at, created_at) голосов цепочки, по возрастанию.
+	VoteTimes []time.Time
+	// OfferedCategories / WantedCategories — join заявка→товар, длина = Count.
+	OfferedCategories []string
+	WantedCategories  []string
+	// CategoryCounts — число ACTIVE-товаров по категории (кэш каталога).
+	CategoryCounts map[string]int
+	CategoryTotal  int
 }
 
 // ChainFeatures — извлечённые из ChainState компоненты (все в [0,1]).
@@ -74,16 +96,16 @@ type ChainFeatures struct {
 }
 
 // ExtractFeatures превращает ChainState в компоненты-фичи. Валидирует вход
-// (Count >= 2, ApprovedVotes в [0, Count]) и возвращает entity.ErrInvalidChainState
+// (Count >= 2, ApprovedVotes в [0, Count]) и возвращает ErrInvalidChainState
 // при несоответствии.
 func ExtractFeatures(s ChainState, cfg RankerConfig) (ChainFeatures, error) {
 	cfg = cfg.normalize()
 
 	if s.Count < 2 {
-		return ChainFeatures{}, entity.ErrInvalidChainState
+		return ChainFeatures{}, ErrInvalidChainState
 	}
 	if s.ApprovedVotes < 0 || s.ApprovedVotes > s.Count {
-		return ChainFeatures{}, entity.ErrInvalidChainState
+		return ChainFeatures{}, ErrInvalidChainState
 	}
 
 	f := ChainFeatures{}

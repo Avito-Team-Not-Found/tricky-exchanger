@@ -12,6 +12,10 @@ FROM alpine:3.24
 
 RUN adduser -D appuser
 COPY --from=builder /server /server
+COPY --from=builder /app/pkg/utils/ranker/models /models
+
+ENV RANKER_MODE=ml
+ENV RANKER_MODEL_PATH=/models/ranker_v1.txt
 
 USER appuser
 EXPOSE 8080

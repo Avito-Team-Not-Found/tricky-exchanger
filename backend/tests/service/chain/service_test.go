@@ -143,6 +143,7 @@ type fakeRepository struct {
 	doneCalls               int
 	allDone                 bool
 	completeCalls           int
+	rankerCtx               ranker.ContextSnapshot
 }
 
 func (r *fakeRepository) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
@@ -222,6 +223,14 @@ func (r *fakeRepository) RestoreActiveIfNoPendingVotes(_ context.Context, _ data
 
 func (r *fakeRepository) LoadScoreFeatures(_ context.Context, _ database.Tx, _ int64) ([]float64, []float64, []int, error) {
 	return []float64{0.9, 0.9}, []float64{0.75, 0.75}, []int{1, 1}, nil
+}
+
+func (r *fakeRepository) LoadRankerContext(_ context.Context, _ database.Tx, _ int64) (ranker.ContextSnapshot, error) {
+	return r.rankerCtx, nil
+}
+
+func (r *fakeRepository) LoadRankerContextForRequests(_ context.Context, _ database.Tx, _ []int64) (ranker.ContextSnapshot, error) {
+	return r.rankerCtx, nil
 }
 
 func (r *fakeRepository) CountPendingVoters(_ context.Context, _ database.Tx, _ int64) (int, error) {
@@ -567,6 +576,67 @@ func TestConfirmKeepsProposedUntilEveryParticipantApproves(t *testing.T) {
 	if repository.pendingCountCalls != 0 || repository.approvedCountCalls != 2 {
 		t.Fatalf("score voter calls: pending=%d, approved=%d", repository.pendingCountCalls, repository.approvedCountCalls)
 	}
+}
+
+func TestProdChainStateFilled(t *testing.T) {
+	created := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	stage := created.Add(2 * time.Hour)
+	repository := &fakeRepository{
+		status:        entity.ChainStatusProposed,
+		length:        3,
+		approvedCount: 1,
+		requestIDs:    []int64{10, 20, 30},
+		edgeRequestID: 10,
+		edgeTargetID:  20,
+		rankerCtx: ranker.ContextSnapshot{
+			CreatedAt:         created,
+			StageEnteredAt:    stage,
+			VoteTimes:         []time.Time{stage},
+			OfferedCategories: []string{"phones", "laptops", "cameras"},
+			WantedCategories:  []string{"laptops", "cameras", "phones"},
+			CategoryCounts:    map[string]int{"phones": 20, "laptops": 10, "cameras": 5},
+			CategoryTotal:     80,
+		},
+	}
+	cap := &capturingRanker{inner: ranker.NewFormulaRanker(ranker.NewRankerConfig())}
+	service := chainservice.NewService(repository, fakeTransactionManager{}).WithScorer(cap)
+
+	if _, err := service.Confirm(context.Background(), "user-1", 7); err != nil {
+		t.Fatalf("Confirm() error = %v", err)
+	}
+	got := cap.last
+	if got.CreatedAt.IsZero() || got.StageEnteredAt.IsZero() {
+		t.Fatalf("refreshScore timestamps zero: created=%v stage=%v", got.CreatedAt, got.StageEnteredAt)
+	}
+	if !got.CreatedAt.Equal(created) {
+		t.Fatalf("CreatedAt = %v, want %v", got.CreatedAt, created)
+	}
+	if len(got.OfferedCategories) == 0 || got.OfferedCategories[0] == "" {
+		t.Fatalf("offered categories empty: %v", got.OfferedCategories)
+	}
+	if len(got.WantedCategories) == 0 || got.WantedCategories[0] == "" {
+		t.Fatalf("wanted categories empty: %v", got.WantedCategories)
+	}
+	feats, err := ranker.ExtractMLFeatures(got, ranker.NewRankerConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feats["hours_since_created"] <= 0 {
+		t.Fatalf("hours_since_created = %v, want > 0", feats["hours_since_created"])
+	}
+	if feats["category_popularity"] <= 0 {
+		t.Fatalf("category_popularity = %v, want > 0", feats["category_popularity"])
+	}
+}
+
+type capturingRanker struct {
+	inner ranker.Ranker
+	last  ranker.ChainState
+}
+
+func (c *capturingRanker) Score(s ranker.ChainState) (float64, error) {
+	c.last = s
+	return c.inner.Score(s)
 }
 
 func TestConfirmFreezesWhenEveryParticipantApproved(t *testing.T) {

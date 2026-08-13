@@ -1,0 +1,18 @@
+[
+  "match_mean",
+  "min_edge",
+  "edge_spread",
+  "liquidity_min",
+  "liquidity_mean",
+  "size_spread",
+  "count",
+  "progress",
+  "is_proposed",
+  "is_frozen",
+  "hours_since_created",
+  "hours_in_stage",
+  "vote_velocity",
+  "category_popularity",
+  "category_diversity",
+  "reliability_mean"
+]

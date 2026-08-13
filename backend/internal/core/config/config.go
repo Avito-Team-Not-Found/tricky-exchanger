@@ -67,6 +67,10 @@ type Config struct {
 	CycleMaxDrafts         int     // максимум возвращаемых вариантов цепочки
 	CycleMinAverageScore   float64 // минимальное среднее качество стрелок цикла
 	CycleMaxScoreGap       float64 // допустимая разница между лучшей и худшей стрелкой
+
+	// Ranker* — скоринг цепочек: LightGBM (дефолт) или formula (явный baseline).
+	RankerMode      string
+	RankerModelPath string
 }
 
 // Load читает конфигурацию из переменных окружения.
@@ -79,6 +83,11 @@ func Load() (*Config, error) {
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET is required")
+	}
+
+	rankerMode, err := ParseRankerMode(os.Getenv("RANKER_MODE"))
+	if err != nil {
+		return nil, err
 	}
 
 	return &Config{
@@ -112,6 +121,9 @@ func Load() (*Config, error) {
 		CycleMaxDrafts:         envIntOrDefault("CYCLE_MAX_DRAFTS", 10),
 		CycleMinAverageScore:   envFloatOrDefault("CYCLE_MIN_AVERAGE_SCORE", 0.5),
 		CycleMaxScoreGap:       envFloatOrDefault("CYCLE_MAX_SCORE_GAP", 1),
+
+		RankerMode:      rankerMode,
+		RankerModelPath: envOrDefault("RANKER_MODEL_PATH", "pkg/utils/ranker/models/ranker_v1.txt"),
 
 		MinIOEndpoint:       envOrDefault("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOPublicEndpoint: envOrDefault("MINIO_PUBLIC_ENDPOINT", "localhost:9000"),
@@ -155,4 +167,22 @@ func envFloatOrDefault(key string, fallback float64) float64 {
 		}
 	}
 	return fallback
+}
+
+const (
+	RankerModeFormula = "formula"
+	RankerModeML      = "ml"
+)
+
+// ParseRankerMode принимает formula|ml; пустое значение → ml.
+// Неизвестное значение — ошибка (fail-fast на старте).
+func ParseRankerMode(v string) (string, error) {
+	switch v {
+	case "", RankerModeML:
+		return RankerModeML, nil
+	case RankerModeFormula:
+		return RankerModeFormula, nil
+	default:
+		return "", fmt.Errorf("RANKER_MODE must be formula or ml, got %q", v)
+	}
 }
