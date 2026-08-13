@@ -1,5 +1,5 @@
 tree
-version=v4
+version=v3
 num_class=1
 num_tree_per_iteration=1
 label_index=0
@@ -9533,14 +9533,12 @@ parameters:
 [metric: binary_logloss,auc]
 [tree_learner: serial]
 [device_type: cpu]
-[data_sample_strategy: bagging]
 [data: ]
 [valid: ]
 [num_iterations: 500]
 [learning_rate: 0.03]
 [num_leaves: 16]
-[num_threads: 12]
-[seed: 42]
+[num_threads: -1]
 [deterministic: 0]
 [force_col_wise: 0]
 [force_row_wise: 0]
@@ -9559,7 +9557,6 @@ parameters:
 [extra_trees: 0]
 [extra_seed: 12879]
 [early_stopping_round: 0]
-[early_stopping_min_delta: 0]
 [first_metric_only: 0]
 [max_delta_step: 0]
 [lambda_l1: 0]
@@ -9594,10 +9591,6 @@ parameters:
 [interaction_constraints: ]
 [verbosity: -1]
 [saved_feature_importance_type: 0]
-[use_quantized_grad: 0]
-[num_grad_quant_bins: 4]
-[quant_train_renew_leaf: 0]
-[stochastic_rounding: 1]
 [linear_tree: 0]
 [max_bin: 255]
 [max_bin_by_feature: ]
@@ -9619,7 +9612,6 @@ parameters:
 [categorical_feature: ]
 [forcedbins_filename: ]
 [precise_float_parser: 0]
-[parser_config_file: ]
 [objective_seed: 16083]
 [num_class: 1]
 [is_unbalance: 0]
@@ -9634,7 +9626,6 @@ parameters:
 [lambdarank_truncation_level: 30]
 [lambdarank_norm: 1]
 [label_gain: ]
-[lambdarank_position_bias_regularization: 0]
 [eval_at: ]
 [multi_error_top_k: 1]
 [auc_mu_weights: ]

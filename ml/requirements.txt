@@ -1,7 +1,7 @@
 # Direct deps. Reproducible env: `cd ml && uv sync` (see uv.lock).
 pandas==2.2.3
 scikit-learn==1.5.2
-lightgbm==4.5.0
+lightgbm==3.3.5
 shap==0.46.0
 matplotlib==3.9.2
 numpy==2.1.3

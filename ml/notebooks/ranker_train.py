@@ -19,6 +19,7 @@ from sklearn.metrics import log_loss, roc_auc_score
 from sklearn.model_selection import train_test_split
 
 SEED = 42
+REQUIRED_LGBM = "3.3.5"
 LATENT_KEYS = ("r", "m", "c_e", "fraud", "epsilon", "pop")
 DGP_FEATURES = {
     "min_edge",
@@ -50,6 +51,12 @@ def find_root(start: Path | None = None) -> Path:
 
 def set_seeds(seed: int = SEED) -> None:
     np.random.seed(seed)
+
+
+def assert_lightgbm_v3() -> None:
+    ver = getattr(lgb, "__version__", "")
+    if ver != REQUIRED_LGBM:
+        raise RuntimeError(f"ожидается lightgbm=={REQUIRED_LGBM}, сейчас {ver!r}")
 
 
 def load_contracts(root: Path) -> tuple[list[str], pd.DataFrame]:
@@ -106,6 +113,7 @@ def stratified_split(
 
 
 def train_lgbm(split: dict, seed: int = SEED) -> lgb.LGBMClassifier:
+    assert_lightgbm_v3()
     model = lgb.LGBMClassifier(
         objective="binary",
         n_estimators=500,
@@ -115,7 +123,7 @@ def train_lgbm(split: dict, seed: int = SEED) -> lgb.LGBMClassifier:
         reg_lambda=1.0,
         random_state=seed,
         n_jobs=-1,
-        verbosity=-1,
+        verbose=-1,
     )
     model.fit(
         split["X_fit"],
@@ -419,6 +427,7 @@ def write_report(
         "# Ranker v1 — LightGBM vs formula baseline",
         "",
         f"- seed: `{SEED}`",
+        f"- LightGBM: `{REQUIRED_LGBM}` (text format v3)",
         f"- LightGBM best_iteration: `{best_iteration}`",
         "",
         "## Gates",
@@ -529,6 +538,7 @@ def export_artifacts(
                     f"golden self-check failed: file={g['proba']:.8f} model={float(pr):.8f}"
                 )
         tmp_model.replace(model_path)
+        _assert_model_text_v3(model_path)
         golden = loaded
     except Exception:
         if tmp_model.exists():
@@ -549,8 +559,17 @@ def export_artifacts(
     return {"model": model_path, "golden": golden_path, "report": report_path, "figures": fig_dir}
 
 
+def _assert_model_text_v3(path: Path) -> None:
+    header = path.read_text(encoding="utf-8").splitlines()[:8]
+    if any(line.strip() == "version=v4" for line in header):
+        raise AssertionError(f"{path} экспортирован как v4: {header}")
+    if not any(line.strip() == "version=v3" for line in header):
+        raise AssertionError(f"{path} без version=v3: {header}")
+
+
 def run(root: Path | None = None) -> dict:
     set_seeds(SEED)
+    assert_lightgbm_v3()
     root = find_root(root)
     fig_dir = root / "ml" / "reports" / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
