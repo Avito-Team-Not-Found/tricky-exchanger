@@ -1464,6 +1464,19 @@ func (r *Postgres) CompleteChain(ctx context.Context, tx database.Tx, chainID in
 	if result.RowsAffected() != 1 {
 		return entity.ErrChainNotReadyForHandoff
 	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE items AS item
+		SET status = 'ARCHIVED', updated_at = NOW()
+		WHERE item.status = 'UNAVAILABLE'
+		  AND item.id IN (
+			SELECT offer.offered_item_id
+			FROM chain_participants AS participant
+			JOIN exchange_offers AS offer ON offer.id = participant.request_id
+			WHERE participant.chain_id = $1
+		  )
+	`, chainID); err != nil {
+		return fmt.Errorf("archive exchanged items: %w", err)
+	}
 	return nil
 }
 
