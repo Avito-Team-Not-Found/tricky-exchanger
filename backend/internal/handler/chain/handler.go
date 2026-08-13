@@ -450,6 +450,26 @@ func (h *Handler) Think(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "vote": entity.VoteThinking})
 }
 
+// Unconfirm returns the caller's round-two decision to pending. It does not
+// remove the candidate response, so the participant can confirm again later.
+func (h *Handler) Unconfirm(c *gin.Context) {
+	userID, ok := currentUserID(c)
+	if !ok {
+		return
+	}
+	chainID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || chainID <= 0 {
+		api.SendError(c, http.StatusUnprocessableEntity, "id must be a positive integer")
+		return
+	}
+	status, err := h.service.Unconfirm(c.Request.Context(), userID, chainID)
+	if err != nil {
+		DetermineError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"chainId": chainID, "status": status, "vote": entity.VotePending})
+}
+
 // Decline withdraws from a proposal and reports whether fast replacement is available.
 func (h *Handler) Decline(c *gin.Context) {
 	userID, ok := currentUserID(c)
@@ -581,6 +601,10 @@ func DetermineError(c *gin.Context, err error) {
 	case errors.Is(err, entity.ErrChainNotFound):
 		api.SendError(c, http.StatusNotFound, err.Error())
 	case errors.Is(err, entity.ErrChainNotProposed):
+		api.SendError(c, http.StatusConflict, err.Error())
+	case errors.Is(err, entity.ErrChainConfirmationExpired):
+		api.SendError(c, http.StatusGone, err.Error())
+	case errors.Is(err, entity.ErrChainConfirmationNotFound):
 		api.SendError(c, http.StatusConflict, err.Error())
 	case errors.Is(err, entity.ErrChainNotReadyForHandoff), errors.Is(err, entity.ErrChainHandoffPending):
 		api.SendError(c, http.StatusConflict, err.Error())

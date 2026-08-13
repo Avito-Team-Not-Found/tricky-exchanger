@@ -128,6 +128,9 @@ type fakeRepository struct {
 	approvedCountCalls      int
 	confirmedRequestID      int64
 	confirmedTargetID       int64
+	unconfirmCalls          int
+	frozenReplacement       bool
+	preparedFrozen          bool
 	affectedChains          []int64
 	releasedRequests        []int64
 	thinkingCalls           int
@@ -144,6 +147,10 @@ type fakeRepository struct {
 	allDone                 bool
 	completeCalls           int
 	rankerCtx               ranker.ContextSnapshot
+}
+
+func (r *fakeRepository) HasDeadlineEvent(_ context.Context, _ string, _ int64) (bool, error) {
+	return false, nil
 }
 
 func (r *fakeRepository) SaveCandidates(_ context.Context, _ database.Tx, drafts []entity.ChainDraft) error {
@@ -248,6 +255,21 @@ func (r *fakeRepository) ConfirmParticipant(_ context.Context, _ database.Tx, _,
 	r.confirmedRequestID = requestID
 	r.confirmedTargetID = targetID
 	return nil
+}
+
+func (r *fakeRepository) UnconfirmParticipant(_ context.Context, _ database.Tx, _ int64, _, _ int64) error {
+	r.unconfirmCalls++
+	return nil
+}
+
+func (r *fakeRepository) PrepareFrozenReplacement(_ context.Context, _ database.Tx, _ int64, _ time.Time) error {
+	r.status = entity.ChainStatusProposed
+	r.preparedFrozen = true
+	return nil
+}
+
+func (r *fakeRepository) IsFrozenReplacement(_ context.Context, _ database.Tx, _ int64) (bool, error) {
+	return r.frozenReplacement, nil
 }
 
 func (r *fakeRepository) MarkParticipantThinking(_ context.Context, _ database.Tx, _, _, _ int64) error {
@@ -393,6 +415,54 @@ func TestThinkRecordsExplicitDecision(t *testing.T) {
 	}
 	if repository.thinkingCalls != 1 {
 		t.Fatalf("thinking calls = %d, want 1", repository.thinkingCalls)
+	}
+}
+
+func TestUnconfirmReturnsApprovalToPending(t *testing.T) {
+	repository := &fakeRepository{
+		status: entity.ChainStatusProposed, length: 3,
+		edgeRequestID: 10, edgeTargetID: 20,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	status, err := service.Unconfirm(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Unconfirm() error = %v", err)
+	}
+	if status != entity.ChainStatusProposed || repository.unconfirmCalls != 1 {
+		t.Fatalf("Unconfirm() status = %s, calls = %d", status, repository.unconfirmCalls)
+	}
+}
+
+func TestUnconfirmDuringFrozenReplacementRollsBack(t *testing.T) {
+	repository := &fakeRepository{
+		status: entity.ChainStatusProposed, length: 3, frozenReplacement: true,
+		edgeRequestID: 10, edgeTargetID: 20,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	status, err := service.Unconfirm(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Unconfirm() error = %v", err)
+	}
+	if status != entity.ChainStatusCandidate || repository.unconfirmCalls != 0 {
+		t.Fatalf("Unconfirm() status = %s, direct calls = %d", status, repository.unconfirmCalls)
+	}
+}
+
+func TestDeclineFromFrozenStartsShortReplacementRound(t *testing.T) {
+	repository := &fakeRepository{
+		status: entity.ChainStatusFrozen, length: 3, approvedCount: 2,
+		edgeRequestID: 10, edgeTargetID: 20, declineAvailable: true,
+	}
+	service := chainservice.NewService(repository, fakeTransactionManager{})
+
+	available, status, err := service.Decline(context.Background(), "user-1", 7)
+	if err != nil {
+		t.Fatalf("Decline() error = %v", err)
+	}
+	if !available || status != entity.ChainStatusProposed || !repository.preparedFrozen {
+		t.Fatalf("Decline() available = %v, status = %s, prepared = %v", available, status, repository.preparedFrozen)
 	}
 }
 

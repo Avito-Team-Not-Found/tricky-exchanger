@@ -1,0 +1,141 @@
+{
+  "info": {
+    "name": "Tricky Exchanger - Chain Cancellation Flow",
+    "description": "Ручная проверка отзыва подтверждения, отказа после FROZEN, второго отказа и распада по дедлайну. Сначала подготовьте цепочку существующими коллекциями и заполните переменные. Папки независимы: перед каждой восстановите указанный начальный статус.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "chain_id", "value": "" },
+    { "key": "token_a", "value": "" },
+    { "key": "token_b", "value": "" },
+    { "key": "token_c", "value": "" },
+    { "key": "replacement_request_id", "value": "" },
+    { "key": "expired_chain_id", "value": "" },
+    { "key": "expired_participant_token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - Отзыв подтверждения в PROPOSED",
+      "description": "Начальное состояние: цепочка PROPOSED, A уже подтвердил участие, остальные ещё ожидают.",
+      "item": [
+        {
+          "name": "A - Отозвать подтверждение",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Цепочка остаётся PROPOSED', () => pm.expect(body.status).to.eql('PROPOSED'));",
+            "pm.test('Голос возвращён в pending', () => pm.expect(body.vote).to.eql('pending'));"
+          ] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}/unconfirm" }
+        },
+        {
+          "name": "A - Проверить цепочку после отзыва",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const chain = pm.response.json();",
+            "pm.test('Статус PROPOSED', () => pm.expect(chain.status).to.eql('PROPOSED'));",
+            "pm.test('Голос A больше не approved', () => { const p = chain.participants.find(x => String(x.ownerUserId || x.owner_user_id) === String(pm.collectionVariables.get('user_a_id'))); if (p) pm.expect(p.vote).to.not.eql('approved'); });"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}" }
+        },
+        {
+          "name": "A - Подтвердить повторно",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Повторное подтверждение принято', () => pm.expect(pm.response.code).to.be.oneOf([200]));"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}/confirm" }
+        }
+      ]
+    },
+    {
+      "name": "02 - Первый отказ после FROZEN и успешная замена",
+      "description": "Начальное состояние: цепочка FROZEN. У заявки B в её кластере есть свободная совместимая замена. A расположен перед B и выбирает замену.",
+      "item": [
+        {
+          "name": "B - Отказаться после FROZEN",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Открыт ограниченный PROPOSED-раунд', () => pm.expect(body.status).to.eql('PROPOSED'));",
+            "pm.test('Замена доступна', () => pm.expect(body.replacementAvailable).to.eql(true));"
+          ] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token_b}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}/decline" }
+        },
+        {
+          "name": "A - Получить варианты замены",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const options = pm.response.json();",
+            "pm.test('Есть хотя бы одна замена', () => pm.expect(options.length).to.be.above(0));",
+            "if (options.length) pm.collectionVariables.set('replacement_request_id', options[0].requestId);"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}/replacements" }
+        },
+        {
+          "name": "A - Выбрать замену",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Замена выбрана', () => pm.response.to.have.status(200));"] } }],
+          "request": { "method": "PUT", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }, { "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"requestId\": {{replacement_request_id}}}" }, "url": "{{base_url}}/api/v1/chains/{{chain_id}}/replacement" }
+        },
+        {
+          "name": "A - Переподтвердить изменившееся ребро",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}/confirm" }
+        },
+        {
+          "name": "C - Приглашённая замена подтверждает",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Цепочка снова FROZEN', () => pm.expect(pm.response.json().status).to.eql('FROZEN'));"
+          ] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token_c}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}/confirm" }
+        }
+      ]
+    },
+    {
+      "name": "03 - Второй отказ во время быстрой замены",
+      "description": "Начальное состояние: после первого отказа из FROZEN API уже вернул replacementAvailable=true, но замена ещё не завершена.",
+      "item": [
+        {
+          "name": "A - Второй участник отказывается",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('Новая замена не запускается', () => pm.expect(body.replacementAvailable).to.eql(false));",
+            "pm.test('Цепочка полностью откатилась', () => pm.expect(body.status).to.eql('CANDIDATE'));"
+          ] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}/decline" }
+        },
+        {
+          "name": "A - Проверить причину отката",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const chain = pm.response.json();",
+            "pm.test('CANDIDATE после полного отката', () => pm.expect(chain.status).to.eql('CANDIDATE'));",
+            "pm.test('Причина participant_cancelled', () => pm.expect(chain.invalidReason || chain.invalid_reason).to.eql('participant_cancelled'));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token_a}}" }], "url": "{{base_url}}/api/v1/chains/{{chain_id}}" }
+        }
+      ]
+    },
+    {
+      "name": "04 - Истёкший дедлайн",
+      "description": "Для быстрой проверки установите deadline цепочки в прошлое в локальной БД, затем выполните GET. Для FROZEN ожидается 410 даже после пересборки и удаления технических участников; для PROPOSED цепочка вернётся как CANDIDATE с invalidReason=deadline_expired.",
+      "item": [
+        {
+          "name": "Участник - Открыть распавшуюся FROZEN-цепочку",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Возвращается 410 Gone, а не 404', () => pm.response.to.have.status(410));",
+            "pm.test('Сообщение объясняет дедлайн', () => pm.expect(JSON.stringify(pm.response.json()).toLowerCase()).to.include('ист'));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{expired_participant_token}}" }], "url": "{{base_url}}/api/v1/chains/{{expired_chain_id}}" }
+        },
+        {
+          "name": "Участник - Список после истечения дедлайна",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Список доступен', () => pm.response.to.have.status(200));",
+            "pm.test('Истёкшая FROZEN-цепочка больше не активна', () => pm.expect(pm.response.json().some(c => String(c.id) === String(pm.collectionVariables.get('expired_chain_id')) && c.status === 'FROZEN')).to.eql(false));"
+          ] } }],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{expired_participant_token}}" }], "url": "{{base_url}}/api/v1/chains" }
+        }
+      ]
+    }
+  ]
+}

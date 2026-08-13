@@ -185,6 +185,10 @@ func (s *fakeService) Confirm(_ context.Context, userID string, chainID int64) (
 	return s.confirmStatus, s.err
 }
 
+func (s *fakeService) Unconfirm(_ context.Context, _ string, _ int64) (entity.ChainStatus, error) {
+	return entity.ChainStatusProposed, s.err
+}
+
 func (s *fakeService) Think(_ context.Context, _ string, _ int64) error { return s.err }
 
 func (s *fakeService) Decline(_ context.Context, _ string, _ int64) (bool, entity.ChainStatus, error) {

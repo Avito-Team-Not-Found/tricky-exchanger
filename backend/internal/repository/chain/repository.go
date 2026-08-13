@@ -602,6 +602,7 @@ func (r *Postgres) ExpireProposalIfDue(ctx context.Context, tx database.Tx, chai
 		UPDATE chains
 		SET status = 'CANDIDATE',
 		    freeze_deadline_at = NULL,
+		    invalid_reason = 'deadline_expired',
 		    version = version + 1,
 		    updated_at = NOW()
 		WHERE id = $1
@@ -626,6 +627,18 @@ func (r *Postgres) ExpireProposalIfDue(ctx context.Context, tx database.Tx, chai
 		  AND eo.status IN ('IN_PROPOSAL', 'LOCKED')
 	`, chainID); err != nil {
 		return false, fmt.Errorf("release expired proposal requests: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE items AS item
+		SET status = 'ACTIVE', updated_at = NOW()
+		WHERE item.id IN (
+			SELECT offer.offered_item_id
+			FROM chain_participants participant
+			JOIN exchange_offers offer ON offer.id = participant.request_id
+			WHERE participant.chain_id = $1
+		) AND item.status = 'UNAVAILABLE'
+	`, chainID); err != nil {
+		return false, fmt.Errorf("release expired proposal items: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE votes
@@ -705,6 +718,16 @@ func (r *Postgres) ExpireFrozenIfDue(
 		return nil, false, err
 	}
 	if _, err := tx.Exec(ctx, `
+		INSERT INTO chain_deadline_events (chain_id, user_id, reason)
+		SELECT DISTINCT cp.chain_id, offer.user_id, 'deadline_expired'
+		FROM chain_participants cp
+		JOIN exchange_offers offer ON offer.id = cp.request_id
+		WHERE cp.chain_id = $1
+		ON CONFLICT DO NOTHING
+	`, chainID); err != nil {
+		return nil, false, fmt.Errorf("record expired chain notification: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
 		UPDATE exchange_offers
 		SET status = 'ACTIVE', updated_at = NOW()
 		WHERE id = ANY($1::bigint[])
@@ -773,6 +796,19 @@ func (r *Postgres) loadVisibleChains(ctx context.Context, userID string, chainID
 		return nil, err
 	}
 	return chains, nil
+}
+
+func (r *Postgres) HasDeadlineEvent(ctx context.Context, userID string, chainID int64) (bool, error) {
+	var exists bool
+	if err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM chain_deadline_events
+			WHERE chain_id = $1 AND user_id = $2 AND reason = 'deadline_expired'
+		)
+	`, chainID, userID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check chain deadline event: %w", err)
+	}
+	return exists, nil
 }
 
 func (r *Postgres) loadParticipants(ctx context.Context, chains []entity.Chain) error {
@@ -1210,6 +1246,61 @@ func (r *Postgres) MarkParticipantThinking(ctx context.Context, tx database.Tx, 
 	return nil
 }
 
+// UnconfirmParticipant returns an approved vote to pending without removing
+// the participant from the proposal. Repeated calls are idempotent.
+func (r *Postgres) UnconfirmParticipant(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error {
+	result, err := tx.Exec(ctx, `
+		UPDATE votes
+		SET vote = 'pending', voted_at = NOW()
+		WHERE chain_id = $1 AND request_id = $2 AND target_request_id = $3
+		  AND vote IN ('approved', 'pending')
+	`, chainID, requestID, targetRequestID)
+	if err != nil {
+		return fmt.Errorf("unconfirm participant: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return entity.ErrChainConfirmationNotFound
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE exchange_offers
+		SET status = 'IN_PROPOSAL', updated_at = NOW()
+		WHERE id = $1 AND status = 'LOCKED'
+	`, requestID); err != nil {
+		return fmt.Errorf("soften participant lock: %w", err)
+	}
+	return nil
+}
+
+// PrepareFrozenReplacement reopens a frozen chain for a short, restricted
+// replacement round. invalid_reason distinguishes it from an ordinary proposal
+// so a second withdrawal can atomically cancel the whole round.
+func (r *Postgres) PrepareFrozenReplacement(ctx context.Context, tx database.Tx, chainID int64, deadline time.Time) error {
+	result, err := tx.Exec(ctx, `
+		UPDATE chains
+		SET status = 'PROPOSED', freeze_deadline_at = $2,
+		    invalid_reason = 'frozen_replacement', version = version + 1, updated_at = NOW()
+		WHERE id = $1 AND status = 'FROZEN'
+	`, chainID, deadline)
+	if err != nil {
+		return fmt.Errorf("prepare frozen replacement: %w", err)
+	}
+	if result.RowsAffected() != 1 {
+		return entity.ErrChainNotFrozen
+	}
+	return nil
+}
+
+func (r *Postgres) IsFrozenReplacement(ctx context.Context, tx database.Tx, chainID int64) (bool, error) {
+	var active bool
+	if err := tx.QueryRow(ctx, `
+		SELECT status = 'PROPOSED' AND invalid_reason = 'frozen_replacement'
+		FROM chains WHERE id = $1
+	`, chainID).Scan(&active); err != nil {
+		return false, fmt.Errorf("check frozen replacement: %w", err)
+	}
+	return active, nil
+}
+
 // DeclineParticipant removes the participant's confirmation and releases its
 // request. A replacement is allowed only when every other participant has
 // confirmed and the declining participant has an own vote in the chain. An
@@ -1270,6 +1361,13 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 			return false, "", mappedErr
 		}
 		return false, "", err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE items SET status = 'ACTIVE', updated_at = NOW()
+		WHERE id = (SELECT offered_item_id FROM exchange_offers WHERE id = $1)
+		  AND status = 'UNAVAILABLE'
+	`, requestID); err != nil {
+		return false, "", fmt.Errorf("release declined item: %w", err)
 	}
 
 	var replacementAvailable bool
@@ -1345,6 +1443,18 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 		return false, "", err
 	}
 	if _, err := tx.Exec(ctx, `
+		UPDATE items AS item
+		SET status = 'ACTIVE', updated_at = NOW()
+		WHERE item.id IN (
+			SELECT offer.offered_item_id
+			FROM chain_participants participant
+			JOIN exchange_offers offer ON offer.id = participant.request_id
+			WHERE participant.chain_id = $1
+		) AND item.status = 'UNAVAILABLE'
+	`, chainID); err != nil {
+		return false, "", fmt.Errorf("release rolled back proposal items: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
 		UPDATE votes
 		SET vote = 'pending', voted_at = NOW()
 		WHERE chain_id = $1 AND vote IN ('approved', 'thinking')
@@ -1358,7 +1468,8 @@ func (r *Postgres) DeclineParticipant(ctx context.Context, tx database.Tx, chain
 		return false, "", fmt.Errorf("clear replacement attempts after rollback: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
-		UPDATE chains SET status = 'CANDIDATE', version = version + 1, updated_at = NOW()
+		UPDATE chains SET status = 'CANDIDATE', freeze_deadline_at = NULL,
+		    invalid_reason = 'participant_cancelled', version = version + 1, updated_at = NOW()
 		WHERE id = $1 AND status = 'PROPOSED'
 	`, chainID); err != nil {
 		if mappedErr, ok := repository.DBErrToErr(err); ok {
@@ -1662,6 +1773,7 @@ func (r *Postgres) FreezeChain(ctx context.Context, tx database.Tx, chainID int6
 		UPDATE chains
 		SET status = 'FROZEN',
 		    freeze_deadline_at = $2,
+		    invalid_reason = NULL,
 		    version = version + 1,
 		    updated_at = NOW()
 		WHERE id = $1 AND status = 'PROPOSED'

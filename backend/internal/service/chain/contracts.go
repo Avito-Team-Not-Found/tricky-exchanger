@@ -15,6 +15,7 @@ type Repository interface {
 	List(ctx context.Context, userID string) ([]entity.Chain, error)
 	ListForOffer(ctx context.Context, userID string, offerID int64) ([]entity.Chain, error)
 	Get(ctx context.Context, userID string, chainID int64) (entity.Chain, error)
+	HasDeadlineEvent(ctx context.Context, userID string, chainID int64) (bool, error)
 	LockForVote(ctx context.Context, tx database.Tx, chainID int64) (entity.ChainStatus, int, error)
 	ValidateVoteParticipants(ctx context.Context, tx database.Tx, userID string, chainID, requestID, targetRequestID int64, chainLength int) error
 	GetVote(ctx context.Context, tx database.Tx, userID string, chainID, requestID, targetRequestID int64) (entity.ChainVote, error)
@@ -33,7 +34,10 @@ type Repository interface {
 	CountPendingVoters(ctx context.Context, tx database.Tx, chainID int64) (int, error)
 	UpdateScore(ctx context.Context, tx database.Tx, chainID int64, score float64) error
 	ConfirmParticipant(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error
+	UnconfirmParticipant(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error
 	MarkParticipantThinking(ctx context.Context, tx database.Tx, chainID, requestID, targetRequestID int64) error
+	PrepareFrozenReplacement(ctx context.Context, tx database.Tx, chainID int64, deadline time.Time) error
+	IsFrozenReplacement(ctx context.Context, tx database.Tx, chainID int64) (bool, error)
 	DeclineParticipant(ctx context.Context, tx database.Tx, chainID, requestID int64, fastReplacementEligible bool) (bool, entity.ChainStatus, error)
 	ListReplacementOptions(ctx context.Context, userID string, chainID int64) ([]entity.ReplacementOption, error)
 	SelectReplacement(ctx context.Context, tx database.Tx, userID string, chainID, replacementRequestID int64) error

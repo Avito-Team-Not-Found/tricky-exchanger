@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -17,6 +18,7 @@ const (
 	minClusters     = 2
 	maxClusters     = 5
 	confirmationTTL = 24 * time.Hour
+	replacementTTL  = 3 * time.Hour
 )
 
 // Service сохраняет найденные варианты цепочек и выдаёт доступные пользователю цепочки.
@@ -133,7 +135,18 @@ func (s *Service) Get(ctx context.Context, userID string, chainID int64) (entity
 	if err := s.expireDue(ctx); err != nil {
 		return entity.Chain{}, err
 	}
-	return s.repository.Get(ctx, userID, chainID)
+	chain, err := s.repository.Get(ctx, userID, chainID)
+	if !errors.Is(err, entity.ErrChainNotFound) {
+		return chain, err
+	}
+	expired, eventErr := s.repository.HasDeadlineEvent(ctx, userID, chainID)
+	if eventErr != nil {
+		return entity.Chain{}, eventErr
+	}
+	if expired {
+		return entity.Chain{}, entity.ErrChainConfirmationExpired
+	}
+	return entity.Chain{}, err
 }
 
 func (s *Service) expireDue(ctx context.Context) error {
@@ -535,6 +548,57 @@ func (s *Service) Confirm(ctx context.Context, userID string, chainID int64) (en
 	return resultStatus, nil
 }
 
+// Unconfirm withdraws a round-two approval while the chain is still waiting
+// for confirmations. The participant stays in the proposal and may confirm
+// again. During a fast-replacement round any additional withdrawal cancels
+// the round for everyone instead of leaving several simultaneous vacancies.
+func (s *Service) Unconfirm(ctx context.Context, userID string, chainID int64) (entity.ChainStatus, error) {
+	if s.repository == nil || s.transactions == nil {
+		return "", entity.ErrChainRepositoryNotConfigured
+	}
+	if chainID <= 0 {
+		return "", entity.ErrInvalidVoteTarget
+	}
+	result := entity.ChainStatusProposed
+	var expired bool
+	err := s.transactions.WithinTransaction(ctx, func(tx database.Tx) error {
+		status, _, err := s.repository.LockForVote(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if status != entity.ChainStatusProposed {
+			return entity.ErrChainNotProposed
+		}
+		expired, err = s.repository.ExpireProposalIfDue(ctx, tx, chainID)
+		if err != nil || expired {
+			return err
+		}
+		requestID, targetID, err := s.repository.FindParticipantEdge(ctx, tx, chainID, userID)
+		if err != nil {
+			return err
+		}
+		replacing, err := s.repository.IsFrozenReplacement(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if replacing {
+			_, result, err = s.repository.DeclineParticipant(ctx, tx, chainID, requestID, false)
+			return err
+		}
+		if err := s.repository.UnconfirmParticipant(ctx, tx, chainID, requestID, targetID); err != nil {
+			return err
+		}
+		return s.refreshScore(ctx, tx, chainID, entity.ChainStatusProposed, ranker.EventRespond)
+	})
+	if err != nil {
+		return "", err
+	}
+	if expired {
+		return "", entity.ErrChainConfirmationExpired
+	}
+	return result, nil
+}
+
 // Think marks an explicit decision to postpone confirmation. Pending remains
 // reserved for a participant who has not made a round-two decision yet.
 func (s *Service) Think(ctx context.Context, userID string, chainID int64) error {
@@ -608,18 +672,28 @@ func (s *Service) Decline(ctx context.Context, userID string, chainID int64) (bo
 			proposalExpired = true
 			return nil
 		}
-		if status != entity.ChainStatusProposed {
+		if status != entity.ChainStatusProposed && status != entity.ChainStatusFrozen {
 			return entity.ErrChainNotProposed
 		}
 		requestID, _, err := s.repository.FindParticipantEdge(ctx, tx, chainID, userID)
 		if err != nil {
 			return err
 		}
+		frozenReplacement, err := s.repository.IsFrozenReplacement(ctx, tx, chainID)
+		if err != nil {
+			return err
+		}
+		if status == entity.ChainStatusFrozen {
+			if err := s.repository.PrepareFrozenReplacement(ctx, tx, chainID, time.Now().Add(replacementTTL)); err != nil {
+				return err
+			}
+			frozenReplacement = false
+		}
 		approved, err := s.repository.CountApprovedVotersExcept(ctx, tx, chainID, requestID)
 		if err != nil {
 			return err
 		}
-		fastReplacementEligible := approved == chainLength-1
+		fastReplacementEligible := !frozenReplacement && approved == chainLength-1
 		replacementAvailable, resultStatus, err = s.repository.DeclineParticipant(ctx, tx, chainID, requestID, fastReplacementEligible)
 		if err != nil {
 			return err

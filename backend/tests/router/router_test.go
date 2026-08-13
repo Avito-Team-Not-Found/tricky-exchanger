@@ -145,6 +145,9 @@ func (stubItemService) UploadImage(_ context.Context, _ uuid.UUID, _ int64, _ io
 func (stubChainService) Confirm(_ context.Context, _ string, _ int64) (entity.ChainStatus, error) {
 	return entity.ChainStatusProposed, nil
 }
+func (stubChainService) Unconfirm(_ context.Context, _ string, _ int64) (entity.ChainStatus, error) {
+	return entity.ChainStatusProposed, nil
+}
 
 func (stubChainService) Think(_ context.Context, _ string, _ int64) error { return nil }
 
