@@ -15,6 +15,7 @@ import {
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
 
+import { declineMessage } from './declineMessage';
 import { replacementInvited } from './replacementInvited';
 import { replacementStage, type ReplacementStage } from './replacementStage';
 
@@ -30,6 +31,18 @@ export function useReplacementSelection(chainId?: number) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // синхронный барьер повторного PUT: isPending становится true только после ререндера (TZ §7.2)
   const inviteInFlight = useRef(false);
+
+  // Роутер переиспользует элемент между /chains/1/replacement и /chains/2/replacement — тот же
+  // маршрут, другой параметр, размонтирования нет. Оба состояния инициализируются лениво, поэтому
+  // без пересинхронизации приглашение первой цепочки утекало бы во вторую: экран открывался бы
+  // сразу на «Ждём ответа кандидата» с чужой карточкой. Правим прямо в рендере, а не эффектом,
+  // чтобы кадра со старой цепочкой не было вовсе.
+  const [renderedChainId, setRenderedChainId] = useState(chainId);
+  if (renderedChainId !== chainId) {
+    setRenderedChainId(chainId);
+    setInvited(replacementInvited.get(chainId));
+    setSelectedId(null);
+  }
 
   // опрос включается только в состоянии ожидания ответа кандидата (TZ §4) и гаснет сам, как
   // только цепочка ушла из PROPOSED, — дальше экран рендерится по её статусу
@@ -168,15 +181,21 @@ export function useReplacementSelection(chainId?: number) {
 
   const abandonMutation = useMutation({
     mutationFn: () => declineChain(chainId as number),
-    onSuccess: () => {
-      // цепочки больше нет — увидеть её в другом статусе и снять запись уже негде
+    onSuccess: (result) => {
+      // цепочки для нас больше нет — увидеть её в другом статусе и снять запись уже негде
       replacementInvited.clear(chainId);
       queryClient.invalidateQueries({ queryKey: ['chains'] });
       // уходим прямо на список вариантов заявки — расформированная цепочка обязана исчезнуть
       // из него сразу, а не висеть кликабельной минуту (staleTime)
       queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
-      message.success('Цепочка расформирована');
-      // цепочки больше нет — возврат на /chains/{id} дал бы 404 (TZ §3.3)
+      // отказ расформировывает цепочку только когда вакансию действительно некем закрыть:
+      // сервер вправе откатить её в CANDIDATE или оставить PROPOSED под подбор замены,
+      // и тогда обещать «расформирована» нельзя — исход берём из ответа
+      message.success(
+        result.status === 'BROKEN' ? 'Цепочка расформирована' : declineMessage(result.status),
+      );
+      // из цепочки мы вышли при любом исходе, так что /chains/{id} закрыт — 404 на
+      // расформированной и 403 на выжившей (TZ §3.3)
       const requestId = chain?.currentRequestId;
       navigate(requestId ? `/exchange-requests/${requestId}` : '/exchange-requests');
     },
@@ -195,7 +214,7 @@ export function useReplacementSelection(chainId?: number) {
   function abandon() {
     modal.confirm({
       title: 'Отказаться от замены?',
-      content: 'Цепочка будет расформирована, заявки вернутся в поиск',
+      content: 'Вы выйдете из цепочки: если заменить вас будет некем, она расформируется',
       okText: 'Да, отказаться',
       okButtonProps: { danger: true },
       cancelText: 'Нет',

@@ -8,7 +8,6 @@ import {
   confirmChain,
   declineChain,
   invalidateChainQueries,
-  type ChainStatus,
   type ConfirmResult,
   type DeclineResult,
 } from '@entities/chain';
@@ -17,13 +16,7 @@ import { getErrorMessage } from '@shared/lib/errorMessage';
 
 import { FreezeDecisionModal } from '../ui/FreezeDecisionModal';
 
-// Отказ не всегда ломает цепочку: сервер откатывает её в CANDIDATE, оставляет PROPOSED
-// с вакансией под замену или распускает совсем — исход виден только из ответа
-const DECLINE_MESSAGE: Partial<Record<ChainStatus, string>> = {
-  BROKEN: 'Вы вышли из сделки. Цепочка распалась',
-  CANDIDATE: 'Вы вышли из сделки. Цепочка вернулась к сбору откликов',
-  PROPOSED: 'Вы вышли из сделки. Участники подбирают замену',
-};
+import { declineMessage } from './declineMessage';
 
 // Подтверждение участия во втором раунде — единая точка для всех экранов цепочки: модалка
 // «Готовность к сделке» + POST /chains/{id}/confirm. Статус из ответа решает тост: PROPOSED —
@@ -48,7 +41,7 @@ export function useChainConfirm(refetch?: () => void, onNotFound?: () => void) {
   const declineMutation = useMutation<DeclineResult, Error, number>({
     mutationFn: (chainId) => declineChain(chainId),
     onSuccess: (data) => {
-      message.success(DECLINE_MESSAGE[data.status] ?? 'Вы вышли из сделки');
+      message.success(declineMessage(data.status));
       invalidate();
       // цепочки больше нет — остаться на её экране нельзя
       if (data.status === 'BROKEN') {
