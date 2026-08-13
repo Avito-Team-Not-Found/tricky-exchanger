@@ -1,5 +1,3 @@
-import { useRef } from 'react';
-
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { App as AntApp } from 'antd';
 
@@ -13,8 +11,6 @@ import {
 } from '@entities/chain';
 
 import { getErrorMessage } from '@shared/lib/errorMessage';
-
-import { DealSuccessModal } from '../ui/DealSuccessModal';
 
 export type DealFulfillmentKind = 'handoff' | 'receipt';
 
@@ -37,10 +33,8 @@ const RECEIPT_ERROR_MESSAGES: Record<number, string> = {
 // для receipt — заявка звена-источника, чей товар я забираю. Статусы заявок меняются, поэтому
 // инвалидируем и «Мои запросы» (exchange-requests). 409 — не ошибка пользователя: тост + перезагрузка.
 export function useDealFulfillment(chain: Chain) {
-  const { message, modal } = AntApp.useApp();
+  const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
-  // модалка успеха живёт в портале вне дерева роутов и сама уход с экрана не переживает
-  const success = useRef<{ destroy: () => void } | null>(null);
 
   const mutation = useMutation<FulfillmentResult, Error, DealFulfillmentKind>({
     mutationFn: (kind) => {
@@ -53,9 +47,9 @@ export function useDealFulfillment(chain: Chain) {
     onSuccess: (data, kind) => {
       invalidate();
       if (kind === 'receipt') {
-        // на завершённой цепочке экран и так перейдёт в «Обмен завершён» — модалка успеха лишняя
+        // после подтверждения получения экран сам перейдёт в «Вы забрали товар» — модалка успеха
+        // не нужна; на завершённой цепочке он перейдёт в «Обмен завершён»
         if (data.status === 'COMPLETED') message.success('Обмен завершён');
-        else openReceivedModal();
         return;
       }
       message.success('Отправка подтверждена');
@@ -74,28 +68,6 @@ export function useDealFulfillment(chain: Chain) {
 
   function invalidate() {
     invalidateChainQueries(queryClient);
-  }
-
-  function closeReceivedModal() {
-    success.current?.destroy();
-    success.current = null;
-  }
-
-  function openReceivedModal() {
-    success.current = modal.confirm({
-      icon: null,
-      centered: true,
-      width: 311,
-      content: (
-        <DealSuccessModal
-          emoji="🎉"
-          title="Получение подтверждено"
-          text="Спасибо! Мы отметили, что вы забрали товар. Обмен завершится, как только все участники подтвердят получение."
-          onClose={closeReceivedModal}
-        />
-      ),
-      footer: null,
-    });
   }
 
   function run(kind: DealFulfillmentKind) {

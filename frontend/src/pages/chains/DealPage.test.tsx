@@ -182,7 +182,26 @@ describe('DealPage', () => {
     expect(await screen.findByText('детали цепочки')).toBeInTheDocument();
   });
 
-  it('shows the received confirmation modal after the receipt without a confirm dialog', async () => {
+  it('shows the received screen with the confirmation text on the page, not in a modal', async () => {
+    // источник DONE — ветка received-waiting «Вы забрали товар», куда экран переходит после receipt
+    const chain = makeChain('IN_PROGRESS');
+    chain.participants[1].requestStatus = 'DONE';
+    mockedUseChain.mockReturnValue(queryOk(chain));
+
+    renderDealPage();
+
+    expect(screen.getByText('Вы забрали товар')).toBeInTheDocument();
+    // текст подтверждения выведен на страницу, а не в модалку
+    expect(
+      screen.getByText(
+        /Спасибо! Мы отметили, что вы забрали товар\. Обмен завершится, как только все участники/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('confirms the receipt without a confirm dialog or a modal', async () => {
     mockedReceipt.mockResolvedValue({ chainId: 1, requestId: 202, status: 'IN_PROGRESS' });
     mockedUseChain.mockReturnValue(queryOk(makeChain('IN_PROGRESS')));
     const user = userEvent.setup();
@@ -194,7 +213,8 @@ describe('DealPage', () => {
     await waitFor(() => expect(mockedReceipt).toHaveBeenCalledWith(1, 202));
     // подтверждение получения не требуется — «Забрать товар?» не показывается
     expect(screen.queryByText('Забрать товар?')).not.toBeInTheDocument();
-    expect(await screen.findByText('Получение подтверждено')).toBeInTheDocument();
+    // модалки успеха больше нет — экран сам перейдёт в «Вы забрали товар» после перечитанной цепочки
+    expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
   });
 
   it('opens the receipt statuses from the details button on the received screen', async () => {

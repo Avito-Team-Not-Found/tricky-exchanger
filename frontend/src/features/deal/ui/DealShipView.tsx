@@ -10,6 +10,7 @@ import { useDealFulfillment } from '../model/useDealFulfillment';
 import { useDealPhoto } from '../model/useDealPhoto';
 import { usePickupPoint } from '../model/usePickupPoint';
 
+import { DealBarcode } from './DealBarcode';
 import { DealItemSwap } from './DealItemSwap';
 import { DealPickupCard } from './DealPickupCard';
 import { DealSafetyBanner } from './DealSafetyBanner';
@@ -93,6 +94,8 @@ export function DealShipView({ chain, deadlineAt, onOpenDetails }: DealShipViewP
         aria-hidden
         tabIndex={-1}
       />
+
+      <DealBarcode chainId={chain.id} kind="handoff" />
 
       {deadlineAt ? (
         <p

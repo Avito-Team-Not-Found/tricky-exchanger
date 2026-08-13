@@ -13,6 +13,7 @@ import { useDealFulfillment } from '../model/useDealFulfillment';
 import { useDispute } from '../model/useDispute';
 import { usePickupPoint } from '../model/usePickupPoint';
 
+import { DealBarcode } from './DealBarcode';
 import { DealDisputeModal } from './DealDisputeModal';
 import { DealItemSwap } from './DealItemSwap';
 import { DealPickupCard } from './DealPickupCard';
@@ -192,6 +193,8 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
 
   return (
     <div className="deal-transit">
+      <DealBarcode chainId={chain.id} kind="receipt" />
+
       <div className="deal-hero deal-hero--success">
         <p className="deal-hero__icon" aria-hidden>
           ✅

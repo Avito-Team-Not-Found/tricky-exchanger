@@ -23,11 +23,11 @@ export function DealDoneView({ state, onOpenDetails, onGoToRequests }: DealDoneV
           {completed ? '✅' : '🎉'}
         </p>
         <p className="deal-hero__title">{completed ? 'Обмен завершён' : 'Вы забрали товар'}</p>
-        {completed ? null : (
-          <p className="deal-hero__text">
-            Обмен завершится, когда все участники подтвердят получение
-          </p>
-        )}
+        <p className="deal-hero__text">
+          {completed
+            ? 'Все участники подтвердили получение. Ваш товар передан, а вы получили новый.'
+            : 'Спасибо! Мы отметили, что вы забрали товар. Обмен завершится, как только все участники подтвердят получение.'}
+        </p>
       </div>
 
       <div className="deal-actions">
