@@ -101,7 +101,7 @@ internal/
   repository/<feature>/   # доступ к БД (postgres), реализует контракты из service/<feature>
   service/<feature>/      # бизнес-логика; contracts.go — интерфейсы того, что нужно от repository/infrastructure
   handler/<feature>/      # HTTP-хендлеры (gin); contracts.go — интерфейс того, что нужно от service
-  infrastructure/         # технические клиенты без бизнес-логики (mailer, codestore, jwt, embeddings, pgvector)
+  infrastructure/         # технические клиенты без бизнес-логики (mailer, codestore, jwt, embeddings)
   middleware/             # сквозные gin-мидлвари, не привязанные к одной фиче (сейчас — Auth, проверка JWT)
   api/                    # общий формат HTTP-ответа/ошибки (internal/api/response.go)
   core/                   # конфиг, логгер, БД-пул, роутер

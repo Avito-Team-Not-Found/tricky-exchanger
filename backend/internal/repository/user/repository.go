@@ -12,7 +12,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
-// Repository — postgres-реализация доступа к таблице users.
 type Repository struct {
 	pool *pgxpool.Pool
 }
@@ -21,7 +20,7 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-// Create сохраняет нового пользователя. При дублировании email возвращает repository.ErrDuplicateKey.
+// Create — ErrDuplicateKey при занятом email.
 func (r *Repository) Create(ctx context.Context, user *entity.User) error {
 	const q = `
 		INSERT INTO users (id, full_name, email, password_hash, created_at)
@@ -39,7 +38,6 @@ func (r *Repository) Create(ctx context.Context, user *entity.User) error {
 	return nil
 }
 
-// GetByEmail возвращает пользователя по email. Если пользователь не найден — repository.ErrNotFound.
 func (r *Repository) GetByEmail(ctx context.Context, email string) (*entity.User, error) {
 	const q = `
 		SELECT id, full_name, email, password_hash, created_at
@@ -62,7 +60,6 @@ func (r *Repository) GetByEmail(ctx context.Context, email string) (*entity.User
 	return &u, nil
 }
 
-// GetByID возвращает пользователя по ID. Если пользователь не найден — repository.ErrNotFound.
 func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*entity.User, error) {
 	const q = `
 		SELECT id, full_name, email, password_hash, created_at
@@ -85,8 +82,7 @@ func (r *Repository) GetByID(ctx context.Context, id uuid.UUID) (*entity.User, e
 	return &u, nil
 }
 
-// UpdatePassword перезаписывает password_hash пользователя. Если пользователь
-// не найден — repository.ErrNotFound.
+// UpdatePassword — ErrNotFound, если пользователя нет.
 func (r *Repository) UpdatePassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
 	const q = `
 		UPDATE users

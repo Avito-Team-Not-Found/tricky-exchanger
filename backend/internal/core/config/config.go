@@ -90,6 +90,55 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	vectorDim, err := envIntOrDefault("VECTOR_DIM", 384)
+	if err != nil {
+		return nil, err
+	}
+	embeddingTimeout, err := envDurationOrDefault("EMBEDDING_TIMEOUT", 2*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	maxInputLength, err := envIntOrDefault("MAX_INPUT_LENGTH", 1500)
+	if err != nil {
+		return nil, err
+	}
+	matchingTopK, err := envIntOrDefault("MATCHING_TOPK", 20)
+	if err != nil {
+		return nil, err
+	}
+	matchingThreshold, err := envFloatOrDefault("MATCHING_THRESHOLD", 0.5)
+	if err != nil {
+		return nil, err
+	}
+	clusterTopK, err := envIntOrDefault("CLUSTER_TOPK", 50)
+	if err != nil {
+		return nil, err
+	}
+	clusterThreshold, err := envFloatOrDefault("CLUSTER_SIMILARITY_THRESHOLD", 0.9)
+	if err != nil {
+		return nil, err
+	}
+	clusterDirectionMargin, err := envFloatOrDefault("CLUSTER_DIRECTION_MARGIN", 0.05)
+	if err != nil {
+		return nil, err
+	}
+	cycleOutgoingK, err := envIntOrDefault("CYCLE_OUTGOING_K", 20)
+	if err != nil {
+		return nil, err
+	}
+	cycleMaxDrafts, err := envIntOrDefault("CYCLE_MAX_DRAFTS", 10)
+	if err != nil {
+		return nil, err
+	}
+	cycleMinAverageScore, err := envFloatOrDefault("CYCLE_MIN_AVERAGE_SCORE", 0.5)
+	if err != nil {
+		return nil, err
+	}
+	cycleMaxScoreGap, err := envFloatOrDefault("CYCLE_MAX_SCORE_GAP", 1)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Config{
 		DatabaseURL: dbURL,
 		ServerPort:  envOrDefault("SERVER_PORT", "8080"),
@@ -107,20 +156,20 @@ func Load() (*Config, error) {
 
 		EmbeddingProvider: envOrDefault("EMBEDDING_PROVIDER", "stub"),
 		TEIURL:            envOrDefault("TEI_URL", "http://tei:80"),
-		VectorDim:         envIntOrDefault("VECTOR_DIM", 384),
-		EmbeddingTimeout:  envDurationOrDefault("EMBEDDING_TIMEOUT", 2*time.Second),
-		MaxInputLength:    envIntOrDefault("MAX_INPUT_LENGTH", 1500),
+		VectorDim:         vectorDim,
+		EmbeddingTimeout:  embeddingTimeout,
+		MaxInputLength:    maxInputLength,
 
-		MatchingTopK:           envIntOrDefault("MATCHING_TOPK", 20),
-		MatchingThreshold:      envFloatOrDefault("MATCHING_THRESHOLD", 0.5),
-		ClusterTopK:            envIntOrDefault("CLUSTER_TOPK", 50),
-		ClusterThreshold:       envFloatOrDefault("CLUSTER_SIMILARITY_THRESHOLD", 0.9),
-		ClusterDirectionMargin: envFloatOrDefault("CLUSTER_DIRECTION_MARGIN", 0.05),
+		MatchingTopK:           matchingTopK,
+		MatchingThreshold:      matchingThreshold,
+		ClusterTopK:            clusterTopK,
+		ClusterThreshold:       clusterThreshold,
+		ClusterDirectionMargin: clusterDirectionMargin,
 		VectorMetric:           envOrDefault("VECTOR_METRIC", "cosine"),
-		CycleOutgoingK:         envIntOrDefault("CYCLE_OUTGOING_K", 20),
-		CycleMaxDrafts:         envIntOrDefault("CYCLE_MAX_DRAFTS", 10),
-		CycleMinAverageScore:   envFloatOrDefault("CYCLE_MIN_AVERAGE_SCORE", 0.5),
-		CycleMaxScoreGap:       envFloatOrDefault("CYCLE_MAX_SCORE_GAP", 1),
+		CycleOutgoingK:         cycleOutgoingK,
+		CycleMaxDrafts:         cycleMaxDrafts,
+		CycleMinAverageScore:   cycleMinAverageScore,
+		CycleMaxScoreGap:       cycleMaxScoreGap,
 
 		RankerMode:      rankerMode,
 		RankerModelPath: envOrDefault("RANKER_MODEL_PATH", "pkg/utils/ranker/models/ranker_v1.txt"),
@@ -142,31 +191,44 @@ func envOrDefault(key, fallback string) string {
 	return fallback
 }
 
-func envIntOrDefault(key string, fallback int) int {
-	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
+// envIntOrDefault возвращает fallback только если переменная не задана.
+// Невалидное значение — ошибка старта.
+func envIntOrDefault(key string, fallback int) (int, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
 	}
-	return fallback
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q is not a valid int: %w", key, v, err)
+	}
+	return n, nil
 }
 
-func envDurationOrDefault(key string, fallback time.Duration) time.Duration {
-	if v := os.Getenv(key); v != "" {
-		if d, err := time.ParseDuration(v); err == nil {
-			return d
-		}
+// envDurationOrDefault — как envIntOrDefault, для time.Duration.
+func envDurationOrDefault(key string, fallback time.Duration) (time.Duration, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
 	}
-	return fallback
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q is not a valid duration: %w", key, v, err)
+	}
+	return d, nil
 }
 
-func envFloatOrDefault(key string, fallback float64) float64 {
-	if v := os.Getenv(key); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f
-		}
+// envFloatOrDefault — как envIntOrDefault, для float64.
+func envFloatOrDefault(key string, fallback float64) (float64, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
 	}
-	return fallback
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q is not a valid float: %w", key, v, err)
+	}
+	return f, nil
 }
 
 const (

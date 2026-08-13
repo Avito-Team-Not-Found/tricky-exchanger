@@ -3,9 +3,10 @@ package user_test
 import (
 	"context"
 	"errors"
-	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/codestore"
 	"testing"
 	"time"
+
+	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/codestore"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"

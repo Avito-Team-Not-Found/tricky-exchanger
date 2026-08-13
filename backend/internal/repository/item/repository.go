@@ -1,4 +1,4 @@
-// Package item содержит postgres-реализацию доступа к таблице items.
+// Package item — PostgreSQL-доступ к items.
 package item
 
 import (
@@ -15,17 +15,14 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/repository"
 )
 
-// Postgres — postgres-реализация доступа к таблице items.
 type Postgres struct {
 	pool *pgxpool.Pool
 }
 
-// NewRepository создаёт репозиторий товаров на базе пула PostgreSQL.
 func NewRepository(pool *pgxpool.Pool) *Postgres {
 	return &Postgres{pool: pool}
 }
 
-// Create сохраняет новый товар. Заполняет ID, Status, CreatedAt, UpdatedAt в переданной структуре.
 func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 	const q = `
 		INSERT INTO items (owner_user_id, title, description, category, embedding, status)
@@ -48,8 +45,7 @@ func (r *Postgres) Create(ctx context.Context, item *entity.Item) error {
 	return nil
 }
 
-// GetByID возвращает товар по идентификатору вне зависимости от владельца —
-// проверку прав доступа выполняет вызывающий слой (service).
+// GetByID — без фильтра по владельцу (ownership в сервисе).
 func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) {
 	const q = `
 		SELECT id, owner_user_id, title, description, COALESCE(category, ''), image_url, status, created_at, updated_at
@@ -71,8 +67,6 @@ func (r *Postgres) GetByID(ctx context.Context, id int64) (*entity.Item, error) 
 	return item, nil
 }
 
-// ListByOwner возвращает страницу товаров владельца (включая архивные — это его личный список)
-// и общее количество товаров, отсортированные по дате создания (новые сверху).
 func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pageSize int) ([]*entity.Item, int, error) {
 	const q = `
 		SELECT id, owner_user_id, title, description, COALESCE(category, ''), image_url, status, created_at, updated_at,
@@ -118,8 +112,6 @@ func (r *Postgres) ListByOwner(ctx context.Context, ownerID uuid.UUID, page, pag
 	return items, total, nil
 }
 
-// Update перезаписывает редактируемые поля товара (title/description/category/status)
-// и обновляет updated_at. Если товар не найден — repository.ErrNotFound.
 func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 	const q = `
 		UPDATE items
@@ -151,8 +143,7 @@ func (r *Postgres) Update(ctx context.Context, item *entity.Item) error {
 	return nil
 }
 
-// UpdateStatus меняет статус товара (используется для архивации). Если товар
-// не найден — repository.ErrNotFound.
+// UpdateStatus — ErrNotFound, если товара нет.
 func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status entity.ItemStatus) error {
 	const q = `
 		UPDATE items
@@ -175,8 +166,7 @@ func (r *Postgres) UpdateStatus(ctx context.Context, id int64, status entity.Ite
 	return nil
 }
 
-// UpdateImageURL сохраняет ссылку на загруженное в MinIO фото товара. Если товар
-// не найден — repository.ErrNotFound.
+// UpdateImageURL — ErrNotFound, если товара нет.
 func (r *Postgres) UpdateImageURL(ctx context.Context, id int64, url string) error {
 	const q = `
 		UPDATE items
@@ -199,7 +189,6 @@ func (r *Postgres) UpdateImageURL(ctx context.Context, id int64, url string) err
 	return nil
 }
 
-// CategoryExists проверяет, что категория с указанным ID существует в справочнике.
 func (r *Postgres) CategoryExists(ctx context.Context, categoryID int64) (bool, error) {
 	const q = `SELECT EXISTS (SELECT 1 FROM categories WHERE id = $1)`
 
@@ -214,9 +203,7 @@ func (r *Postgres) CategoryExists(ctx context.Context, categoryID int64) (bool, 
 	return exists, nil
 }
 
-// HasActiveHardReservation сообщает, есть ли у товара «живая» заявка в статусах
-// мягкой/жёсткой блокировки (IN_PROPOSAL / LOCKED). Такой товар нельзя
-// редактировать, архивировать или менять ему фото.
+// HasActiveHardReservation — заявка в IN_PROPOSAL/LOCKED (мутации товара запрещены).
 func (r *Postgres) HasActiveHardReservation(ctx context.Context, itemID int64) (bool, error) {
 	const q = `
 		SELECT EXISTS (

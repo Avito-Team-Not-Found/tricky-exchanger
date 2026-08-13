@@ -12,10 +12,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/internal/api"
 )
 
-const contextUserIDKey = "userID"
-
-// TokenParser — то, что мидлвари ожидают от инфраструктуры токенов.
-// Реализация лежит в internal/infrastructure/token.
 type TokenParser interface {
 	Parse(tokenStr string) (uuid.UUID, error)
 }
@@ -41,7 +37,7 @@ func Auth(parser TokenParser) gin.HandlerFunc {
 			return
 		}
 
-		c.Set(contextUserIDKey, userID)
+		c.Set(api.UserIDContextKey, userID)
 		c.Next()
 	}
 }
@@ -49,7 +45,7 @@ func Auth(parser TokenParser) gin.HandlerFunc {
 // UserID достаёт userID, положенный мидлварью Auth. ok=false означает, что
 // мидлварь Auth не применялась к этому маршруту — программная ошибка роутинга.
 func UserID(c *gin.Context) (uuid.UUID, bool) {
-	v, exists := c.Get(contextUserIDKey)
+	v, exists := c.Get(api.UserIDContextKey)
 	if !exists {
 		return uuid.Nil, false
 	}

@@ -1,8 +1,6 @@
-// Package api содержит общие для всех фич хелперы отправки HTTP-ответа.
+// Package api — единый формат HTTP-ответов:
 //
-// Формат ошибок единый для всего бэкенда (см. PROJECT.md §7.3):
-//
-//	{"error": "человекочитаемое сообщение", "code": 400}
+//	{"error": "...", "code": 400}
 package api
 
 import "github.com/gin-gonic/gin"

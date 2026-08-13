@@ -9,8 +9,8 @@ import (
 var ErrInvalidChainState = errors.New("invalid chain state: Count must be >= 2 and ApprovedVotes must be in [0, Count]")
 
 // ChainStateStatus — этап жизненного цикла цепочки для скоринга.
-// Свой изолированный enum: Ranker отвязан от PR-типов (entity.chain_status пуст),
-// при интеграции адаптер маппит PR-статус -> ChainStateStatus.
+// Свой изолированный enum: Ranker не зависит от entity.ChainStatus,
+// при интеграции адаптер маппит статус цепочки -> ChainStateStatus.
 type ChainStateStatus string
 
 const (

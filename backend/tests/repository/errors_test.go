@@ -75,3 +75,17 @@ func TestDBErrToErr_UnknownCode(t *testing.T) {
 		t.Fatal("expected ok=false for unknown SQLSTATE")
 	}
 }
+
+func TestMapDBErr(t *testing.T) {
+	if repository.MapDBErr(nil) != nil {
+		t.Fatal("MapDBErr(nil) must be nil")
+	}
+	raw := errors.New("boom")
+	if got := repository.MapDBErr(raw); got != raw {
+		t.Fatalf("non-pg error must pass through, got %v", got)
+	}
+	mapped := repository.MapDBErr(&pgconn.PgError{Code: "23505", Message: "dup"})
+	if !errors.Is(mapped, repository.ErrDuplicateKey) {
+		t.Fatalf("got %v", mapped)
+	}
+}

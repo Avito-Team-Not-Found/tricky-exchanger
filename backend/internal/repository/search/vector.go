@@ -5,9 +5,7 @@ import (
 	"strings"
 )
 
-// embedLiteral превращает вектор []float32 в строковый литерал pgvector "[0.1,0.2,...]".
-// pgx передаёт его как text-параметр, а PostgreSQL неявно приводит к vector.
-// Формат вывода максимально компактен (без хвостовых нулей), чтобы не раздувать запрос.
+// embedLiteral — компактный литерал pgvector "[0.1,0.2,...]" для text-параметра.
 func embedLiteral(vector []float32) string {
 	if len(vector) == 0 {
 		return "[]"
@@ -18,5 +16,3 @@ func embedLiteral(vector []float32) string {
 	}
 	return "[" + strings.Join(parts, ",") + "]"
 }
-
-//TODO: Снести, зачем целый файл ради 1 функции??

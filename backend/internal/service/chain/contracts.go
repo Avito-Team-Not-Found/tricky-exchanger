@@ -9,7 +9,6 @@ import (
 	"github.com/Avito-Team-Not-Found/tricky-exchanger/pkg/utils/ranker"
 )
 
-// Repository описывает хранилище, необходимое сервису цепочек.
 type Repository interface {
 	SaveCandidates(ctx context.Context, tx database.Tx, drafts []entity.ChainDraft) error
 	List(ctx context.Context, userID string) ([]entity.Chain, error)
