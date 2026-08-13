@@ -86,12 +86,13 @@ func TestObservationRanges(t *testing.T) {
 }
 
 // TestFunnelEdgeCases: направление влияния латенток, без точных вероятностей.
-// Низкий r повышает риск freeze_fail; высокий pop → крупные кластеры → чаще замена.
+// Низкий min(r) чаще даёт no_show; fraud чаще item_mismatch; высокий pop → крупные кластеры → чаще замена.
 func TestFunnelEdgeCases(t *testing.T) {
 	rows := Generate(7, 500)
 	chains := firstRowsByChain(rows)
 
 	var lowRComp, lowRFrozen, highRComp, highRFrozen int
+	var lowMinRNoShow, lowMinRFrozen, highMinRNoShow, highMinRFrozen int
 	var lowPopSize, highPopSize float64
 	var lowPopN, highPopN int
 	var lowPopReplOK, lowPopReplTry, highPopReplOK, highPopReplTry int
@@ -102,6 +103,7 @@ func TestFunnelEdgeCases(t *testing.T) {
 			t.Fatal(err)
 		}
 		meanR := meanFloat(o.R)
+		minR := minFloat(o.R)
 		meanSize := meanInt(o.Sizes)
 
 		if o.Pop <= 0.3 {
@@ -113,7 +115,7 @@ func TestFunnelEdgeCases(t *testing.T) {
 			highPopN++
 		}
 
-		reachedFrozen := o.Reason == "completed" || o.Reason == "freeze_fail"
+		reachedFrozen := o.Reason == "completed" || o.Reason == "no_show" || o.Reason == "item_mismatch"
 		if reachedFrozen {
 			if meanR <= 0.4 {
 				lowRFrozen++
@@ -127,9 +129,21 @@ func TestFunnelEdgeCases(t *testing.T) {
 					highRComp++
 				}
 			}
+			if minR <= 0.35 {
+				lowMinRFrozen++
+				if o.Reason == "no_show" {
+					lowMinRNoShow++
+				}
+			}
+			if minR >= 0.6 {
+				highMinRFrozen++
+				if o.Reason == "no_show" {
+					highMinRNoShow++
+				}
+			}
 		}
 
-		attemptedRepl := o.Replaced || o.Reason == "confirm_timeout"
+		attemptedRepl := o.Replaced || o.Reason == "replacement_fail"
 		if attemptedRepl {
 			if o.Pop <= 0.3 {
 				lowPopReplTry++
@@ -163,6 +177,15 @@ func TestFunnelEdgeCases(t *testing.T) {
 		t.Fatalf("high r should complete more often after FROZEN: P(low r)=%.3f P(high r)=%.3f", pLow, pHigh)
 	}
 
+	if lowMinRFrozen < 8 || highMinRFrozen < 8 {
+		t.Fatalf("not enough min(r) frozen tails: low=%d high=%d", lowMinRFrozen, highMinRFrozen)
+	}
+	pNoShowLow := float64(lowMinRNoShow) / float64(lowMinRFrozen)
+	pNoShowHigh := float64(highMinRNoShow) / float64(highMinRFrozen)
+	if pNoShowLow <= pNoShowHigh {
+		t.Fatalf("low min(r) should no_show more often: P(low)=%.3f P(high)=%.3f", pNoShowLow, pNoShowHigh)
+	}
+
 	if lowPopReplTry < 5 || highPopReplTry < 5 {
 		t.Fatalf("not enough replacement attempts: lowPop=%d highPop=%d", lowPopReplTry, highPopReplTry)
 	}
@@ -171,6 +194,38 @@ func TestFunnelEdgeCases(t *testing.T) {
 	if pReplHighPop <= pReplLowPop {
 		t.Fatalf("high pop should replace more often: P(low pop)=%.3f P(high pop)=%.3f", pReplLowPop, pReplHighPop)
 	}
+
+	fraudRows := Generate(19, 2500)
+	var fraudIP, fraudMismatch, cleanIP, cleanMismatch int
+	for _, row := range firstRowsByChain(fraudRows) {
+		o, err := parseOracleRow(row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reachedIP := o.Reason == "completed" || o.Reason == "item_mismatch"
+		if !reachedIP {
+			continue
+		}
+		if o.Fraud {
+			fraudIP++
+			if o.Reason == "item_mismatch" {
+				fraudMismatch++
+			}
+		} else {
+			cleanIP++
+			if o.Reason == "item_mismatch" {
+				cleanMismatch++
+			}
+		}
+	}
+	if fraudIP < 8 || cleanIP < 20 {
+		t.Fatalf("not enough IN_PROGRESS tails for fraud: fraud=%d clean=%d", fraudIP, cleanIP)
+	}
+	pFraudMM := float64(fraudMismatch) / float64(fraudIP)
+	pCleanMM := float64(cleanMismatch) / float64(cleanIP)
+	if pFraudMM <= pCleanMM {
+		t.Fatalf("fraud should item_mismatch more often: P(fraud)=%.3f P(clean)=%.3f", pFraudMM, pCleanMM)
+	}
 }
 
 // TestRowEmissionConsistency: строки одной цепи — согласованный слепок воронки.
@@ -178,13 +233,14 @@ func TestRowEmissionConsistency(t *testing.T) {
 	rows := Generate(42, 80)
 	byChain := groupRows(rows)
 	proposedOK := map[string]bool{
-		"PROPOSED": true, "FROZEN": true, "COMPLETED": true, "BROKEN": true,
+		"PROPOSED": true, "FROZEN": true, "IN_PROGRESS": true, "COMPLETED": true, "BROKEN": true,
 	}
 	frozenOK := map[string]bool{
-		"FROZEN": true, "COMPLETED": true, "BROKEN": true,
+		"FROZEN": true, "IN_PROGRESS": true, "COMPLETED": true, "BROKEN": true,
 	}
 	pIdx := featIndex("progress")
 	hIdx := featIndex("hours_since_created")
+	hsIdx := featIndex("hours_in_stage")
 	vIdx := featIndex("vote_velocity")
 	ipIdx := featIndex("is_proposed")
 	ifIdx := featIndex("is_frozen")
@@ -246,7 +302,50 @@ func TestRowEmissionConsistency(t *testing.T) {
 				t.Fatalf("chain %d RESPOND: vote_velocity=%v, want votes/hours > 0 (progress=%v hours=%v)",
 					chainID, velocity, progress, hours)
 			}
+			if row.event == "IN_PROGRESS" || row.stage == "IN_PROGRESS" {
+				if isFrozen != 1 {
+					t.Fatalf("chain %d IN_PROGRESS: is_frozen=%v, want 1", chainID, isFrozen)
+				}
+				if isProposed != 1 {
+					t.Fatalf("chain %d IN_PROGRESS: is_proposed=%v, want 1", chainID, isProposed)
+				}
+				if progress != 1 {
+					t.Fatalf("chain %d IN_PROGRESS: progress=%v, want 1", chainID, progress)
+				}
+				if velocity != 0 {
+					t.Fatalf("chain %d IN_PROGRESS: vote_velocity=%v, want 0", chainID, velocity)
+				}
+				hoursStage, err := parseFloat(row.feats[hsIdx])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if hoursStage < -1e-9 {
+					t.Fatalf("chain %d IN_PROGRESS: hours_in_stage=%v", chainID, hoursStage)
+				}
+			}
 		}
+	}
+}
+
+func TestExtractFeaturesInProgressIsFrozen(t *testing.T) {
+	st := ranker.ChainState{
+		Count:                   3,
+		Stage:                   ranker.ChainStateInProgress,
+		Event:                   ranker.EventConfirm,
+		EdgeCosines:             []float64{0.2, 0.2, 0.2},
+		ParticipantReliability:  []float64{0.75, 0.75, 0.75},
+		ParticipantClusterSizes: []int{2, 2, 2},
+		ApprovedVotes:           3,
+	}
+	f, err := ranker.ExtractFeatures(st, ranker.NewRankerConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.IsFrozen != 1 || f.IsProposed != 1 {
+		t.Fatalf("IN_PROGRESS flags proposed=%d frozen=%d, want 1/1", f.IsProposed, f.IsFrozen)
+	}
+	if math.Abs(f.Progress-1) > 1e-9 {
+		t.Fatalf("IN_PROGRESS progress=%v, want 1", f.Progress)
 	}
 }
 

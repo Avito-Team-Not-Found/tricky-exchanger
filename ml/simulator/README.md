@@ -4,29 +4,28 @@
 Пишет датасет в формате будущих строк `chain_events_log` для обучения LightGBM.
 В БД не ходит, бэкенд не трогает: только `pkg/utils/ranker` и стандартная библиотека.
 
-Каждая цепь проходит воронку (отклики → предложение → заморозка → исполнение)
-и эмитит несколько строк-снимков: `ADD`, опционально `RESPOND`, `PROPOSED`, `FROZEN`.
+Каждая цепь проходит воронку (отклики → предложение → заморозка → отправка на ПВЗ → исполнение)
+и эмитит несколько строк-снимков: `ADD`, опционально `RESPOND`, `PROPOSED`, `FROZEN`, при отправке `IN_PROGRESS`.
+После FROZEN два риска: `no_show` (не принесли на ПВЗ) и `item_mismatch` (не совпало / fraud на ПВЗ).
 `formula_score` считается той же формулой, что в проде. Латентки (`r`, `m`, `fraud`, …)
 попадают только в `raw_json`, в фичи обучения не идут.
 
 ## Запуск
 
-Из корня репозитория:
+Из каталога `ml/simulator` (здесь лежит `go.mod`):
 
 ```bash
-go run ./ml/simulator \
-  -seed 42 \
-  -n 10000 \
-  -out ml/data/synthetic_v1.csv \
-  -report ml/reports/sim_v1.md
+cd ml/simulator
+go test . -v
+go run . -seed 42 -n 10000 -out ../data/synthetic_v1.csv -report ../reports/sim_v1.md
 ```
 
 | флаг | смысл | default |
 |---|---|---|
 | `-seed` | seed RNG; один seed → байт-в-байт тот же CSV | `42` |
 | `-n` | число цепей | `10000` |
-| `-out` | путь к CSV | `ml/data/synthetic_v1.csv` |
-| `-report` | путь к отчёту самопроверок | `ml/reports/sim_v1.md` |
+| `-out` | путь к CSV | `../data/synthetic_v1.csv` |
+| `-report` | путь к отчёту самопроверок | `../reports/sim_v1.md` |
 
 `-report` **полностью перезаписывает** markdown (не дописывает). Если самопроверки
 упали, CSV не пишется, report — пишется.
@@ -36,7 +35,8 @@ go run ./ml/simulator \
 ## Тесты
 
 ```bash
-go test ./ml/simulator -v
+cd ml/simulator
+go test . -v
 ```
 
 Юнит-тесты быстрые, без БД и сети. Не проверяют точные вероятности воронки —

@@ -11,17 +11,19 @@ import (
 )
 
 const (
-	windowHours     = 48.0
-	relObs          = 0.75
-	pFraud          = 0.03
-	lambdaResponse  = 2.0 // Exp(λ·m_i): λ не задан в ТЗ; большой λ → окно 48ч почти не режет воронку
-	lambdaConfirm   = 2.0
-	pEmitRespond    = 0.5
-	pReplHigh       = 0.6
-	pReplLow        = 0.1
-	epsSigma        = 0.3
-	cosNoiseSigma   = 0.12
-	sizeNoiseOffset = 1.5 // «шум» в Poisson(pop·3+шум): поднимает P(min_size≥2) и долю замен
+	windowHours      = 48.0
+	relObs           = 0.75
+	pFraud           = 0.03
+	lambdaResponse   = 2.0 // Exp(λ·m_i): λ не задан в ТЗ; большой λ → окно 48ч почти не режет воронку
+	lambdaConfirm    = 2.0
+	lambdaInProgress = 0.25 // Exp(λ) delay FROZEN→IN_PROGRESS; mean 4ч, клип 24ч
+	shipWindowHours  = 24.0
+	pEmitRespond     = 0.5
+	pReplHigh        = 0.6
+	pReplLow         = 0.1
+	epsSigma         = 0.3
+	cosNoiseSigma    = 0.12
+	sizeNoiseOffset  = 1.5 // «шум» в Poisson(pop·3+шум): поднимает P(min_size≥2) и долю замен
 )
 
 // Фиксированный каталог: обход только по индексу, без map.
@@ -32,43 +34,45 @@ var categoryCatalog = []string{
 }
 
 type oracle struct {
-	Count    int       `json:"count"`
-	Pop      float64   `json:"pop"`
-	Offered  []string  `json:"offered"`
-	Wanted   []string  `json:"wanted"`
-	Sizes    []int     `json:"sizes"`
-	R        []float64 `json:"r"`
-	M        []float64 `json:"m"`
-	CE       []float64 `json:"c_e"`
-	CosE     []float64 `json:"cos_e"`
-	Fraud    bool      `json:"fraud"`
-	Epsilon  float64   `json:"epsilon"`
-	Reason   string    `json:"reason"`
-	TProp    float64   `json:"t_prop"`
-	TFrozen  float64   `json:"t_frozen"`
-	Replaced bool      `json:"replaced"`
+	Count       int       `json:"count"`
+	Pop         float64   `json:"pop"`
+	Offered     []string  `json:"offered"`
+	Wanted      []string  `json:"wanted"`
+	Sizes       []int     `json:"sizes"`
+	R           []float64 `json:"r"`
+	M           []float64 `json:"m"`
+	CE          []float64 `json:"c_e"`
+	CosE        []float64 `json:"cos_e"`
+	Fraud       bool      `json:"fraud"`
+	Epsilon     float64   `json:"epsilon"`
+	Reason      string    `json:"reason"`
+	TProp       float64   `json:"t_prop"`
+	TFrozen     float64   `json:"t_frozen"`
+	TInProgress float64   `json:"t_inprogress"`
+	Replaced    bool      `json:"replaced"`
 }
 
 type chainSim struct {
-	id       int
-	count    int
-	pop      float64
-	offered  []string
-	wanted   []string
-	sizes    []int
-	r        []float64
-	m        []float64
-	cE       []float64
-	cosE     []float64
-	fraud    bool
-	epsilon  float64
-	label    string
-	reason   string
-	tProp    float64
-	tFrozen  float64
-	tConfWin float64
-	replaced bool
-	arrived  []float64 // времена пришедших откликов, отсортированы
+	id          int
+	count       int
+	pop         float64
+	offered     []string
+	wanted      []string
+	sizes       []int
+	r           []float64
+	m           []float64
+	cE          []float64
+	cosE        []float64
+	fraud       bool
+	epsilon     float64
+	label       string
+	reason      string
+	tProp       float64
+	tFrozen     float64
+	tInProgress float64
+	tConfWin    float64
+	replaced    bool
+	arrived     []float64 // времена пришедших откликов, отсортированы
 }
 
 type csvRow struct {
@@ -101,7 +105,7 @@ func newGenerator(seed int64) *generator {
 // Повторный вызов с тем же seed возвращает идентичный датасет.
 func Generate(seed int64, n int) []csvRow {
 	g := newGenerator(seed)
-	rows := make([]csvRow, 0, n*3)
+	rows := make([]csvRow, 0, n*4)
 	for i := 1; i <= n; i++ {
 		ch := g.simulateChain(i)
 		rows = append(rows, g.emitRows(ch)...)
@@ -220,7 +224,7 @@ func (g *generator) simulateChain(id int) chainSim {
 			pRepl = pReplHigh
 		}
 		if !bernoulli(rng, pRepl) {
-			ch.reason = "confirm_timeout"
+			ch.reason = "replacement_fail"
 			return ch
 		}
 		// успех замены: перерисовываем r первого (детерминированно — индекс 0)
@@ -234,14 +238,26 @@ func (g *generator) simulateChain(id int) chainSim {
 	}
 	ch.tFrozen = ch.tProp + ch.tConfWin
 
-	// --- исполнение ---
+	// --- отправка на ПВЗ (FROZEN → IN_PROGRESS) ---
 	minR := minFloat(ch.r)
-	pBreak := 0.05 + 0.15*(1-minR)
-	if ch.fraud {
-		pBreak += 0.5
+	pNoship := clip(0.03+0.20*(1-minR), 0.02, 0.5)
+	if bernoulli(rng, pNoship) {
+		ch.reason = "no_show"
+		return ch
 	}
-	if bernoulli(rng, pBreak) {
-		ch.reason = "freeze_fail"
+	delay := expSample(rng, lambdaInProgress)
+	if delay > shipWindowHours {
+		delay = shipWindowHours
+	}
+	ch.tInProgress = ch.tFrozen + delay
+
+	// --- совпадение товара на ПВЗ (IN_PROGRESS → COMPLETED) ---
+	pMismatch := 0.02
+	if ch.fraud {
+		pMismatch += 0.6
+	}
+	if bernoulli(rng, pMismatch) {
+		ch.reason = "item_mismatch"
 		return ch
 	}
 	ch.label = "COMPLETED"
@@ -251,21 +267,22 @@ func (g *generator) simulateChain(id int) chainSim {
 
 func (g *generator) emitRows(ch chainSim) []csvRow {
 	raw := mustJSON(oracle{
-		Count:    ch.count,
-		Pop:      ch.pop,
-		Offered:  append([]string(nil), ch.offered...),
-		Wanted:   append([]string(nil), ch.wanted...),
-		Sizes:    append([]int(nil), ch.sizes...),
-		R:        append([]float64(nil), ch.r...),
-		M:        append([]float64(nil), ch.m...),
-		CE:       append([]float64(nil), ch.cE...),
-		CosE:     append([]float64(nil), ch.cosE...),
-		Fraud:    ch.fraud,
-		Epsilon:  ch.epsilon,
-		Reason:   ch.reason,
-		TProp:    ch.tProp,
-		TFrozen:  ch.tFrozen,
-		Replaced: ch.replaced,
+		Count:       ch.count,
+		Pop:         ch.pop,
+		Offered:     append([]string(nil), ch.offered...),
+		Wanted:      append([]string(nil), ch.wanted...),
+		Sizes:       append([]int(nil), ch.sizes...),
+		R:           append([]float64(nil), ch.r...),
+		M:           append([]float64(nil), ch.m...),
+		CE:          append([]float64(nil), ch.cE...),
+		CosE:        append([]float64(nil), ch.cosE...),
+		Fraud:       ch.fraud,
+		Epsilon:     ch.epsilon,
+		Reason:      ch.reason,
+		TProp:       ch.tProp,
+		TFrozen:     ch.tFrozen,
+		TInProgress: ch.tInProgress,
+		Replaced:    ch.replaced,
 	})
 
 	rows := make([]csvRow, 0, 4)
@@ -302,11 +319,19 @@ func (g *generator) emitRows(ch chainSim) []csvRow {
 	}
 	push("PROPOSED", "PROPOSED", 0, ch.tProp, 0, 0)
 
-	if ch.reason == "confirm_timeout" {
+	if ch.reason == "replacement_fail" {
 		return rows
 	}
 	vel := float64(ch.count) / ch.tConfWin
 	push("FROZEN", "FROZEN", ch.count, ch.tFrozen, 0, vel)
+	if ch.reason == "no_show" {
+		return rows
+	}
+	hoursIn := ch.tInProgress - ch.tFrozen
+	if hoursIn < 0 {
+		hoursIn = 0
+	}
+	push("IN_PROGRESS", "IN_PROGRESS", ch.count, ch.tInProgress, hoursIn, 0)
 	return rows
 }
 
@@ -348,22 +373,22 @@ func (g *generator) buildRow(
 	diversity := float64(uniqueCount(ch.offered)) / float64(ch.count)
 
 	values := map[string]float64{
-		"match_mean":           extracted.Match,
-		"min_edge":             minFloat(matchEdges),
-		"edge_spread":          maxFloat(matchEdges) - minFloat(matchEdges),
-		"liquidity_min":        extracted.Liquidity,
-		"liquidity_mean":       liqMean,
-		"size_spread":          float64(maxInt(ch.sizes) - minInt(ch.sizes)),
-		"count":                float64(ch.count),
-		"progress":             extracted.Progress,
-		"is_proposed":          float64(extracted.IsProposed),
-		"is_frozen":            float64(extracted.IsFrozen),
-		"hours_since_created":  hoursCreated,
-		"hours_in_stage":       hoursStage,
-		"vote_velocity":        velocity,
-		"category_popularity":  ch.pop,
-		"category_diversity":   diversity,
-		"reliability_mean":     extracted.Reliability,
+		"match_mean":          extracted.Match,
+		"min_edge":            minFloat(matchEdges),
+		"edge_spread":         maxFloat(matchEdges) - minFloat(matchEdges),
+		"liquidity_min":       extracted.Liquidity,
+		"liquidity_mean":      liqMean,
+		"size_spread":         float64(maxInt(ch.sizes) - minInt(ch.sizes)),
+		"count":               float64(ch.count),
+		"progress":            extracted.Progress,
+		"is_proposed":         float64(extracted.IsProposed),
+		"is_frozen":           float64(extracted.IsFrozen),
+		"hours_since_created": hoursCreated,
+		"hours_in_stage":      hoursStage,
+		"vote_velocity":       velocity,
+		"category_popularity": ch.pop,
+		"category_diversity":  diversity,
+		"reliability_mean":    extracted.Reliability,
 	}
 
 	feats := make([]string, len(featureNames))
@@ -389,7 +414,7 @@ func eventToRanker(event string) ranker.StateEvent {
 		return ranker.EventAdd
 	case "RESPOND", "PROPOSED":
 		return ranker.EventRespond
-	case "FROZEN":
+	case "FROZEN", "IN_PROGRESS":
 		return ranker.EventConfirm
 	default:
 		return ranker.EventAdd

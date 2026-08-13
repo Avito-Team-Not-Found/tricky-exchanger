@@ -10,9 +10,9 @@ import (
 )
 
 type checkResult struct {
-	Name    string
-	OK      bool
-	Detail  string
+	Name   string
+	OK     bool
+	Detail string
 }
 
 func runChecks(rows []csvRow, nChains int, csvA, csvB []byte) []checkResult {
@@ -23,6 +23,7 @@ func runChecks(rows []csvRow, nChains int, csvA, csvB []byte) []checkResult {
 		checkBaseRate(rows),
 		checkMonotonicity(rows),
 		checkFrozenBroken(rows),
+		checkInProgress(rows),
 		checkVolume(rows, nChains),
 		checkDeterminism(csvA, csvB),
 	}
@@ -42,8 +43,8 @@ func checkSchemaAndRanges(rows []csvRow) checkResult {
 	if len(rows) == 0 {
 		return checkResult{"ranges", false, "no rows"}
 	}
-	allowedEvent := map[string]bool{"ADD": true, "RESPOND": true, "PROPOSED": true, "FROZEN": true}
-	allowedStage := map[string]bool{"CANDIDATE": true, "PROPOSED": true, "FROZEN": true}
+	allowedEvent := map[string]bool{"ADD": true, "RESPOND": true, "PROPOSED": true, "FROZEN": true, "IN_PROGRESS": true}
+	allowedStage := map[string]bool{"CANDIDATE": true, "PROPOSED": true, "FROZEN": true, "IN_PROGRESS": true}
 	allowedLabel := map[string]bool{"COMPLETED": true, "BROKEN": true}
 	for i, row := range rows {
 		if !allowedEvent[row.event] || !allowedStage[row.stage] || !allowedLabel[row.label] {
@@ -139,17 +140,18 @@ func checkBaseRate(rows []csvRow) checkResult {
 }
 
 func checkMonotonicity(rows []csvRow) checkResult {
+	pI := completedRate(rows, "IN_PROGRESS")
 	pF := completedRate(rows, "FROZEN")
 	pP := completedRate(rows, "PROPOSED")
 	pC := completedRate(rows, "CANDIDATE")
-	ok := pF >= 0.80 && pF <= 0.90 &&
+	ok := pI > pF && pF > pP && pP > pC &&
+		pF >= 0.80 && pF <= 0.90 &&
 		pP >= 0.40 && pP <= 0.60 &&
-		pC >= 0.15 && pC <= 0.30 &&
-		pF > pP && pP > pC
+		pC >= 0.15 && pC <= 0.30
 	return checkResult{
 		"monotonicity",
 		ok,
-		fmt.Sprintf("P(comp|FROZEN)=%.4f [0.80,0.90]; P(comp|PROPOSED)=%.4f [0.40,0.60]; P(comp|CANDIDATE)=%.4f [0.15,0.30]", pF, pP, pC),
+		fmt.Sprintf("P(comp|IN_PROGRESS)=%.4f; P(comp|FROZEN)=%.4f [0.80,0.90]; P(comp|PROPOSED)=%.4f [0.40,0.60]; P(comp|CANDIDATE)=%.4f [0.15,0.30]", pI, pF, pP, pC),
 	}
 }
 
@@ -172,10 +174,44 @@ func checkFrozenBroken(rows []csvRow) checkResult {
 	return checkResult{"frozen_broken", ok, fmt.Sprintf("P(BROKEN|FROZEN)=%.4f (want [0.03, 0.20]) n=%d", rate, frozen)}
 }
 
+func checkInProgress(rows []csvRow) checkResult {
+	var nIP int
+	nFrozenChains := 0
+	nNoShow := 0
+	seen := map[int]string{}
+	for _, row := range rows {
+		if row.stage == "IN_PROGRESS" {
+			nIP++
+		}
+		if _, ok := seen[row.chainID]; ok {
+			continue
+		}
+		var o oracle
+		if err := json.Unmarshal([]byte(row.rawJSON), &o); err != nil {
+			return checkResult{"in_progress", false, err.Error()}
+		}
+		seen[row.chainID] = o.Reason
+		switch o.Reason {
+		case "completed", "no_show", "item_mismatch":
+			nFrozenChains++
+			if o.Reason == "no_show" {
+				nNoShow++
+			}
+		}
+	}
+	want := nFrozenChains - nNoShow
+	ok := nIP > 0 && nIP == want
+	return checkResult{
+		"in_progress",
+		ok,
+		fmt.Sprintf("IN_PROGRESS rows=%d; frozen chains=%d no_show=%d (want rows = frozen−no_show = %d)", nIP, nFrozenChains, nNoShow, want),
+	}
+}
+
 func checkVolume(rows []csvRow, nChains int) checkResult {
 	nRows := len(rows)
 	lo := int(math.Round(2.0 * float64(nChains)))
-	hi := int(math.Round(2.5 * float64(nChains)))
+	hi := int(math.Round(3.0 * float64(nChains)))
 	ok := nRows >= lo && nRows <= hi
 	return checkResult{"volume", ok, fmt.Sprintf("%d chains / %d rows (want ~%d–%d rows)", nChains, nRows, lo, hi)}
 }
@@ -264,7 +300,7 @@ func renderReport(seed int64, n int, outPath, reportPath string, rows []csvRow, 
 
 	fmt.Fprintf(&b, "\n## Funnel (rows)\n\n")
 	fmt.Fprintf(&b, "| stage | rows | P(COMPLETED) |\n|---|---:|---:|\n")
-	for _, stage := range []string{"CANDIDATE", "PROPOSED", "FROZEN"} {
+	for _, stage := range []string{"CANDIDATE", "PROPOSED", "FROZEN", "IN_PROGRESS"} {
 		var nStage, nComp int
 		for _, row := range rows {
 			if row.stage != stage {
@@ -330,9 +366,9 @@ func renderReport(seed int64, n int, outPath, reportPath string, rows []csvRow, 
 	}
 
 	fmt.Fprintf(&b, "\n## Notes\n\n")
-	fmt.Fprintf(&b, "- formula_score from `pkg/utils/ranker` FormulaRanker (`ChainScoreCalculator`) on the same ChainState prod would see.\n")
-	fmt.Fprintf(&b, "- LightGBM columns after `raw_json` follow `ml/features.json`.\n")
-	fmt.Fprintf(&b, "- `raw_json` is oracle-only (latents including fraud); do not train on it.\n")
+	fmt.Fprintf(&b, "- After FROZEN the funnel splits: `no_show` (no IN_PROGRESS row) vs ship to PVZ then `item_mismatch`/`completed`.\n")
+	fmt.Fprintf(&b, "- Extra RNG draws after FROZEN change the CSV vs older simulator versions even at the same seed.\n")
+	fmt.Fprintf(&b, "\n## Tests\n\n```bash\ncd ml/simulator && go test . -v\n```\n")
 	return b.String()
 }
 
