@@ -6,6 +6,8 @@ import ruRU from 'antd/locale/ru_RU';
 import { useAppSelector } from '@app/store/hooks';
 import type { ThemeMode } from '@app/store/slices/themeSlice';
 
+import { useReducedMotion } from '@shared/lib/useReducedMotion';
+
 // значения совпадают с tokens.scss — при изменении палитры править оба места
 const baseTokens = {
   colorPrimary: '#1677FF',
@@ -74,6 +76,7 @@ const themeComponents: Record<ThemeMode, ThemeConfig['components']> = {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const mode = useAppSelector((state) => state.theme.mode);
   const isDark = mode === 'dark';
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -86,7 +89,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       locale={ruRU}
       theme={{
         algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-        token: themeTokens[mode],
+        // движение antd построено на CSSMotion, поэтому CSS-правилом prefers-reduced-motion
+        // из global.scss оно не гасится — выключаем seed-токеном
+        token: { ...themeTokens[mode], motion: !reducedMotion },
         components: themeComponents[mode],
       }}
     >
