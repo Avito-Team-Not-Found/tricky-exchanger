@@ -2,12 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  confirmChain,
-  useChain,
-  type Chain,
-  type ChainParticipant,
-} from '@entities/chain';
+import { confirmChain, useChain, type Chain, type ChainParticipant } from '@entities/chain';
 
 import { renderWithProviders } from '@shared/testing/renderWithProviders';
 
@@ -143,6 +138,43 @@ describe('ChainParticipantsPage', () => {
 
     expect(screen.getByText('Зеркальный фотоаппарат Canon')).toBeInTheDocument();
     expect(screen.getByText('Планшет')).toBeInTheDocument();
+  });
+
+  // строка звена рисует одного участника, а пул получаемого звена — заявки разных людей:
+  // по ссылке с выбранным вариантом показываем только его, а не весь кластер
+  it('keeps only the selected option on the receiving link', () => {
+    const pool = [
+      {
+        clusterId: 2,
+        requestId: 202,
+        position: 1,
+        isCurrentUser: false,
+        offeredItemId: 2,
+        offeredItemTitle: 'Зеркальный фотоаппарат Canon',
+        offeredItemDescription: '',
+        wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
+      },
+      {
+        clusterId: 2,
+        requestId: 203,
+        position: 1,
+        isCurrentUser: false,
+        offeredItemId: 3,
+        offeredItemTitle: 'Планшет',
+        offeredItemDescription: '',
+        wantedDescription: 'Хочу велосипед',
+        requestStatus: 'ACTIVE' as const,
+      },
+    ];
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ participants: [MY_CANDIDATE, ...pool] })));
+
+    renderWithProviders(<ChainParticipantsPage />, {
+      initialEntries: ['/chains/1/participants?option=203'],
+    });
+
+    expect(screen.getByText('Планшет')).toBeInTheDocument();
+    expect(screen.queryByText('Зеркальный фотоаппарат Canon')).not.toBeInTheDocument();
   });
 
   it('shows the vote status of a responded candidate', () => {

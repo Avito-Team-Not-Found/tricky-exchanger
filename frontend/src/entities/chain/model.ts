@@ -203,9 +203,15 @@ export function chainLinks(chain: Chain): ChainLink[] {
     .map(([position, candidates]) => ({ position, candidates }));
 }
 
-// пул заявок следующего звена по кольцу; пока цепочка CANDIDATE, кандидатов несколько — UI сам решает, как их показать
-export function receivesItem(chain: Chain): ChainParticipant[] {
-  return chain.participants.filter((p) => p.position === chain.receivesFromPosition);
+// пул заявок следующего звена по кольцу; пока цепочка CANDIDATE, кандидатов несколько.
+// requestId сужает пул до выбранного варианта: заявки кластера принадлежат разным
+// пользователям, и без сужения экран показал бы их чужие товары под одним участником.
+// Неизвестный requestId (вариант выбыл) возвращает весь пул — так экран не остаётся пустым
+export function receivesItem(chain: Chain, requestId?: number): ChainParticipant[] {
+  const sources = chain.participants.filter((p) => p.position === chain.receivesFromPosition);
+  if (requestId === undefined) return sources;
+  const selected = sources.find((p) => p.requestId === requestId);
+  return selected ? [selected] : sources;
 }
 
 // единственный участник на позиции источника: на собранной цепочке на позицию приходится ровно один

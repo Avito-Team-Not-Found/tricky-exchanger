@@ -24,6 +24,8 @@ import './ChainItemView.scss';
 
 interface ChainItemViewProps {
   chain: Chain;
+  // заявка выбранного варианта получения: экран показывает именно её товар
+  receiveRequestId?: number;
   isVoting: boolean;
   onVote: (candidate: ChainParticipant, active: boolean) => void;
   onOpenParticipants: () => void;
@@ -36,6 +38,7 @@ interface ChainItemViewProps {
 // действие зависит от статуса цепочки
 export function ChainItemView({
   chain,
+  receiveRequestId,
   isVoting,
   onVote,
   onOpenParticipants,
@@ -43,7 +46,7 @@ export function ChainItemView({
   onProceed,
 }: ChainItemViewProps) {
   const { token } = theme.useToken();
-  const received = receivesItem(chain);
+  const received = receivesItem(chain, receiveRequestId);
   const single = received.length === 1 ? received[0] : null;
   const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);

@@ -2,7 +2,13 @@ import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import { Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { useChainConfirm, useChainVote, useProposalExpiry, ChainCard } from '@features/chains';
+import {
+  receiveOptionQuery,
+  useChainConfirm,
+  useChainVote,
+  useProposalExpiry,
+  ChainCard,
+} from '@features/chains';
 
 import {
   approvedVotes,
@@ -162,7 +168,11 @@ export function ChainListPage() {
                 locked={hasAssembled && !isAssembled(entry.status)}
                 approvedCount={approvedCountFor(entry)}
                 deadlineAt={deadlineAtFor(entry)}
-                onOpen={() => navigate(`/chains/${entry.chainId}`)}
+                // карточка — один вариант получения, а экраны цепочки одни на chainId:
+                // без ссылки на заявку они снова развернули бы звено во весь пул кандидатов
+                onOpen={() =>
+                  navigate(`/chains/${entry.chainId}${receiveOptionQuery(option.requestId)}`)
+                }
                 onProceed={() => navigate(`/chains/${entry.chainId}/deal`)}
                 onConfirm={(chainId) => openConfirm(chainId)}
                 onVote={(active) =>

@@ -1,5 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useSearchParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -116,6 +117,12 @@ const request = {
   updatedAt: '',
 } as never;
 
+// целевой экран перехода: показывает, какой вариант получения доехал до цепочки
+function OptionProbe() {
+  const [searchParams] = useSearchParams();
+  return <div>вариант: {searchParams.get('option')}</div>;
+}
+
 describe('ChainListPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -166,6 +173,21 @@ describe('ChainListPage', () => {
 
     await user.click(screen.getByText('Фотоаппарат'));
     expect(await screen.findByText('chain detail')).toBeInTheDocument();
+  });
+
+  // экраны цепочки одни на chainId — карточка передаёт им свой вариант получения,
+  // иначе они снова развернут звено во весь пул кандидатов
+  it('passes the picked option to the chain detail', async () => {
+    const user = userEvent.setup();
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(queryOk([makeOptions()]));
+
+    renderWithProviders(<ChainListPage />, {
+      routes: [{ path: '/chains/1', element: <OptionProbe /> }],
+    });
+
+    await user.click(screen.getByText('Планшет'));
+    expect(await screen.findByText('вариант: 203')).toBeInTheDocument();
   });
 
   it('casts a vote for the concrete candidate without a confirmation', async () => {

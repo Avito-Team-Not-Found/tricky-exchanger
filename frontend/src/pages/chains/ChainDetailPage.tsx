@@ -1,7 +1,14 @@
 import { Alert, Button, Skeleton } from 'antd';
 import { useNavigate, useParams } from 'react-router';
 
-import { ChainItemView, useChainConfirm, useChainVote, useProposalExpiry } from '@features/chains';
+import {
+  ChainItemView,
+  receiveOptionQuery,
+  useChainConfirm,
+  useChainVote,
+  useProposalExpiry,
+  useReceiveOption,
+} from '@features/chains';
 
 import { receivesItem, useChain, useReplacements } from '@entities/chain';
 
@@ -17,6 +24,7 @@ export function ChainDetailPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
   const chainId = chainIdParam ? Number(chainIdParam) : undefined;
+  const receiveRequestId = useReceiveOption();
   const { data: chain, isLoading: isChainLoading, isError, refetch } = useChain(chainId);
   const { confirmVote, isVoting } = useChainVote(refetch);
   const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
@@ -41,7 +49,7 @@ export function ChainDetailPage() {
       : [],
   );
 
-  const received = chain ? receivesItem(chain) : [];
+  const received = chain ? receivesItem(chain, receiveRequestId) : [];
   const single = received.length === 1 ? received[0] : null;
   const title =
     single?.offeredItemTitle ?? (received.length > 1 ? 'Варианты обмена' : 'Цепочка обмена');
@@ -76,6 +84,7 @@ export function ChainDetailPage() {
             ) : null}
             <ChainItemView
               chain={chain}
+              receiveRequestId={receiveRequestId}
               isVoting={isVoting}
               onVote={(candidate, active) =>
                 confirmVote(
@@ -87,7 +96,9 @@ export function ChainDetailPage() {
                   active,
                 )
               }
-              onOpenParticipants={() => navigate(`/chains/${chain.id}/participants`)}
+              onOpenParticipants={() =>
+                navigate(`/chains/${chain.id}/participants${receiveOptionQuery(receiveRequestId)}`)
+              }
               onConfirm={() => openConfirm(chain.id)}
               onProceed={() => navigate(`/chains/${chain.id}/deal`)}
             />

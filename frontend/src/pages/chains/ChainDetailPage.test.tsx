@@ -1,5 +1,6 @@
 import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useSearchParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -87,6 +88,12 @@ function makeChain(overrides: Partial<Chain> = {}): Chain {
     ],
     ...overrides,
   };
+}
+
+// целевой экран перехода: показывает, какой вариант получения доехал до схемы участников
+function OptionProbe() {
+  const [searchParams] = useSearchParams();
+  return <div>участники: {searchParams.get('option')}</div>;
 }
 
 describe('ChainDetailPage', () => {
@@ -199,6 +206,60 @@ describe('ChainDetailPage', () => {
     await waitFor(() =>
       expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 202 }),
     );
+  });
+
+  // ссылка с выбранным вариантом сужает получаемое звено до одной заявки: заголовок и отклик
+  // относятся к ней, а не к первому кандидату пула
+  it('shows the option from the link when the receiving pool has several', async () => {
+    const pool = Array.from({ length: 2 }, (_, index) => ({
+      clusterId: 2,
+      requestId: 202 + index,
+      position: 2,
+      isCurrentUser: false,
+      offeredItemId: 20 + index,
+      offeredItemTitle: `Фотоаппарат ${index + 1}`,
+      offeredItemDescription: '',
+      wantedDescription: 'Хочу велосипед',
+      requestStatus: 'ACTIVE' as const,
+    }));
+    mockedVote.mockResolvedValue({
+      chainId: 1,
+      requestId: 101,
+      targetRequestId: 203,
+      vote: 'pending',
+      votedAt: '2026-08-08T12:00:00Z',
+      chainStatus: 'CANDIDATE',
+    });
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(
+      queryOk(makeChain({ participants: [makeChain().participants[0], ...pool] })),
+    );
+
+    renderWithProviders(<ChainDetailPage />, { initialEntries: ['/chains/1?option=203'] });
+
+    expect(screen.getByRole('heading', { name: 'Фотоаппарат 2', level: 2 })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Откликнуться' }));
+    await waitFor(() =>
+      expect(mockedVote).toHaveBeenCalledWith(1, { requestId: 101, targetRequestId: 203 }),
+    );
+  });
+
+  it('carries the selected option to the participants screen', async () => {
+    const user = userEvent.setup();
+    mockedUseChain.mockReturnValue(queryOk(makeChain()));
+
+    renderWithProviders(<ChainDetailPage />, {
+      initialEntries: ['/chains/1?option=202'],
+      routes: [
+        {
+          path: '/chains/1/participants',
+          element: <OptionProbe />,
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Посмотреть всю цепочку' }));
+    expect(await screen.findByText('участники: 202')).toBeInTheDocument();
   });
 
   it('shows the assembled pill once the chain is proposed', () => {
