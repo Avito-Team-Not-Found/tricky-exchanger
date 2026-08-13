@@ -172,6 +172,7 @@ describe('DealPage', () => {
 
     expect(screen.getByText('Обмен завершён')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'К моим запросам' })).toBeInTheDocument();
+    expect(screen.getByText('У вас есть 24 часа на возврат товара.')).toBeInTheDocument();
   });
 
   it('redirects to the chain screen when the deal is not reachable', async () => {
@@ -196,6 +197,13 @@ describe('DealPage', () => {
       screen.getByText(
         /Спасибо! Мы отметили, что вы забрали товар\. Обмен завершится, как только все участники/,
       ),
+    ).toBeInTheDocument();
+    // предупреждение не использовать товар и срок возврата идут сразу после подтверждения
+    expect(
+      screen.getByText('Не используйте товар, пока не подтвердят получение.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('После получения всеми участниками товара у вас будет 24 часа на возврат.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Получение подтверждено')).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

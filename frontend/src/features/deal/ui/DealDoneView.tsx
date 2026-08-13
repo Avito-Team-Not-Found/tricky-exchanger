@@ -28,6 +28,16 @@ export function DealDoneView({ state, onOpenDetails, onGoToRequests }: DealDoneV
             ? 'Все участники подтвердили получение. Ваш товар передан, а вы получили новый.'
             : 'Спасибо! Мы отметили, что вы забрали товар. Обмен завершится, как только все участники подтвердят получение.'}
         </p>
+        {completed ? (
+          <p className="deal-hero__text">У вас есть 24 часа на возврат товара.</p>
+        ) : (
+          <>
+            <p className="deal-hero__text">Не используйте товар, пока не подтвердят получение.</p>
+            <p className="deal-hero__text">
+              После получения всеми участниками товара у вас будет 24 часа на возврат.
+            </p>
+          </>
+        )}
       </div>
 
       <div className="deal-actions">
