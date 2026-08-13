@@ -61,7 +61,6 @@
   padding: 0 var(--spacing-sm);
 }
 
-// sticky-футер выбора: нижний край мобильного экрана занимают кнопки действия
 .replacement-footer {
   position: sticky;
   bottom: 0;
@@ -146,7 +145,7 @@
   color: var(--color-text-secondary);
 }
 
-// ряд миниатюр: на узком экране при длинной цепочке скроллится по горизонтали, тело — нет
+// при длинной цепочке ряд скроллится по горизонтали, а тело экрана — нет
 .replacement-summary__chain {
   display: flex;
   align-items: center;

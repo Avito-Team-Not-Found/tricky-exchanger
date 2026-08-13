@@ -1,5 +1,4 @@
-// карточка кандидата: высота 94 покрывает тач-таргет 44×44, рамка выбранной карточки —
-// 2px accent, у невыбранной прозрачная рамка той же ширины, чтобы не сдвигался контент
+// у невыбранной карточки рамка прозрачная той же ширины, иначе выбор сдвигал бы контент
 .replacement-card {
   display: flex;
   align-items: center;
@@ -16,13 +15,11 @@
   border-color: var(--color-accent-primary);
 }
 
-// вариант для экрана ожидания: ниже по высоте, некликабельный, без рамки выбора
 .replacement-card--invited {
   min-height: 88px;
   cursor: default;
 }
 
-// фокус-ринг на карточке при фокусе внутреннего radio
 .replacement-card:has(.replacement-card__radio:focus-visible) {
   outline: 2px solid var(--color-accent-primary);
   outline-offset: 2px;
@@ -68,8 +65,7 @@
   white-space: nowrap;
 }
 
-// пилюля актуальности: 12/600, высота 26, тон на 15% заливке; цвет не единственный
-// носитель — текст дублирует тон
+// цвет не единственный носитель значения — текст дублирует тон
 .replacement-card__pill {
   display: inline-flex;
   align-items: center;
@@ -93,7 +89,6 @@
   color: var(--color-status-warning);
 }
 
-// нативный radio, перерисованный под макет (22×22, круг с точкой в выбранном состоянии)
 .replacement-card__radio {
   display: grid;
   place-items: center;
@@ -125,7 +120,7 @@
   opacity: 0.4;
 }
 
-// фокус-ринг рисует сама карточка (см. :has выше) — дублировать его вокруг самого radio не нужно
+// фокус-ринг рисует сама карточка (см. :has выше)
 .replacement-card__radio:focus-visible {
   outline: none;
 }

@@ -21,7 +21,6 @@
   color: var(--color-text-secondary);
 }
 
-// список причин — вертикальные карточки-радио, как в форме запроса
 .deal-dispute__reasons {
   display: flex;
   flex-direction: column;
@@ -37,7 +36,6 @@
   border-radius: var(--radius-md);
 }
 
-// действия модалки — «Отмена» и danger-«Открыть спор» в одну строку
 .deal-dispute__actions {
   display: flex;
   gap: var(--spacing-sm);

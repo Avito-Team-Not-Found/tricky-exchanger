@@ -54,7 +54,7 @@
   flex: 1;
 }
 
-// статус — в одной строке с названием товара, чтобы не добавлять карточке третью строку
+// статус в одной строке с названием, чтобы не добавлять карточке третью строку
 .request-card__head {
   display: flex;
   align-items: center;
@@ -68,7 +68,6 @@
   min-width: 0;
 }
 
-// стрелка «отдаю → хочу» центрируется по первой строке описания
 .request-card__arrow {
   flex-shrink: 0;
   height: calc(var(--font-size-body-sm) * var(--line-height-body));
