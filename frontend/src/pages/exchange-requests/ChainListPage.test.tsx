@@ -301,7 +301,7 @@ describe('ChainListPage', () => {
     expect(screen.getByRole('button', { name: 'Требуется действие' })).toBeInTheDocument();
 
     const dimmedCard = screen
-      .getAllByRole('article')
+      .getAllByRole('button')
       .find((card) => card.textContent?.includes('Книга'));
     expect(dimmedCard).toHaveAttribute('aria-disabled', 'true');
     expect(dimmedCard).toContainElement(screen.getByRole('button', { name: 'Откликнуться' }));
@@ -575,7 +575,7 @@ describe('ChainListPage', () => {
     expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeEnabled();
 
     const dimmedCard = screen
-      .getAllByRole('article')
+      .getAllByRole('button')
       .find((card) => card.textContent?.includes('Книга'));
     expect(dimmedCard).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: 'Откликнуться' })).toBeDisabled();
@@ -635,7 +635,7 @@ describe('ChainListPage', () => {
     expect(screen.getAllByRole('button', { name: 'Требуются действия' })).toHaveLength(2);
 
     const assembledCards = screen
-      .getAllByRole('article')
+      .getAllByRole('button')
       .filter(
         (card) =>
           card.textContent?.includes('Фотоаппарат') || card.textContent?.includes('Планшет'),

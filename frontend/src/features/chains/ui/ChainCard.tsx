@@ -82,7 +82,22 @@ export function ChainCard({
     .join(' ');
 
   return (
-    <article className={className} onClick={onOpen} aria-disabled={locked || undefined}>
+    <article
+      className={className}
+      role="button"
+      tabIndex={locked ? -1 : 0}
+      aria-label={`${option.title}: ${option.wantedDescription}`}
+      aria-disabled={locked || undefined}
+      onClick={locked ? undefined : onOpen}
+      onKeyDown={(event) => {
+        if (locked) return;
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       {approvedCount !== undefined ? (
         <ConsentBadge
           className="chain-card__consent"
