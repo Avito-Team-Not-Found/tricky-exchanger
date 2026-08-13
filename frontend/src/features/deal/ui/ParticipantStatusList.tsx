@@ -24,7 +24,7 @@ export function ParticipantStatusList({ chain, mode }: ParticipantStatusListProp
   const participants = [...chain.participants].sort((a, b) => a.position - b.position);
 
   return (
-    <ul className="participant-status">
+    <ul className="participant-status motion-cascade">
       {participants.map((participant) => (
         <ParticipantStatusRow
           key={participant.requestId}
@@ -82,7 +82,10 @@ function ParticipantStatusRow({
           emoji={isMe ? undefined : alias.emoji}
         />
         <span className="participant-status__name">{isMe ? 'Вы' : alias.name}</span>
-        <span className={`participant-status__pill participant-status__pill--${pill.tone}`}>
+        <span
+          key={pill.label}
+          className={`participant-status__pill participant-status__pill--${pill.tone}`}
+        >
           {pill.label}
         </span>
       </div>

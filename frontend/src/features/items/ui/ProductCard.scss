@@ -7,7 +7,13 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
-  transition: box-shadow 0.2s ease;
+  transition:
+    box-shadow var(--motion-duration-base) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.product-card:active {
+  transform: scale(0.98);
 }
 
 .product-card:focus-visible {

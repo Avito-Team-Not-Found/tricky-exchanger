@@ -54,7 +54,7 @@ export function ExchangeRequestsPage() {
           </Button>
         </EmptyState>
       ) : (
-        <div className="requests-page__list">
+        <div className="requests-page__list motion-cascade">
           {requests.map((request) => (
             <RequestCard
               key={request.id}

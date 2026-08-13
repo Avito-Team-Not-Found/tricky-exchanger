@@ -73,7 +73,11 @@ export function ChainItemView({
           {assembled ? (
             <span className="chain-item__badges">
               <span className="chain-item__ready">Цепочка собрана</span>
-              <ConsentBadge count={approvedVotes(chain)} total={chain.length} />
+              <ConsentBadge
+                key={approvedVotes(chain)}
+                count={approvedVotes(chain)}
+                total={chain.length}
+              />
             </span>
           ) : (
             <ProbabilityBadge score={chain.score} />

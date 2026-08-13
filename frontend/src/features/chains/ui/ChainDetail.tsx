@@ -53,6 +53,7 @@ export function ChainDetail({
   const me = myParticipant(chain);
   const canVote = chain.status === 'CANDIDATE';
   const assembled = isAssembled(chain.status);
+  const approved = approvedVotes(chain);
   // голос привязан к цели голосования, а не к голосующему: решение участника позиции p лежит
   // в vote позиции (p + 1) % length (SOFT-LOCK §3.3); на CANDIDATE сдвига нет — там это отклики
   const showConfirmPills = chain.status !== 'CANDIDATE';
@@ -88,10 +89,10 @@ export function ChainDetail({
       {assembled ? (
         <div className="chain-detail__head">
           <p className="chain-detail__ready">Цепочка собрана</p>
-          <ConsentBadge count={approvedVotes(chain)} total={chain.length} />
+          <ConsentBadge key={approved} count={approved} total={chain.length} />
         </div>
       ) : null}
-      <ul className="chain-detail__participants">
+      <ul className="chain-detail__participants motion-cascade">
         {links.map((link) => (
           <ChainLinkRow
             key={link.position}

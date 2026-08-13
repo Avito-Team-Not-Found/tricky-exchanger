@@ -109,6 +109,7 @@
 
 // подтвердил, ждём остальных: статусная строка вместо кнопки внизу (SOFT-LOCK §8)
 .chain-detail__confirmed {
+  animation: motion-pop-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   margin: 0;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-full);

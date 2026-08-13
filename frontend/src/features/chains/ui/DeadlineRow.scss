@@ -1,5 +1,6 @@
 // таймер дедлайна ответа (макет 4.6/4.7, TimerRow): пилюля с 12%-й заливкой warning (DEADLINE-PLAN §2)
 .deadline-row {
+  animation: motion-fade-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);

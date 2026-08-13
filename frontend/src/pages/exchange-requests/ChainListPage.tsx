@@ -155,7 +155,7 @@ export function ChainListPage() {
             description="Попробуйте изменить запрос позже"
           />
         ) : (
-          <div className="chain-list-page__list">
+          <div className="chain-list-page__list motion-cascade">
             {receiveOptions.map(({ entry, option }) => (
               <ChainCard
                 key={`${entry.chainId}-${option.requestId}`}

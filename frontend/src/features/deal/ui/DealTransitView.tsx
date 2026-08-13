@@ -150,6 +150,7 @@ export function DealTransitView({ chain, state, onOpenDetails }: DealTransitView
                   <span className="deal-transit__item-main">
                     <span className="deal-transit__item-name">{participant.offeredItemTitle}</span>
                     <span
+                      key={pill.label}
                       className={`deal-transit__item-pill deal-transit__item-pill--${pill.tone}`}
                     >
                       {pill.label}

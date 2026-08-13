@@ -7,6 +7,13 @@
   background: var(--color-bg-card);
   border-radius: var(--radius-md);
   cursor: pointer;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.chain-card:active {
+  transform: scale(0.98);
 }
 
 // карточка, требующая действия (PROPOSED) или уже замороженная, выделена рамкой (SOFT-LOCK §5.1/§5.4)
@@ -122,6 +129,7 @@
 
 // предупреждение «Примите решение…» перед inline-кнопками «Да»/«Нет» (SOFT-LOCK §5.2)
 .chain-card__hurry {
+  animation: motion-rise-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   margin: 0;
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-semibold);
@@ -133,6 +141,7 @@
 .chain-card__inline {
   display: flex;
   gap: var(--spacing-sm);
+  animation: motion-rise-in var(--motion-duration-base) var(--motion-ease-out) 40ms backwards;
 }
 
 .chain-card__inline .ant-btn {
@@ -141,6 +150,7 @@
 
 // подтвердил, ждём остальных: статусная строка вместо кнопки (SOFT-LOCK §5.3)
 .chain-card__confirmed {
+  animation: motion-pop-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   margin: 0;
   display: inline-flex;
   align-items: center;

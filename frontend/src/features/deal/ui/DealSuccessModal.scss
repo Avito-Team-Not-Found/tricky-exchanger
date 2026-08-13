@@ -4,7 +4,9 @@
   gap: var(--spacing-md);
 }
 
+// задержка нужна, чтобы эмодзи выскочил после раскрытия модалки antd, а не одновременно с ней
 .deal-success__icon {
+  animation: motion-pop-in var(--motion-duration-slow) var(--motion-ease-out) 80ms backwards;
   margin: 0;
   font-size: 32px;
   line-height: 1.5;

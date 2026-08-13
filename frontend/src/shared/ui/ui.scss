@@ -28,6 +28,9 @@
   font-size: var(--font-size-caption);
   line-height: var(--line-height-heading);
   white-space: nowrap;
+  transition:
+    background-color var(--motion-duration-base) var(--motion-ease-standard),
+    color var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .fade-in-image {
@@ -37,6 +40,16 @@
 
 .fade-in-image--loaded {
   opacity: 1;
+}
+
+.empty-state,
+.error-state {
+  animation: motion-rise-in var(--motion-duration-base) var(--motion-ease-out) backwards;
+}
+
+.empty-state__icon,
+.error-state__icon {
+  animation: motion-pop-in var(--motion-duration-base) var(--motion-ease-out) 60ms backwards;
 }
 
 .empty-state {
@@ -123,4 +136,7 @@
   font-size: var(--font-size-caption);
   line-height: var(--line-height-heading);
   white-space: nowrap;
+  transition:
+    background-color var(--motion-duration-base) var(--motion-ease-standard),
+    color var(--motion-duration-base) var(--motion-ease-standard);
 }

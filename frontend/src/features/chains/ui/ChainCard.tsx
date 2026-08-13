@@ -84,6 +84,7 @@ export function ChainCard({
     <article className={className} onClick={onOpen} aria-disabled={locked || undefined}>
       {approvedCount !== undefined ? (
         <ConsentBadge
+          key={approvedCount}
           className="chain-card__consent"
           count={approvedCount}
           total={options.length}
