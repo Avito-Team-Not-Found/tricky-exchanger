@@ -24,7 +24,7 @@ interface DealShipViewProps {
   onOpenDetails: () => void;
 }
 
-// таймер показывает фактическое значение freezeDeadlineAt, а не условные 47:58 из макета
+// таймер показывает фактическое значение freezeDeadlineAt, а не условные 47:58
 function deadlineLabel(deadlineAt: string | null): string | null {
   if (!deadlineAt) return null;
   const remaining = new Date(deadlineAt).getTime() - Date.now();
