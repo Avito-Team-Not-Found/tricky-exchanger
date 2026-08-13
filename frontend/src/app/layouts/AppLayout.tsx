@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { AppstoreOutlined, SwapOutlined, UserOutlined } from '@ant-design/icons';
 import { NavLink, Outlet, useLocation } from 'react-router';
 
+import { useScreenMotionClass } from '@shared/lib/useScreenMotion';
 import { BrandLogo } from '@shared/ui';
 import './AppLayout.scss';
 
@@ -38,6 +39,7 @@ const FULL_SCREEN_PATTERNS = [/^\/chains\/[^/]+(\/(participants|deal(\/(shipment
 
 export function AppLayout() {
   const { pathname } = useLocation();
+  const screenMotionClass = useScreenMotionClass();
   const isFullScreen = FULL_SCREEN_PATTERNS.some((pattern) => pattern.test(pathname));
   const isFormScreen = FORM_SCREEN_PATTERNS.some((pattern) => pattern.test(pathname));
 
@@ -63,7 +65,10 @@ export function AppLayout() {
           </nav>
         </aside>
         <main className="app-content">
-          <Outlet />
+          {/* key перемонтирует узел при навигации — на этом держится enter-анимация экрана */}
+          <div key={pathname} className={`app-content__screen ${screenMotionClass}`}>
+            <Outlet />
+          </div>
         </main>
       </div>
       {!isFullScreen ? (

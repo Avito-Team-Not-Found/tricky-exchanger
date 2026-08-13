@@ -33,4 +33,11 @@ describe('AppLayout', () => {
 
     expect(container.querySelector('.app-side-menu')).toBeInTheDocument();
   });
+
+  // анимации в jsdom не исполняются — проверяем только обёртку, на remount которой они держатся
+  it('wraps routed content into the animated screen container', () => {
+    const { container } = renderLayout(['/products']);
+
+    expect(container.querySelector('.app-content__screen.motion-screen')).toBeInTheDocument();
+  });
 });

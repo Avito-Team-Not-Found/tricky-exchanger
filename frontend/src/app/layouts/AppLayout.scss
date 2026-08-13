@@ -45,10 +45,16 @@
 }
 
 /* колонка, чтобы экран цепочки мог растянуться на всю высоту и прижать кнопку к низу (макет 4.8);
-   другим экранам блочная разметка не мешает — flex оставляем только полноэкранным */
-.app-layout--full-screen .app-content {
+   другим экранам блочная разметка не мешает — flex оставляем только полноэкранным.
+   Обёртка экрана тоже колонка, иначе она разорвала бы цепочку flex: 1 до .chain-detail-page */
+.app-layout--full-screen .app-content,
+.app-layout--full-screen .app-content__screen {
   display: flex;
   flex-direction: column;
+}
+
+.app-layout--full-screen .app-content__screen {
+  flex: 1;
 }
 
 .app-side-menu {
@@ -79,7 +85,7 @@
   font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: color var(--motion-duration-base) var(--motion-ease-standard);
 }
 
 .app-nav-item--active {
@@ -89,6 +95,11 @@
 .app-nav-item__icon {
   font-size: 20px;
   line-height: 1;
+  transition: transform var(--motion-duration-base) var(--motion-ease-standard);
+}
+
+.app-nav-item--active .app-nav-item__icon {
+  transform: scale(1.1);
 }
 
 @media (min-width: 1024px) {
@@ -137,6 +148,9 @@
     min-height: 44px;
     border-radius: var(--radius-md);
     font-size: var(--font-size-body);
+    transition:
+      color var(--motion-duration-base) var(--motion-ease-standard),
+      background-color var(--motion-duration-base) var(--motion-ease-standard);
   }
 
   .app-side-menu .app-nav-item--active {
