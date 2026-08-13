@@ -161,9 +161,21 @@ export function ChainItemView({
             Требуются действия
           </Button>
         ) : chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
-          <p className="chain-item__confirmed" role="status">
-            Вы подтвердили · ждём остальных
-          </p>
+          <>
+            <p className="chain-item__confirmed" role="status">
+              Вы подтвердили · ждём остальных
+            </p>
+            <Button
+              className="chain-item__decline"
+              type="text"
+              danger
+              size="large"
+              block
+              onClick={onDecline}
+            >
+              Отказаться от сделки
+            </Button>
+          </>
         ) : shipRequired ? (
           <>
             <Button

@@ -34,9 +34,10 @@ export function useChainConfirm(
   // модалка живёт в портале вне дерева роутов — иначе останется висеть поверх нового экрана
   // с живой кнопкой «Да»
   const decision = useRef<{ destroy: () => void } | null>(null);
-  // отказ из FROZEN завершает для нас цепочку при любом исходе: товар высвобожден, цепочка ушла
-  // под быструю замену или распалась — флаг переносит переход в общий onSuccess мутации
-  const declineFromFrozen = useRef(false);
+  // отказ с собранной цепочки (FROZEN или PROPOSED после моего подтверждения) завершает для нас
+  // сделку при любом исходе: товар высвобожден, цепочка ушла под быструю замену или распалась —
+  // флаг переносит переход в общий onSuccess мутации
+  const leaveChainOnDecline = useRef(false);
 
   const mutation = useMutation<ConfirmResult, Error, number>({
     mutationFn: (chainId) => confirmChain(chainId),
@@ -56,7 +57,7 @@ export function useChainConfirm(
     onSuccess: (data) => {
       message.success(declineMessage(data.status));
       invalidate();
-      if (data.status === 'BROKEN' || declineFromFrozen.current) {
+      if (data.status === 'BROKEN' || leaveChainOnDecline.current) {
         closeDecision();
         onNotFound?.();
       }
@@ -102,8 +103,8 @@ export function useChainConfirm(
   }
 
   // какой из трёх исходов случится, клиент заранее не знает — формулировка обтекаемая
-  function openDecline(chainId: number, fromFrozen = false) {
-    declineFromFrozen.current = fromFrozen;
+  function openDecline(chainId: number, leaveChain = false) {
+    leaveChainOnDecline.current = leaveChain;
     modal.confirm({
       title: 'Отказаться от сделки?',
       content:
