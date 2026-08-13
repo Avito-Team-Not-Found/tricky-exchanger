@@ -165,12 +165,12 @@ describe('RequestForm', () => {
     expect(screen.getByRole('button', { name: /Создать запрос/ })).toBeEnabled();
   });
 
-  it('blocks saving a wanted description shorter than 50 characters', async () => {
+  it('blocks saving a wanted description shorter than 25 characters', async () => {
     const user = userEvent.setup();
     renderWithProviders(<RequestForm />);
 
     await user.click(screen.getByText('Кухонный комбайн'));
-    await user.type(screen.getByLabelText('Что вы хотите получить'), 'x'.repeat(49));
+    await user.type(screen.getByLabelText('Что вы хотите получить'), 'x'.repeat(24));
     await pickCategory(user);
 
     expect(await screen.findByText('Пожалуйста, опишите желаемое подробнее')).toBeInTheDocument();
@@ -178,7 +178,7 @@ describe('RequestForm', () => {
   });
 
   // иначе кнопка неактивна, а ошибки на экране нет — пользователю нечем объяснить отказ
-  it('explains the blocked save for a request created before the 50-character rule', async () => {
+  it('explains the blocked save for a request created before the 25-character rule', async () => {
     mockedUseRequest.mockReturnValue(queryOk({ ...liveRequest, wantedDescription: 'Ноутбук' }));
     renderWithProviders(<RequestForm requestId={1} />);
 
