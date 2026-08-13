@@ -29,8 +29,7 @@ export function ChainDetailPage() {
   const { confirmVote, isVoting } = useChainVote(refetch);
   const { openConfirm } = useChainConfirm(refetch, () => navigate('/exchange-requests'));
 
-  // баннер входа в замену — единственный корректный признак вакансии (TZ §2): в теле цепочки
-  // отличий после отказа не видно
+  // непустой пул — единственный признак вакансии: в теле цепочки отличий после отказа не видно
   const { data: replacements = [], isLoading: isReplacementsLoading } = useReplacements(chainId, {
     enabled: chain?.status === 'PROPOSED',
   });

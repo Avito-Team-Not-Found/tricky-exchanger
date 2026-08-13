@@ -138,7 +138,7 @@ describe('useReplacementSelection', () => {
     expect(invalidate.mock.calls.map(([options]) => options?.queryKey)).toContainEqual(['chains']);
   });
 
-  // список протухающий: конфликт — повод перезапросить пул, а не повторить действие (TZ §1)
+  // список протухающий: конфликт — повод перезапросить пул, а не повторить действие
   it('re-fetches the pool and stays selecting when the candidate is gone', async () => {
     mockedSelect.mockRejectedValue(axiosError(422));
     const { result } = await renderSelecting();
@@ -164,7 +164,7 @@ describe('useReplacementSelection', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/chains/1'));
   });
 
-  // сервер не идемпотентен: повторный PUT тем же requestId вернул бы 422 (TZ §7.2)
+  // сервер не идемпотентен: повторный PUT тем же requestId вернул бы 422
   it('sends a single request when invite is called twice in a row', async () => {
     mockedSelect.mockImplementation(() => new Promise(() => {}));
     const { result } = await renderSelecting();
@@ -193,7 +193,7 @@ describe('useReplacementSelection', () => {
     expect(mockedSelect).not.toHaveBeenCalled();
   });
 
-  // цепочки после расформирования больше нет — возврат на /chains/{id} дал бы 404 (TZ §3.3)
+  // цепочки после расформирования больше нет — возврат на /chains/{id} дал бы 404
   it('confirms abandoning and leaves for the request options', async () => {
     mockedDecline.mockResolvedValue({ chainId: 1, status: 'BROKEN', replacementAvailable: false });
     const { result } = await renderSelecting();
@@ -208,7 +208,7 @@ describe('useReplacementSelection', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/exchange-requests/101'));
   });
 
-  // 404 цепочки — не ошибка загрузки, а штатный откат «Замена не состоялась» (TZ §4.1)
+  // 404 цепочки — не ошибка загрузки, а штатный откат «Замена не состоялась»
   it('treats a missing chain as a rollback rather than a load failure', async () => {
     mockChainQuery(undefined, { isError: true, error: axiosError(404) });
     const { result } = await renderSelecting();

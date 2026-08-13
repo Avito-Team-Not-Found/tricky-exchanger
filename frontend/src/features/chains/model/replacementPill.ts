@@ -7,11 +7,8 @@ export interface ReplacementPillMeta {
 
 const ACTUALITY_DAYS = 14;
 
-// «Актуальность» заявки-кандидата — единственное поле ответа, которое реально различает
-// кандидатов: reliability у всех строк выборки одинаковая (TZ §11.3). respondedAt — это
-// exchange_offers.updated_at, поэтому честно описывается только давность обновления (TZ §5.3).
-// Граница «≤ 14 дней назад» — актуальна, всё старше — давно не обновлялась; будущая дата
-// попадает в первую ветку.
+// reliability у всех кандидатов выборки одинаковая, так что различает их только respondedAt —
+// и это exchange_offers.updated_at, то есть честно описывается лишь давность обновления
 export function replacementPillMeta(
   respondedAt: string,
   now: Date = new Date(),

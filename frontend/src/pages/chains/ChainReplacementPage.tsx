@@ -14,11 +14,9 @@ import { ChainPageHeader } from './ChainPageHeader';
 
 import './ChainReplacementPage.scss';
 
-// инкрементальная клиентская подгрузка (TZ §7.1): сервер отдаёт весь пул одним массивом
+// сервер отдаёт весь пул одним массивом — постраничность целиком клиентская
 const PAGE_SIZE = 10;
 
-// Экран замены участника (макеты 4.8 «Замена участника»): конечный автомат из четырёх состояний
-// (TZ §4). Страница — «глупый» рендер, вся логика в useReplacementSelection.
 export function ChainReplacementPage() {
   const { chainId: chainIdParam } = useParams<{ chainId: string }>();
   const navigate = useNavigate();
@@ -47,7 +45,7 @@ export function ChainReplacementPage() {
       (participant) => participant.position === chain.receivesFromPosition,
     ) ?? [];
   const declinedTitle = vacant.length === 1 ? vacant[0].offeredItemTitle : null;
-  // «Назад» не может вести на цепочку, которой уже нет (TZ §3.3)
+  // «Назад» не может вести на цепочку, которой уже нет
   const backTo = stage === 'rolledBack' ? '/exchange-requests' : `/chains/${chainId}`;
 
   return (
@@ -62,8 +60,7 @@ export function ChainReplacementPage() {
         ) : stage === 'selecting' ? (
           options.length > 0 ? (
             <CandidateList
-              // счётчик подгрузки сбрасывается, когда сервер вернул другой пул (TZ §7.1):
-              // состав пула — и есть идентичность списка, ремонтировать его иначе незачем
+              // состав пула — и есть идентичность списка: другой пул сбрасывает счётчик подгрузки
               key={options.map((option) => option.requestId).join(',')}
               options={options}
               declinedTitle={declinedTitle}
@@ -75,11 +72,8 @@ export function ChainReplacementPage() {
               onAbandon={abandon}
             />
           ) : (
-            // Гейт «только актору» из TZ §11.1 не реализуем: тело цепочки отдаётся относительно
-            // читателя (receivesFromPosition = currentPosition + 1), поэтому «актор» по данным
-            // GET /chains/{id} — это всегда сам читатель, и проверка вырождается в тавтологию.
-            // Кнопка безопасна: decline — собственный отказ участника, а не действие над чужим.
-            // Различать актора должен сервер, отдавая non-актору 403 (TZ §11.1, задача на бэкенд).
+            // гейта «только актору» здесь нет: тело цепочки отдаётся относительно читателя, так
+            // что вычислить актора по нему нельзя — различать его должен сервер, отдавая 403
             <EmptyState
               title="Замен не нашлось"
               description="Подходящих участников для этой позиции сейчас нет. Цепочку придётся расформировать"
@@ -112,7 +106,6 @@ interface CandidateListProps {
   onAbandon: () => void;
 }
 
-// Экран «Выбор кандидата» (TZ §5.1): контекст-блок, список CandidateCard и sticky-футер с действиями.
 function CandidateList({
   options,
   declinedTitle,
@@ -123,7 +116,7 @@ function CandidateList({
   onInvite,
   onAbandon,
 }: CandidateListProps) {
-  // пул кластера ограничен по размеру — подгрузка по 10 без виртуализации (TZ §7.1)
+  // пул кластера ограничен по размеру, поэтому подгрузка обходится без виртуализации
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const visible = options.slice(0, visibleCount);
@@ -189,7 +182,6 @@ function CandidateList({
   );
 }
 
-// Экран «Приглашение отправлено» (TZ §5.4): статус-иконка, приглашённый кандидат, переход к цепочке.
 function WaitingView({
   chainId,
   invitedOption,
@@ -223,7 +215,6 @@ function WaitingView({
   );
 }
 
-// Экран «Замена подтверждена» (TZ §5.5): статус-иконка и сводка собранной цепочки.
 function SucceededView({ chain }: { chain?: Chain }) {
   const navigate = useNavigate();
   if (!chain) return null;
@@ -287,7 +278,6 @@ function SucceededView({ chain }: { chain?: Chain }) {
   );
 }
 
-// Откат (TZ §4.1): у цепочки нет отдельного борда — верстается на EmptyState с навигацией на живой экран.
 function RolledBackView({ chain }: { chain?: Chain }) {
   const navigate = useNavigate();
   if (chain?.status === 'CANDIDATE') {

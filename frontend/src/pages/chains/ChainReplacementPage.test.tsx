@@ -117,7 +117,7 @@ describe('ChainReplacementPage', () => {
     ).toBeInTheDocument();
   });
 
-  // пустой пул — единственный выход расформировать цепочку, приглашать некого (TZ §4.2)
+  // пустой пул — единственный выход расформировать цепочку, приглашать некого
   it('offers only to disband the chain when the pool is empty', () => {
     mockOptions([]);
 
@@ -141,7 +141,7 @@ describe('ChainReplacementPage', () => {
     expect(screen.queryByRole('button', { name: /Показать ещё/ })).not.toBeInTheDocument();
   });
 
-  // ровно один кандидат за действие (TZ §7.3): выбор читается из самого radio, не из класса
+  // ровно один кандидат за действие: выбор читается из самого radio, не из класса
   it('keeps the selection to a single candidate', async () => {
     const user = userEvent.setup();
     mockOptions([makeOption(1), makeOption(2)]);
@@ -168,7 +168,7 @@ describe('ChainReplacementPage', () => {
     expect(screen.getByRole('button', { name: 'Пригласить замену' })).toBeEnabled();
   });
 
-  // барьер повторной отправки (TZ §7.2): пока PUT в полёте, выбор не меняется и действий нет
+  // барьер повторной отправки: пока PUT в полёте, выбор не меняется и действий нет
   it('freezes the cards and both actions while the invite is in flight', async () => {
     mockedSelect.mockImplementation(() => new Promise(() => {}));
     const user = userEvent.setup();
@@ -218,7 +218,7 @@ describe('ChainReplacementPage', () => {
     expect(screen.getByText('2 участника в цепочке')).toBeInTheDocument();
   });
 
-  // откат ведёт на живой экран, а не на удалённую цепочку (TZ §4.1)
+  // откат ведёт на живой экран, а не на удалённую цепочку
   it('explains a rollback caused by the candidate declining', () => {
     mockedUseChain.mockReturnValue({
       data: makeChain({ status: 'CANDIDATE' }),

@@ -403,7 +403,7 @@ describe('ChainDetailPage', () => {
     ).toBeInTheDocument();
   });
 
-  // непустой пул замен — единственный признак вакансии: в теле цепочки отказ не виден (TZ §2)
+  // непустой пул замен — единственный признак вакансии: в теле цепочки отказ не виден
   it('offers to pick a replacement when the pool is not empty', async () => {
     const user = userEvent.setup();
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));

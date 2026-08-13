@@ -3,18 +3,14 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { fetchChain, fetchExchangeOptions, fetchReplacements } from './api';
 import type { Chain } from './model';
 
-// Пока на экране есть цепочка в PROPOSED/FROZEN/IN_PROGRESS, данные обновляются каждые 30с и при
-// возврате вкладки: так переход в FROZEN после последнего подтверждения и статусы отправки/
-// получения на экране сделки видны без ручного обновления. На COMPLETED опрос не нужен — состояние конечное.
+// живые статусы опрашиваются: иначе переход в FROZEN после чужого подтверждения и отправка
+// соседей на экране сделки видны только после ручного обновления
 const ACTUALIZATION_MS = 30_000;
 
 function isPollableStatus(status: string | undefined): boolean {
   return status === 'PROPOSED' || status === 'FROZEN' || status === 'IN_PROGRESS';
 }
 
-// Опции запроса деталей цепочки вынесены отдельно: на карточках вариантов они нужны для
-// нескольких PROPOSED-цепочек сразу (бейдж «N/M согласий» считается из participants[].vote),
-// поэтому переиспользуются в useChains
 export function chainQueryOptions(chainId?: number) {
   return {
     queryKey: ['chains', chainId],
@@ -30,8 +26,6 @@ export function chainQueryOptions(chainId?: number) {
 export function useChain(
   chainId?: number,
   options: {
-    // экран замены ждёт ответа кандидата своим ритмом (15с); остальные экраны довольствуются
-    // стандартным опросом 30с по поллируемым статусам из chainQueryOptions
     refetchInterval?: number | false | ((chain: Chain | undefined) => number | false);
   } = {},
 ) {
@@ -48,8 +42,6 @@ export function useChain(
   });
 }
 
-// детали нескольких цепочек сразу (карточки вариантов считают согласия PROPOSED-цепочек
-// по участникам); с пустым списком возвращает пустой массив и запросов не делает
 export function useChains(chainIds: number[]) {
   return useQueries({ queries: chainIds.map((chainId) => chainQueryOptions(chainId)) });
 }
@@ -68,8 +60,8 @@ export function useExchangeOptions(offerId?: number) {
   });
 }
 
-// Ключ намеренно вложен в ['chains'], чтобы инвалидация по префиксу задевала и пул замен:
-// список кандидатов протухающий, перечитывается при любой мутации над цепочкой
+// ключ намеренно вложен в ['chains']: пул замен протухающий и должен перечитываться
+// при любой мутации над цепочкой, а инвалидация идёт по префиксу
 export function useReplacements(
   chainId?: number,
   options: { enabled?: boolean; refetchInterval?: number | false } = {},

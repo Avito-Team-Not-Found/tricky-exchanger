@@ -11,7 +11,7 @@ describe('replacementStage', () => {
     expect(replacementStage('PROPOSED', true)).toBe('waiting');
   });
 
-  // подтверждение кандидата — последнее недостающее, поэтому цепочка сразу уходит в FROZEN (TZ §4)
+  // подтверждение кандидата — последнее недостающее, поэтому цепочка сразу уходит в FROZEN
   it('reports success once the chain is frozen', () => {
     expect(replacementStage('FROZEN', true)).toBe('succeeded');
   });

@@ -21,7 +21,6 @@ import { replacementStage, type ReplacementStage } from './replacementStage';
 
 const WAITING_POLL_INTERVAL = 15_000;
 
-// Вся логика экрана замены (TZ §6.4): страница — «глупый» рендер по stage.
 export function useReplacementSelection(chainId?: number) {
   const navigate = useNavigate();
   const { message, modal } = AntApp.useApp();
@@ -29,14 +28,11 @@ export function useReplacementSelection(chainId?: number) {
   // запись переживает перезагрузку: иначе экран ожидания превращается обратно в выбор кандидата
   const [invited, setInvited] = useState(() => replacementInvited.get(chainId));
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  // синхронный барьер повторного PUT: isPending становится true только после ререндера (TZ §7.2)
+  // синхронный барьер повторного PUT: isPending становится true только после ререндера
   const inviteInFlight = useRef(false);
 
-  // Роутер переиспользует элемент между /chains/1/replacement и /chains/2/replacement — тот же
-  // маршрут, другой параметр, размонтирования нет. Оба состояния инициализируются лениво, поэтому
-  // без пересинхронизации приглашение первой цепочки утекало бы во вторую: экран открывался бы
-  // сразу на «Ждём ответа кандидата» с чужой карточкой. Правим прямо в рендере, а не эффектом,
-  // чтобы кадра со старой цепочкой не было вовсе.
+  // роутер переиспользует элемент между /chains/1 и /chains/2/replacement, размонтирования нет —
+  // без пересинхронизации лениво поднятое приглашение утекло бы в соседнюю цепочку
   const [renderedChainId, setRenderedChainId] = useState(chainId);
   if (renderedChainId !== chainId) {
     setRenderedChainId(chainId);
@@ -44,8 +40,6 @@ export function useReplacementSelection(chainId?: number) {
     setSelectedId(null);
   }
 
-  // опрос включается только в состоянии ожидания ответа кандидата (TZ §4) и гаснет сам, как
-  // только цепочка ушла из PROPOSED, — дальше экран рендерится по её статусу
   const {
     data: chain,
     isLoading: isChainLoading,
@@ -57,10 +51,7 @@ export function useReplacementSelection(chainId?: number) {
       invited !== null && current?.status === 'PROPOSED' ? WAITING_POLL_INTERVAL : false,
   });
 
-  // пул кандидатов существует только пока цепочка PROPOSED; при FROZEN/CANDIDATE/BROKEN запрос
-  // не нужен вовсе (вернул бы 409) — экран там рендерится по статусу цепочки.
-  // В ожидании пул опрашивается наравне с цепочкой: отказ приглашённого статус цепочки не меняет,
-  // и вновь открывшуюся вакансию видно только по нему (см. vacancyReopened).
+  // вне PROPOSED пула не существует и запрос вернул бы 409
   const {
     data: options = [],
     isLoading: isListLoading,
@@ -72,9 +63,8 @@ export function useReplacementSelection(chainId?: number) {
       invited !== null && chain?.status === 'PROPOSED' ? WAITING_POLL_INTERVAL : false,
   });
 
-  // Как только цепочка увидена вне PROPOSED, вакансии больше нет и сохранённая запись протухла:
-  // снимаем её, чтобы следующая замена по этой же цепочке начиналась с выбора кандидата,
-  // а не с чужого экрана ожидания. Это единственное, что ограничивает время жизни ключа.
+  // единственное, что ограничивает время жизни записи: иначе следующая замена по этой же
+  // цепочке началась бы сразу с экрана ожидания
   const chainStatus = chain?.status;
   useEffect(() => {
     if (chainStatus && chainStatus !== 'PROPOSED') {
@@ -82,21 +72,15 @@ export function useReplacementSelection(chainId?: number) {
     }
   }, [chainId, chainStatus]);
 
-  // Приглашённый кандидат может отказаться сам. Цепочку это не откатывает: сервер снова открывает
-  // вакансию на его позиции (быстрая замена), статус остаётся PROPOSED — и по нему это состояние
-  // неотличимо от «ждём ответа». Единственный признак — пул: пока приглашение в силе, вакансии нет
-  // и пул пуст, а непустой пул означает, что позиция снова свободна и выбирать нужно заново.
-  // Приглашённого в свежем пуле уже нет (он занял позицию в цепочке), поэтому его наличие в списке
-  // читается как «данные ещё от прошлого выбора» и приглашение не отменяет — иначе гонка
-  // с инвалидацией сразу после PUT выбрасывала бы актора обратно в 'selecting'.
+  // отказ приглашённого статус цепочки не меняет, так что открывшуюся заново вакансию видно
+  // только по непустому пулу; сам приглашённый в свежем пуле уже отсутствует, и его наличие
+  // читается как данные от прошлого выбора — иначе гонка с инвалидацией после PUT сбросила бы stage
   const invitedRequestId = invited?.requestId ?? null;
   const vacancyReopened =
     invited !== null &&
     chain?.status === 'PROPOSED' &&
     options.length > 0 &&
     !options.some((option) => option.requestId === invitedRequestId);
-  // экран уходит в 'selecting' по вычисленному признаку, а не по состоянию: эффект лишь снимает
-  // протухшую запись, чтобы перезагрузка не вернула актора на «Ждём ответа кандидата»
   useEffect(() => {
     if (vacancyReopened) replacementInvited.clear(chainId);
   }, [chainId, vacancyReopened]);
@@ -106,20 +90,16 @@ export function useReplacementSelection(chainId?: number) {
     ? 'rolledBack'
     : replacementStage(chain?.status, invited !== null && !vacancyReopened);
   const isLoading = isListLoading || isChainLoading;
-  // 404 цепочки — не ошибка загрузки, а штатный откат («Замена не состоялась»)
-  // Ошибка пула валит экран только там, где пул вообще нужен: запрос остаётся включённым весь
-  // waiting (цепочка ещё PROPOSED), и его 403/409 на уже закрытой вакансии иначе подменял бы
-  // «Ждём ответа кандидата» общей ошибкой.
+  // 404 цепочки — не ошибка загрузки, а штатный откат; ошибка пула валит экран только там, где
+  // пул нужен, иначе его 403/409 на закрытой вакансии подменил бы экран ожидания
   const isError = (isChainError && !isChainNotFound) || (stage === 'selecting' && isListError);
 
-  // повторить нужно то, что упало: обычно это цепочка, а не пул (ErrorState на странице один)
   function refetch() {
     void refetchChain();
     void refetchOptions();
   }
 
-  // выбор живёт в state, но существует только пока кандидат есть в свежем пуле: после фонового
-  // refetch выбранная заявка может исчезнуть, и кнопка приглашения обязана погаснуть сама
+  // после фонового refetch выбранная заявка может исчезнуть — кнопка приглашения гаснет сама
   const selectedOption = options.find((option) => option.requestId === selectedId) ?? null;
 
   const inviteMutation = useMutation({
@@ -130,12 +110,10 @@ export function useReplacementSelection(chainId?: number) {
       replacementInvited.set(chainId, option);
       // и карточка цепочки, и пул замен лежат под ['chains'] — одна инвалидация покрывает оба
       queryClient.invalidateQueries({ queryKey: ['chains'] });
-      // список вариантов заявки живёт под своим ключом со staleTime 60s: без инвалидации
-      // экран «Варианты обмена» ещё минуту показывал бы цепочку в прежнем составе
+      // свой ключ со staleTime 60s: иначе «Варианты обмена» ещё минуту показывают прежний состав
       queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
     },
     onError: (error) => {
-      // список протухающий: конфликт — повод перезапросить, а не повторить действие (TZ §1)
       message.error(
         getErrorMessage(
           error,
@@ -150,7 +128,7 @@ export function useReplacementSelection(chainId?: number) {
       );
       if (isAxiosError(error) && error.response) {
         const status = error.response.status;
-        // актор сменился или вакансия закрыта — на живой экран цепочки, повторять нечего
+        // актор сменился или вакансия закрыта — повторять нечего
         if (status === 403) {
           navigate(`/chains/${chainId}`);
           return;
@@ -160,7 +138,6 @@ export function useReplacementSelection(chainId?: number) {
           return;
         }
         if (status === 409) {
-          // цепочка ушла из PROPOSED — перезапрашиваем цепочку, экран сам уйдёт в верный stage
           queryClient.invalidateQueries({ queryKey: ['chains'] });
           return;
         }
@@ -185,17 +162,14 @@ export function useReplacementSelection(chainId?: number) {
       // цепочки для нас больше нет — увидеть её в другом статусе и снять запись уже негде
       replacementInvited.clear(chainId);
       queryClient.invalidateQueries({ queryKey: ['chains'] });
-      // уходим прямо на список вариантов заявки — расформированная цепочка обязана исчезнуть
-      // из него сразу, а не висеть кликабельной минуту (staleTime)
+      // расформированная цепочка обязана исчезнуть из списка сразу, а не висеть минуту (staleTime)
       queryClient.invalidateQueries({ queryKey: ['exchange-options'] });
-      // отказ расформировывает цепочку только когда вакансию действительно некем закрыть:
-      // сервер вправе откатить её в CANDIDATE или оставить PROPOSED под подбор замены,
-      // и тогда обещать «расформирована» нельзя — исход берём из ответа
+      // сервер вправе откатить цепочку в CANDIDATE или оставить PROPOSED под подбор замены —
+      // обещать «расформирована» заранее нельзя, исход берём из ответа
       message.success(
         result.status === 'BROKEN' ? 'Цепочка расформирована' : declineMessage(result.status),
       );
-      // из цепочки мы вышли при любом исходе, так что /chains/{id} закрыт — 404 на
-      // расформированной и 403 на выжившей (TZ §3.3)
+      // из цепочки мы вышли при любом исходе, так что /chains/{id} для нас закрыт
       const requestId = chain?.currentRequestId;
       navigate(requestId ? `/exchange-requests/${requestId}` : '/exchange-requests');
     },
@@ -210,7 +184,6 @@ export function useReplacementSelection(chainId?: number) {
     },
   });
 
-  // действие необратимо (TZ §3.3) — обязательный Modal.confirm с danger-кнопкой
   function abandon() {
     modal.confirm({
       title: 'Отказаться от замены?',
@@ -235,8 +208,6 @@ export function useReplacementSelection(chainId?: number) {
     isAbandoning: abandonMutation.isPending,
     stage,
     chain,
-    // карточка приглашённого переживает перезагрузку вместе с записью: без неё экран ожидания
-    // после возврата на страницу показывал бы «пустую» замену
     invitedOption: vacancyReopened ? null : (invited?.option ?? null),
   };
 }
