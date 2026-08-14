@@ -54,22 +54,11 @@
   color: var(--color-text-secondary);
 }
 
-.chain-item__ready {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-heading);
-  color: var(--color-status-success);
-  white-space: nowrap;
-}
-
 .chain-item__badges {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
 }
 

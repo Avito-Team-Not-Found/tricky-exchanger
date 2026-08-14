@@ -249,7 +249,7 @@ describe('ChainListPage', () => {
 
     renderWithProviders(<ChainListPage />);
 
-    expect(screen.getAllByText('Цепочка собрана')).toHaveLength(2);
+    expect(screen.getAllByText('Средняя · 72%')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: 'Откликнуться' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
   });

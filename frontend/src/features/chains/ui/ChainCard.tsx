@@ -58,6 +58,8 @@ export function ChainCard({
   const canVote = options.status === 'CANDIDATE';
   const canAct = canVote && (!option.vote || option.vote === 'pending');
   const hardLocked = isHardLocked(options.status);
+  // собранная, но ещё не начатая цепочка: вероятность обмена всё ещё важна — показываем score
+  const showScore = options.status === 'PROPOSED' || options.status === 'FROZEN';
   // на FROZEN сделка началась, но товар не отправлен — зовём действовать, а не «к сделке»
   const shipRequired = needsShipment(options.status);
   const dealReady = hasDeal(options.status) && !shipRequired;
@@ -118,11 +120,7 @@ export function ChainCard({
         <span className="chain-card__count">
           {options.length} {plural(options.length, ['участник', 'участника', 'участников'])}
         </span>
-        {canVote ? (
-          <ProbabilityBadge score={options.score} />
-        ) : (
-          <span className="chain-card__ready">Цепочка собрана</span>
-        )}
+        {canVote || showScore ? <ProbabilityBadge score={options.score} /> : null}
       </div>
 
       <DeadlineRow
