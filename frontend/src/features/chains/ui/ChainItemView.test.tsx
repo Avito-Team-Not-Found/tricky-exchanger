@@ -99,4 +99,37 @@ describe('ChainItemView', () => {
     expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Отказаться от сделки' })).not.toBeInTheDocument();
   });
+
+  it('shows the score badge while the probability still matters', () => {
+    renderChain(baseChain());
+
+    expect(screen.getByText('Высокая · 80%')).toBeInTheDocument();
+  });
+
+  it('hides the score badge on an in-progress chain', () => {
+    const chain = baseChain();
+    chain.status = 'IN_PROGRESS';
+
+    renderChain(chain);
+
+    expect(screen.queryByText('Высокая · 80%')).not.toBeInTheDocument();
+  });
+
+  it('hides the score badge on a completed chain', () => {
+    const chain = baseChain();
+    chain.status = 'COMPLETED';
+
+    renderChain(chain);
+
+    expect(screen.queryByText('Высокая · 80%')).not.toBeInTheDocument();
+  });
+
+  it('hides the score badge on a broken chain', () => {
+    const chain = baseChain();
+    chain.status = 'BROKEN';
+
+    renderChain(chain);
+
+    expect(screen.queryByText('Высокая · 80%')).not.toBeInTheDocument();
+  });
 });

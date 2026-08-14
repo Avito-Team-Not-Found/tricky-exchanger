@@ -10,6 +10,7 @@ import {
   needsMyAction,
   needsShipment,
   receivesItem,
+  showsScore,
   type Chain,
   type ChainParticipant,
 } from '@entities/chain';
@@ -56,8 +57,6 @@ export function ChainItemView({
   const single = received.length === 1 ? received[0] : null;
   const assembled = isAssembled(chain.status);
   const hardLocked = isHardLocked(chain.status);
-  // собранная, но ещё не начатая цепочка: вероятность обмена всё ещё важна — показываем score
-  const showScore = chain.status === 'PROPOSED' || chain.status === 'FROZEN';
   const shipRequired = needsShipment(chain.status);
   // approved/rejected отклик снять нельзя (DELETE их не снимает) — кнопки для них нет
   const voteCandidate =
@@ -95,16 +94,16 @@ export function ChainItemView({
           </span>
           {assembled ? (
             <span className="chain-item__badges">
-              {showScore ? <ProbabilityBadge score={chain.score} /> : null}
+              {showsScore(chain.status) ? <ProbabilityBadge score={chain.score} /> : null}
               <ConsentBadge
                 key={approvedVotes(chain)}
                 count={approvedVotes(chain)}
                 total={chain.length}
               />
             </span>
-          ) : (
+          ) : showsScore(chain.status) ? (
             <ProbabilityBadge score={chain.score} />
-          )}
+          ) : null}
         </div>
       </div>
 

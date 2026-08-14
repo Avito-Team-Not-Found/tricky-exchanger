@@ -102,7 +102,7 @@
   z-index: 1;
 }
 
-// подтвердил, ждём остальных: статусная строка вместо кнопки (SOFT-LOCK §5.3)
+// подтвердил, ждём остальных: статусная строка вынесена из блока действий наверх
 .chain-card__confirmed {
   animation: motion-pop-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   margin: 0;

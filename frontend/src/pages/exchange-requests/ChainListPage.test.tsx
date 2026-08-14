@@ -254,6 +254,24 @@ describe('ChainListPage', () => {
     expect(screen.queryByRole('button', { name: 'Отозвать отклик' })).not.toBeInTheDocument();
   });
 
+  it('hides the score badge on a card whose deal is already in progress', () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(queryOk([makeOptions({ status: 'IN_PROGRESS' })]));
+
+    renderWithProviders(<ChainListPage />);
+
+    expect(screen.queryByText('Средняя · 72%')).not.toBeInTheDocument();
+  });
+
+  it('hides the score badge on a completed card', () => {
+    mockedUseRequest.mockReturnValue(queryOk(request));
+    mockedUseOptions.mockReturnValue(queryOk([makeOptions({ status: 'COMPLETED' })]));
+
+    renderWithProviders(<ChainListPage />);
+
+    expect(screen.queryByText('Средняя · 72%')).not.toBeInTheDocument();
+  });
+
   it('orders the cards by descending probability, not by the backend order', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     const weak = makeOptions({ score: 0.55 });
@@ -599,7 +617,7 @@ describe('ChainListPage', () => {
     expect(screen.queryByText('⚠ Примите решение как можно скорее!')).not.toBeInTheDocument();
   });
 
-  it('replaces the action with the confirmed line once my vote is approved', () => {
+  it('shows the confirmed line at the top of the card once my vote is approved', () => {
     mockedUseRequest.mockReturnValue(queryOk(request));
     const options = makeOptions({ status: 'PROPOSED' });
     options.receiveOptions[0].vote = 'approved';
