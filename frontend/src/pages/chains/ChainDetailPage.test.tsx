@@ -266,12 +266,12 @@ describe('ChainDetailPage', () => {
     expect(await screen.findByText('участники: 202')).toBeInTheDocument();
   });
 
-  it('shows the assembled pill once the chain is proposed', () => {
+  it('shows the probability badge once the chain is proposed', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 
     renderWithProviders(<ChainDetailPage />);
 
-    expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
+    expect(screen.getByText('Высокая · 90%')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeInTheDocument();
   });
 

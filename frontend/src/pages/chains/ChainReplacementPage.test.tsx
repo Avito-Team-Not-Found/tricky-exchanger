@@ -245,7 +245,7 @@ describe('ChainReplacementPage', () => {
     renderWithProviders(<ChainReplacementPage />);
 
     expect(screen.getByText('Замена подтверждена')).toBeInTheDocument();
-    expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
+    expect(screen.getByText('Высокая · 90%')).toBeInTheDocument();
     expect(screen.getByText('2 участника в цепочке')).toBeInTheDocument();
   });
 

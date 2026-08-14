@@ -4,6 +4,7 @@ import {
   hasDeal,
   isHardLocked,
   needsShipment,
+  showsScore,
   type ExchangeOption,
   type ExchangeOptions,
   type VoteValue,
@@ -64,7 +65,7 @@ export function ChainCard({
   // на PROPOSED receiveOption ровно один, и его vote — решение текущего пользователя;
   // на CANDIDATE то же поле — отклик первого раунда, myVote им не считается
   const myVote: VoteValue | undefined = options.status === 'PROPOSED' ? option.vote : undefined;
-  const confirmed = myVote === 'approved';
+  const confirmed = myVote === 'approved' && !needsReplacement;
   const needsAction = options.status === 'PROPOSED' && !confirmed;
 
   const className = [
@@ -118,11 +119,7 @@ export function ChainCard({
         <span className="chain-card__count">
           {options.length} {plural(options.length, ['участник', 'участника', 'участников'])}
         </span>
-        {canVote ? (
-          <ProbabilityBadge score={options.score} />
-        ) : (
-          <span className="chain-card__ready">Цепочка собрана</span>
-        )}
+        {showsScore(options.status) ? <ProbabilityBadge score={options.score} /> : null}
       </div>
 
       <DeadlineRow
@@ -131,6 +128,12 @@ export function ChainCard({
         showShipDeadline
         purpose={deadlinePurpose}
       />
+
+      {confirmed ? (
+        <p className="chain-card__confirmed" role="status">
+          Вы подтвердили · ждём остальных
+        </p>
+      ) : null}
 
       {canAct ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
@@ -165,10 +168,6 @@ export function ChainCard({
             Требуется действие
           </Button>
         </div>
-      ) : confirmed ? (
-        <p className="chain-card__confirmed" role="status">
-          Вы подтвердили · ждём остальных
-        </p>
       ) : needsAction ? (
         <div className="chain-card__actions" onClick={(event) => event.stopPropagation()}>
           <Button

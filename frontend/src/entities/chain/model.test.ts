@@ -13,6 +13,7 @@ import {
   needsMyAction,
   needsShipment,
   receivesItem,
+  showsScore,
   type Chain,
   type ChainParticipant,
 } from './model';
@@ -158,6 +159,20 @@ describe('needsShipment', () => {
     expect(needsShipment('COMPLETED')).toBe(false);
     expect(needsShipment('CANDIDATE')).toBe(false);
     expect(needsShipment('PROPOSED')).toBe(false);
+  });
+});
+
+describe('showsScore', () => {
+  it('shows the score while the probability still affects the decision', () => {
+    expect(showsScore('CANDIDATE')).toBe(true);
+    expect(showsScore('PROPOSED')).toBe(true);
+    expect(showsScore('FROZEN')).toBe(true);
+  });
+
+  it('hides the score once the deal is in progress, done or broken', () => {
+    expect(showsScore('IN_PROGRESS')).toBe(false);
+    expect(showsScore('COMPLETED')).toBe(false);
+    expect(showsScore('BROKEN')).toBe(false);
   });
 });
 

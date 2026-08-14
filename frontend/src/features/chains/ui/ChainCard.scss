@@ -87,21 +87,6 @@
   white-space: nowrap;
 }
 
-// «Цепочка собрана» занимает слот ProbabilityBadge
-.chain-card__ready {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 var(--spacing-sm);
-  flex-shrink: 0;
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-heading);
-  color: var(--color-status-success);
-  white-space: nowrap;
-}
-
 // ширину даёт block-проп кнопки: flex-basis в колонке обнулил бы её высоту
 .chain-card__actions {
   display: flex;
@@ -117,7 +102,7 @@
   z-index: 1;
 }
 
-// подтвердил, ждём остальных: статусная строка вместо кнопки (SOFT-LOCK §5.3)
+// подтвердил, ждём остальных: статусная строка вынесена из блока действий наверх
 .chain-card__confirmed {
   animation: motion-pop-in var(--motion-duration-base) var(--motion-ease-out) backwards;
   margin: 0;

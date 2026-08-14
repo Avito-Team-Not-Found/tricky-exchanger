@@ -22,20 +22,6 @@
   gap: var(--spacing-sm);
 }
 
-.chain-detail__ready {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-start;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--color-status-success) 15%, transparent);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-heading);
-  color: var(--color-status-success);
-  white-space: nowrap;
-}
-
 .chain-detail__action {
   margin-top: auto;
 }

@@ -15,6 +15,7 @@ export {
   needsShipment,
   nextInRing,
   receivesItem,
+  showsScore,
   sourceParticipant,
   VACANCY_META,
   VOTE_META,

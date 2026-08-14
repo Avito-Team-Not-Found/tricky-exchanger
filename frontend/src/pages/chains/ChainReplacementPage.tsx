@@ -5,10 +5,10 @@ import { useNavigate, useParams } from 'react-router';
 
 import { ReplacementCandidateCard, useReplacementSelection } from '@features/chains';
 
-import { type Chain, type ReplacementOption } from '@entities/chain';
+import { showsScore, type Chain, type ReplacementOption } from '@entities/chain';
 
 import { plural } from '@shared/lib/plural';
-import { EmptyState, ErrorState, StatusTag } from '@shared/ui';
+import { EmptyState, ErrorState, ProbabilityBadge } from '@shared/ui';
 
 import { ChainPageHeader } from './ChainPageHeader';
 
@@ -259,7 +259,7 @@ function SucceededView({ chain }: { chain?: Chain }) {
             </span>
           ))}
         </div>
-        <StatusTag tone="success">Цепочка собрана</StatusTag>
+        {showsScore(chain.status) ? <ProbabilityBadge score={chain.score} /> : null}
         <p className="replacement-summary__count">
           {chain.length} {plural(chain.length, ['участник', 'участника', 'участников'])} в цепочке
         </p>

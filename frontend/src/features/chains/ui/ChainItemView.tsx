@@ -10,6 +10,7 @@ import {
   needsMyAction,
   needsShipment,
   receivesItem,
+  showsScore,
   type Chain,
   type ChainParticipant,
 } from '@entities/chain';
@@ -63,6 +64,9 @@ export function ChainItemView({
     received.find((candidate) => !candidate.vote) ??
     null;
   const canVote = chain.status === 'CANDIDATE' && voteCandidate !== null;
+  // на вакансию в цепочке зовём выбрать замену — своё подтверждение при этом не показываем
+  const confirmed =
+    chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' && !needsReplacement;
   const withdraw = voteCandidate?.vote === 'pending';
 
   return (
@@ -90,16 +94,16 @@ export function ChainItemView({
           </span>
           {assembled ? (
             <span className="chain-item__badges">
-              <span className="chain-item__ready">Цепочка собрана</span>
+              {showsScore(chain.status) ? <ProbabilityBadge score={chain.score} /> : null}
               <ConsentBadge
                 key={approvedVotes(chain)}
                 count={approvedVotes(chain)}
                 total={chain.length}
               />
             </span>
-          ) : (
+          ) : showsScore(chain.status) ? (
             <ProbabilityBadge score={chain.score} />
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -116,6 +120,12 @@ export function ChainItemView({
         deadlineAt={chain.freezeDeadlineAt}
         purpose={chainDeadlinePurpose(chain)}
       />
+
+      {confirmed ? (
+        <p className="chain-item__confirmed" role="status">
+          Вы подтвердили · ждём остальных
+        </p>
+      ) : null}
 
       {single?.offeredItemDescription ? (
         <section className="chain-item__section">
@@ -160,22 +170,17 @@ export function ChainItemView({
           >
             Требуются действия
           </Button>
-        ) : chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
-          <>
-            <p className="chain-item__confirmed" role="status">
-              Вы подтвердили · ждём остальных
-            </p>
-            <Button
-              className="chain-item__decline"
-              type="text"
-              danger
-              size="large"
-              block
-              onClick={onDecline}
-            >
-              Отказаться от сделки
-            </Button>
-          </>
+        ) : confirmed ? (
+          <Button
+            className="chain-item__decline"
+            type="text"
+            danger
+            size="large"
+            block
+            onClick={onDecline}
+          >
+            Отказаться от сделки
+          </Button>
         ) : shipRequired ? (
           <>
             <Button

@@ -315,13 +315,23 @@ describe('ChainParticipantsPage', () => {
     expect(screen.queryByRole('button', { name: 'Требуются действия' })).not.toBeInTheDocument();
   });
 
-  it('shows the assembled pill and a confirm action on a PROPOSED chain', () => {
+  it('shows the score badge and a confirm action on a PROPOSED chain', () => {
     mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'PROPOSED' })));
 
     renderWithProviders(<ChainParticipantsPage />);
 
-    expect(screen.getByText('Цепочка собрана')).toBeInTheDocument();
+    expect(screen.getByText('Высокая · 90%')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Требуются действия' })).toBeInTheDocument();
+  });
+
+  it('shows only the consents badge on an in-progress chain', () => {
+    mockedUseChain.mockReturnValue(queryOk(makeChain({ status: 'IN_PROGRESS' })));
+
+    renderWithProviders(<ChainParticipantsPage />);
+
+    expect(screen.queryByText('Высокая · 90%')).not.toBeInTheDocument();
+    expect(screen.getByText('0/2 согласий')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Перейти к сделке' })).toBeInTheDocument();
   });
 
   it('confirms participation from the participants screen', async () => {

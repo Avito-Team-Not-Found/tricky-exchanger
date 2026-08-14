@@ -171,6 +171,12 @@ export function isAssembled(status: ChainStatus): boolean {
   return status === 'PROPOSED' || isHardLocked(status);
 }
 
+// вероятность показываем, пока она ещё влияет на решение: на CANDIDATE (выбор варианта), PROPOSED
+// (подтверждение) и FROZEN (товар не отправлен); дальше сделка исполнена или распалась — бейдж пуст
+export function showsScore(status: ChainStatus): boolean {
+  return status === 'CANDIDATE' || status === 'PROPOSED' || status === 'FROZEN';
+}
+
 // быстрая замена после отказа на FROZEN: цепочка снова PROPOSED, но дедлайн у неё — подбор
 // замены, а не ответа (см. PROJECT.md §4.8)
 export function isFrozenReplacement(chain: Chain): boolean {

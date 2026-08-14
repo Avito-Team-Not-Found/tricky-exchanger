@@ -12,6 +12,7 @@ import {
   needsMyAction,
   participantAlias,
   receivesItem,
+  showsScore,
   VACANCY_META,
   VOTE_META,
   type Chain,
@@ -21,7 +22,7 @@ import {
 } from '@entities/chain';
 
 import { plural } from '@shared/lib/plural';
-import { Avatar, FadeInImage } from '@shared/ui';
+import { Avatar, FadeInImage, ProbabilityBadge } from '@shared/ui';
 
 import { ConsentBadge } from './ConsentBadge';
 
@@ -57,9 +58,14 @@ export function ChainDetail({ chain, receiveRequestId, onConfirm, onProceed }: C
     <div className="chain-detail">
       {assembled ? (
         <div className="chain-detail__head">
-          <p className="chain-detail__ready">Цепочка собрана</p>
+          {showsScore(chain.status) ? <ProbabilityBadge score={chain.score} /> : null}
           <ConsentBadge key={approved} count={approved} total={chain.length} />
         </div>
+      ) : null}
+      {chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
+        <p className="chain-detail__confirmed" role="status">
+          Вы подтвердили · ждём остальных
+        </p>
       ) : null}
       <ul className="chain-detail__participants motion-cascade">
         {links.map((link) => (
@@ -83,10 +89,6 @@ export function ChainDetail({ chain, receiveRequestId, onConfirm, onProceed }: C
         >
           Требуются действия
         </Button>
-      ) : chain.status === 'PROPOSED' && myConfirmVote(chain) === 'approved' ? (
-        <p className="chain-detail__confirmed" role="status">
-          Вы подтвердили · ждём остальных
-        </p>
       ) : hasDeal(chain.status) ? (
         <Button
           className="chain-detail__action"
